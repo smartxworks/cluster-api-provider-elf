@@ -3,4 +3,23 @@ layout:
 - go.kubebuilder.io/v3
 projectName: cluster-api-provider-elf
 repo: github.com/smartxworks/cluster-api-provider-elf
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: cluster.x-k8s.io
+  group: infrastructure
+  kind: ElfCluster
+  path: github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3
+  version: v1alpha3
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: cluster.x-k8s.io
+  group: infrastructure
+  kind: ElfMachine
+  path: github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3
+  version: v1alpha3
 version: "3"

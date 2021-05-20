@@ -30,6 +30,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	infrastructurev1alpha3 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	"github.com/smartxworks/cluster-api-provider-elf/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -41,6 +44,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
+	utilruntime.Must(infrastructurev1alpha3.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -74,6 +78,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = (&controllers.ElfClusterReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("ElfCluster"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ElfCluster")
+		os.Exit(1)
+	}
+	if err = (&controllers.ElfMachineReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("ElfMachine"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ElfMachine")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
