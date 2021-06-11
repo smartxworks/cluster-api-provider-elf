@@ -1,0 +1,7 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: ElfMachineTemplate
+metadata:
+  name: elfmachinetemplate-sample
+spec:
+  # Add fields here
+  foo: bar
