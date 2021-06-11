@@ -18,24 +18,38 @@ package v1alpha3
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+const (
+	ClusterFinalizer         = "elfcluster.infrastructure.cluster.x-k8s.io"
+	ControlPlaneEndpointPort = 6443
+)
 
 // ElfClusterSpec defines the desired state of ElfCluster
 type ElfClusterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Server is address of the elf VIP
+	Server string `json:"server,omitempty"`
 
-	// Foo is an example field of ElfCluster. Edit elfcluster_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Username is the name used to log into the Elf server.
+	Username string `json:"username,omitempty"`
+
+	// Password is the password used to log into the Elf server.
+	Password string `json:"password,omitempty"`
+
+	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+	// +optional
+	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint"`
 }
 
 // ElfClusterStatus defines the observed state of ElfCluster
 type ElfClusterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// +optional
+	Ready bool `json:"ready,omitempty"`
+
+	// Conditions defines current service state of the ElfCluster.
+	// +optional
+	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -48,6 +62,22 @@ type ElfCluster struct {
 
 	Spec   ElfClusterSpec   `json:"spec,omitempty"`
 	Status ElfClusterStatus `json:"status,omitempty"`
+}
+
+func (c *ElfCluster) GetConditions() clusterv1.Conditions {
+	return c.Status.Conditions
+}
+
+func (c *ElfCluster) SetConditions(conditions clusterv1.Conditions) {
+	c.Status.Conditions = conditions
+}
+
+func (c *ElfCluster) Auth() ElfAuth {
+	return ElfAuth{
+		Host:     c.Spec.Server,
+		Username: c.Spec.Username,
+		Password: c.Spec.Password,
+	}
 }
 
 //+kubebuilder:object:root=true
