@@ -17,47 +17,247 @@ limitations under the License.
 package controllers
 
 import (
-	"context"
+	"fmt"
+	"reflect"
+	"strings"
 
-	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/runtime"
+	"github.com/pkg/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterutilv1 "sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	infrastructurev1alpha3 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
+	infrautilv1 "github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
-// ElfClusterReconciler reconciles a ElfCluster object
-type ElfClusterReconciler struct {
-	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
-}
+var (
+	clusterControlledType     = &infrav1.ElfCluster{}
+	clusterControlledTypeName = reflect.TypeOf(clusterControlledType).Elem().Name()
+	clusterControlledTypeGVK  = infrav1.GroupVersion.WithKind(clusterControlledTypeName)
+)
 
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;patch
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfclusters/finalizers,verbs=update
+//+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the ElfCluster object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.7.2/pkg/reconcile
-func (r *ElfClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = r.Log.WithValues("elfcluster", req.NamespacedName)
+// AddClusterControllerToManager adds the cluster controller to the provided
+// manager.
+func AddClusterControllerToManager(ctx *context.ControllerManagerContext, mgr manager.Manager) error {
+	var (
+		controllerNameShort = fmt.Sprintf("%s-controller", strings.ToLower(clusterControlledTypeName))
+	)
 
-	// your logic here
+	// Build the controller context.
+	controllerContext := &context.ControllerContext{
+		ControllerManagerContext: ctx,
+		Name:                     controllerNameShort,
+		Logger:                   ctx.Logger.WithName(controllerNameShort),
+	}
 
-	return ctrl.Result{}, nil
+	reconciler := &ElfClusterReconciler{ControllerContext: controllerContext}
+
+	return ctrl.NewControllerManagedBy(mgr).
+		// Watch the controlled, infrastructure resource.
+		For(clusterControlledType).
+		// Watch the CAPI resource that owns this infrastructure resource.
+		Watches(
+			&source.Kind{Type: &clusterv1.Cluster{}},
+			&handler.EnqueueRequestsFromMapFunc{
+				ToRequests: clusterutilv1.ClusterToInfrastructureMapFunc(clusterControlledTypeGVK),
+			},
+		).
+		WithOptions(controller.Options{MaxConcurrentReconciles: ctx.MaxConcurrentReconciles}).
+		Complete(reconciler)
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *ElfClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrastructurev1alpha3.ElfCluster{}).
-		Complete(r)
+// ElfClusterReconciler reconciles a ElfCluster object
+type ElfClusterReconciler struct {
+	*context.ControllerContext
+}
+
+// Reconcile ensures the back-end state reflects the Kubernetes resource state intent.
+func (r *ElfClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
+	clusterService := service.NewClusterSrevice(r.Client)
+
+	// Get the ElfCluster resource for this request.
+	elfCluster, err := clusterService.GetElfClusterByName(r, req.Namespace, req.Name)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			r.Logger.Info("ElfCluster not found, won't reconcile", "key", req.NamespacedName)
+
+			return reconcile.Result{}, nil
+		}
+
+		return reconcile.Result{}, err
+	}
+
+	// Fetch the CAPI Cluster.
+	cluster, err := clusterService.GetOwnerCluster(r, elfCluster.ObjectMeta)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if cluster == nil {
+		r.Logger.Info("Waiting for Cluster Controller to set OwnerRef on ElfCluster",
+			"namespace", elfCluster.Namespace,
+			"elfCluster", elfCluster.Name)
+
+		return reconcile.Result{}, nil
+	}
+
+	if clusterutilv1.IsPaused(cluster, elfCluster) {
+		r.Logger.V(4).Info("ElfCluster linked to a cluster that is paused",
+			"namespace", elfCluster.Namespace,
+			"elfCluster", elfCluster.Name)
+
+		return reconcile.Result{}, nil
+	}
+
+	// Create the patch helper.
+	patchHelper, err := patch.NewHelper(elfCluster, r.Client)
+	if err != nil {
+		return reconcile.Result{}, errors.Wrapf(
+			err,
+			"failed to init patch helper for %s %s/%s",
+			elfCluster.GroupVersionKind(),
+			elfCluster.Namespace,
+			elfCluster.Name)
+	}
+
+	// Create the cluster context for this request.
+	logger := r.Logger.WithValues("namespace", cluster.Namespace, "elfCluster", elfCluster.Name)
+	clusterContext := &context.ClusterContext{
+		ControllerContext: r.ControllerContext,
+		Cluster:           cluster,
+		ElfCluster:        elfCluster,
+		Logger:            logger,
+		PatchHelper:       patchHelper,
+	}
+
+	// Always issue a patch when exiting this function so changes to the
+	// resource are patched back to the API server.
+	defer func() {
+		if err := clusterContext.Patch(); err != nil {
+			if reterr == nil {
+				reterr = err
+			}
+
+			clusterContext.Logger.Error(err, "patch failed", "elfCluster", clusterContext.String())
+		}
+	}()
+
+	// Handle deleted clusters
+	if !elfCluster.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(clusterContext)
+	}
+
+	// Handle non-deleted clusters
+	return r.reconcileNormal(clusterContext)
+}
+
+func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (reconcile.Result, error) {
+	ctx.Logger.Info("Reconciling ElfCluster delete")
+
+	machineSrevice := service.NewMachineSrevice(ctx.Client)
+
+	elfMachines, err := machineSrevice.FindElfMachinesInCluster(ctx, ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
+	if err != nil {
+		return reconcile.Result{}, errors.Wrapf(err,
+			"Unable to list ElfMachines part of ElfCluster %s/%s", ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
+	}
+
+	if len(elfMachines) > 0 {
+		ctx.Logger.Info("Waiting for ElfMachines to be deleted", "count", len(elfMachines))
+
+		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
+	}
+
+	// Cluster is deleted so remove the finalizer.
+	ctrlutil.RemoveFinalizer(ctx.ElfCluster, infrav1.ClusterFinalizer)
+
+	return reconcile.Result{}, nil
+}
+
+func (r *ElfClusterReconciler) reconcileNormal(ctx *context.ClusterContext) (reconcile.Result, error) {
+	ctx.Logger.Info("Reconciling ElfCluster")
+
+	// If the ElfCluster doesn't have our finalizer, add it.
+	ctrlutil.AddFinalizer(ctx.ElfCluster, infrav1.ClusterFinalizer)
+
+	// Reconcile the ElfCluster resource's ready state.
+	ctx.ElfCluster.Status.Ready = true
+
+	// If the cluster is deleted, that's mean that the workload cluster is being deleted
+	if !ctx.Cluster.DeletionTimestamp.IsZero() {
+		return reconcile.Result{}, nil
+	}
+
+	// Update the ElfCluster resource with its API endpoints.
+	if err := r.reconcileControlPlaneEndpoint(ctx); err != nil {
+		return reconcile.Result{}, errors.Wrapf(err,
+			"Failed to reconcile ControlPlaneEndpoint for ElfCluster %s/%s",
+			ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
+	}
+
+	// Wait until the API server is online and accessible.
+	if !r.isAPIServerOnline(ctx) {
+		return reconcile.Result{}, nil
+	}
+
+	return reconcile.Result{}, nil
+}
+
+func (r *ElfClusterReconciler) reconcileControlPlaneEndpoint(ctx *context.ClusterContext) error {
+	// If the cluster already has ControlPlaneEndpoint set then there is nothing to do .
+	if !ctx.ElfCluster.Spec.ControlPlaneEndpoint.IsZero() {
+		ctx.Logger.V(6).Info("ControlPlaneEndpoint already exist of ElfCluster")
+
+		return nil
+	}
+
+	return infrautilv1.ErrNoMachineIPAddr
+}
+
+func (r *ElfClusterReconciler) isAPIServerOnline(ctx *context.ClusterContext) bool {
+	if nodeService, err := service.NewNodeSrevice(ctx, ctx.Client, ctx.Cluster); err == nil {
+		// The target cluster is online. To make sure the correct control
+		// plane endpoint information is logged, it is necessary to fetch
+		// an up-to-date Cluster resource. If this fails, then set the
+		// control plane endpoint information to the values from the
+		// ElfCluster resource, as it must have the correct information
+		// if the API server is online.
+		if _, err := nodeService.FindAll(); err == nil {
+			clusterService := service.NewClusterSrevice(ctx.Client)
+
+			cluster, err := clusterService.GetByName(ctx, ctx.Cluster.Namespace, ctx.Cluster.Name)
+			if err != nil {
+				cluster = ctx.Cluster.DeepCopy()
+				cluster.Spec.ControlPlaneEndpoint.Host = ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host
+				cluster.Spec.ControlPlaneEndpoint.Port = ctx.ElfCluster.Spec.ControlPlaneEndpoint.Port
+
+				ctx.Logger.Error(err, "failed to get updated cluster object while checking if API server is online")
+			}
+
+			ctx.Logger.Info(
+				"API server is online",
+				"namespace", cluster.Namespace, "cluster", cluster.Name,
+				"controlPlaneEndpoint", cluster.Spec.ControlPlaneEndpoint.String())
+
+			return true
+		}
+	}
+
+	return false
 }

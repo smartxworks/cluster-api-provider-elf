@@ -136,6 +136,10 @@ func (j *VMJob) IsDone() bool {
 	return j.State == VMJobDone
 }
 
+func (j *VMJob) IsFailed() bool {
+	return j.State == VMJobFailed
+}
+
 func (j *VMJob) IsFinished() bool {
 	return j.State == VMJobDone || j.State == VMJobFailed
 }

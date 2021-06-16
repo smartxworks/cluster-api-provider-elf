@@ -161,8 +161,12 @@ func (m *ElfMachine) SetVM(UUID string) {
 	m.Status.VMRef = UUID
 }
 
+func (m *ElfMachine) WithVM() bool {
+	return m.Status.VMRef != "" || m.Status.TaskRef != ""
+}
+
 func (m *ElfMachine) HasVM() bool {
-	return !(m.Status.VMRef == "" && m.Status.TaskRef == "")
+	return m.Status.VMRef != ""
 }
 
 func (m *ElfMachine) HasTask() bool {
