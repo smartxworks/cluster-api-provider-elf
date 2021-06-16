@@ -18,96 +18,97 @@ package main
 
 import (
 	"flag"
+	"math/rand"
 	"os"
+	"time"
 
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	// to ensure that exec-entrypoint and run can make use of them.
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
+	"k8s.io/klog"
+	"k8s.io/klog/klogr"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
+	ctrlsig "sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
-	infrastructurev1alpha3 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
 	"github.com/smartxworks/cluster-api-provider-elf/controllers"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/manager"
 	//+kubebuilder:scaffold:imports
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	setupLog = ctrllog.Log.WithName("entrypoint")
+
+	managerOpts             manager.Options
+	defaultLeaderElectionID = manager.DefaultLeaderElectionID
 )
 
-func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
-	utilruntime.Must(infrastructurev1alpha3.AddToScheme(scheme))
-	//+kubebuilder:scaffold:scheme
-}
-
+// nolint:gocognit
 func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-	opts := zap.Options{
-		Development: true,
+	rand.Seed(time.Now().UnixNano())
+
+	klog.InitFlags(nil)
+	ctrllog.SetLogger(klogr.New())
+	if err := flag.Set("v", "2"); err != nil {
+		klog.Fatalf("failed to set log level: %v", err)
 	}
-	opts.BindFlags(flag.CommandLine)
+
+	flag.BoolVar(
+		&managerOpts.LeaderElectionEnabled,
+		"enable-leader-election",
+		true,
+		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(
+		&managerOpts.LeaderElectionID,
+		"leader-election-id",
+		defaultLeaderElectionID,
+		"Name of the config map to use as the locking resource when configuring leader election.")
+	flag.IntVar(
+		&managerOpts.MaxConcurrentReconciles,
+		"max-concurrent-reconciles",
+		10,
+		"The maximum number of allowed, concurrent reconciles.")
+
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	// Create a function that adds all of the controllers and webhooks to the manager.
+	addToManager := func(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
+		if err := controllers.AddClusterControllerToManager(ctx, mgr); err != nil {
+			return err
+		}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "ea6b6891.cluster.x-k8s.io",
-	})
+		if err := controllers.AddMachineControllerToManager(ctx, mgr); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	setupLog.Info("creating controller manager")
+	managerOpts.AddToManager = addToManager
+	mgr, err := manager.New(managerOpts)
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
+		setupLog.Error(err, "problem creating controller manager")
 		os.Exit(1)
 	}
 
-	if err = (&controllers.ElfClusterReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("ElfCluster"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ElfCluster")
-		os.Exit(1)
-	}
-	if err = (&controllers.ElfMachineReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("ElfMachine"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ElfMachine")
-		os.Exit(1)
-	}
-	//+kubebuilder:scaffold:builder
+	setupChecks(mgr)
 
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
+	sigHandler := ctrlsig.SetupSignalHandler()
+	setupLog.Info("starting controller manager")
+	if err := mgr.Start(sigHandler); err != nil {
+		setupLog.Error(err, "problem running controller manager")
 		os.Exit(1)
 	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
+}
+
+func setupChecks(mgr ctrlmgr.Manager) {
+	if err := mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to create ready check")
 		os.Exit(1)
 	}
 
-	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
+	if err := mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to create health check")
 		os.Exit(1)
 	}
 }
