@@ -21,6 +21,8 @@ k8s 基础集群安装 [cluster-api](https://github.com/kubernetes-sigs/cluster-
 
 **生成创建嵌套集群的配置文件**
 
+提示：请根据​实际情况修改下述配置信息。
+
 ```shell
 # 嵌套集群的名称
 export CLUSTER_NAME=cluster
@@ -63,7 +65,7 @@ kubectl apply -f name.yaml
 # 获取嵌套集群的 kubeconfig 配置
 clusterctl get kubeconfig cluster > cluster.kubeconfig
 
-# 部署 CNI, 可以选择 flannel 或者 calico
+# 部署 CNI, 可以选择 flannel 或者 calico（可选）
 kubectl --kubeconfig=./cluster.kubeconfig \
   apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
 
