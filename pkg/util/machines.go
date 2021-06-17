@@ -1,11 +1,15 @@
 package util
 
 import (
+	"context"
 	"regexp"
 
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
 )
 
 const (
@@ -18,6 +22,30 @@ const (
 
 // ErrNoMachineIPAddr indicates that no valid IP addresses were found in a machine context
 var ErrNoMachineIPAddr = errors.New("no IP addresses found for machine")
+
+// GetElfMachinesInCluster gets a cluster's ElfMachine resources.
+func GetElfMachinesInCluster(
+	ctx context.Context,
+	controllerClient client.Client,
+	namespace, clusterName string) ([]*infrav1.ElfMachine, error) {
+
+	labels := map[string]string{clusterv1.ClusterLabelName: clusterName}
+	machineList := &infrav1.ElfMachineList{}
+
+	if err := controllerClient.List(
+		ctx, machineList,
+		client.InNamespace(namespace),
+		client.MatchingLabels(labels)); err != nil {
+		return nil, err
+	}
+
+	machines := make([]*infrav1.ElfMachine, len(machineList.Items))
+	for i := range machineList.Items {
+		machines[i] = &machineList.Items[i]
+	}
+
+	return machines, nil
+}
 
 // IsControlPlaneMachine returns true if the provided resource is
 // a member of the control plane.
@@ -40,15 +68,15 @@ func ConvertProviderIDToUUID(providerID *string) string {
 	return matches[1]
 }
 
-func ConvertUUIDToProviderID(UUID string) string {
-	if UUID == "" {
+func ConvertUUIDToProviderID(uuid string) string {
+	if uuid == "" {
 		return ""
 	}
 
 	pattern := regexp.MustCompile(UUIDPattern)
-	if !pattern.MatchString(UUID) {
+	if !pattern.MatchString(uuid) {
 		return ""
 	}
 
-	return ProviderIDPrefix + UUID
+	return ProviderIDPrefix + uuid
 }
