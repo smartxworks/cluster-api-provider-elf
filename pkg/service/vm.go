@@ -85,8 +85,8 @@ func (svr *VMService) Clone(
 }
 
 // Delete VM.
-func (svr *VMService) Delete(UUID string) (*infrav1.VMJob, error) {
-	job, err := svr.Session.VmDelete(UUID, true)
+func (svr *VMService) Delete(uuid string) (*infrav1.VMJob, error) {
+	job, err := svr.Session.VmDelete(uuid, true)
 	if err != nil {
 		return nil, err
 	}
@@ -95,13 +95,13 @@ func (svr *VMService) Delete(UUID string) (*infrav1.VMJob, error) {
 }
 
 // Power Off VM.
-func (svr *VMService) PowerOff(UUID string) (*infrav1.VMJob, error) {
-	svr.Logger.Info("Power off VM", "VM", UUID)
+func (svr *VMService) PowerOff(uuid string) (*infrav1.VMJob, error) {
+	svr.Logger.Info("Power off VM", "VM", uuid)
 
 	vmStopBody := client.VmStopBody{
 		Force: true,
 	}
-	job, err := svr.Session.VmStop(UUID, &vmStopBody)
+	job, err := svr.Session.VmStop(uuid, &vmStopBody)
 	if err != nil {
 		return nil, err
 	}
@@ -110,11 +110,11 @@ func (svr *VMService) PowerOff(UUID string) (*infrav1.VMJob, error) {
 }
 
 // Get the VM.
-func (svr *VMService) Get(UUID string) (*infrav1.VirtualMachine, error) {
-	if UUID == "" {
+func (svr *VMService) Get(uuid string) (*infrav1.VirtualMachine, error) {
+	if uuid == "" {
 		return nil, nil
 	} else {
-		elfVM, err := svr.Session.VmGet(UUID)
+		elfVM, err := svr.Session.VmGet(uuid)
 		if err != nil {
 			return nil, err
 		}
