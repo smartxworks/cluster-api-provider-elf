@@ -17,18 +17,24 @@ limitations under the License.
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	clustererror "sigs.k8s.io/cluster-api/errors"
 	clusterutilv1 "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -90,12 +96,9 @@ func AddMachineControllerToManager(ctx *context.ControllerManagerContext, mgr ma
 
 // Reconcile ensures the back-end state reflects the Kubernetes resource state intent.
 func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
-	machineService := service.NewMachineSrevice(r.Client)
-	serviceCluster := service.NewClusterSrevice(r.Client)
-
 	// Get the ElfMachine resource for this request.
-	elfMachine, err := machineService.GetElfMachineByName(r, req.Namespace, req.Name)
-	if err != nil {
+	elfMachine := &infrav1.ElfMachine{}
+	if err := r.Client.Get(r, req.NamespacedName, elfMachine); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.Logger.Info("ElfMachine not found, won't reconcile", "key", req.NamespacedName)
 
@@ -106,7 +109,7 @@ func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 	}
 
 	// Fetch the CAPI Machine.
-	machine, err := machineService.GetOwnerMachine(r, elfMachine.ObjectMeta)
+	machine, err := clusterutilv1.GetOwnerMachine(r, r.Client, elfMachine.ObjectMeta)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -118,7 +121,7 @@ func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 	}
 
 	// Fetch the CAPI Cluster.
-	cluster, err := serviceCluster.GetClusterFromMetadata(r, machine.ObjectMeta)
+	cluster, err := clusterutilv1.GetClusterFromMetadata(r, r.Client, machine.ObjectMeta)
 	if err != nil {
 		r.Logger.Info("Machine is missing cluster label or cluster does not exist",
 			"namespace", machine.Namespace, "machine", machine.Name)
@@ -133,8 +136,12 @@ func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 	}
 
 	// Fetch the ElfCluster
-	elfCluster, err := serviceCluster.GetElfClusterByName(r, elfMachine.Namespace, cluster.Spec.InfrastructureRef.Name)
-	if err != nil {
+	elfCluster := &infrav1.ElfCluster{}
+	elfClusterName := client.ObjectKey{
+		Namespace: elfMachine.Namespace,
+		Name:      cluster.Spec.InfrastructureRef.Name,
+	}
+	if err := r.Client.Get(r, elfClusterName, elfCluster); err != nil {
 		r.Logger.Info("ElfMachine Waiting for ElfCluster",
 			"namespace", elfMachine.Namespace, "elfMachine", elfMachine.Name)
 
@@ -390,8 +397,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*infrav
 	if !ctx.ElfMachine.WithVM() {
 		ctx.Logger.Info("vmRef and taskRef not exist")
 
-		secretService := service.NewSecretService(ctx.Client)
-		bootstrapData, err := secretService.GetBootstrapData(ctx, ctx.Machine.Namespace, *ctx.Machine.Spec.Bootstrap.DataSecretName)
+		bootstrapData, err := r.getBootstrapData(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -470,7 +476,7 @@ func (r *ElfMachineReconciler) reconcileProviderID(ctx *context.MachineContext, 
 
 // ELF without cloud provider.
 func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineContext, vm *infrav1.VirtualMachine) (bool, error) {
-	nodeService, err := service.NewNodeSrevice(ctx, ctx.Client, ctx.Cluster)
+	kubeClient, err := infrautilv1.NewKubeClient(ctx, ctx.Client, ctx.Cluster)
 	if err != nil {
 		return false, errors.Wrapf(err,
 			"failed to get client for Cluster %s/%s",
@@ -478,7 +484,7 @@ func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineConte
 		)
 	}
 
-	nodeList, err := nodeService.FindAll()
+	nodeList, err := kubeClient.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		return false, err
 	}
@@ -495,7 +501,15 @@ func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineConte
 
 		providerID = *ctx.ElfMachine.Spec.ProviderID
 		node.Spec.ProviderID = providerID
-		_, err := nodeService.SetProviderID(node.Name, providerID)
+		var payloads []interface{}
+		payloads = append(payloads,
+			infrav1.PatchStringValue{
+				Op:    "add",
+				Path:  "/spec/providerID",
+				Value: providerID,
+			})
+		payloadBytes, _ := json.Marshal(payloads)
+		_, err := kubeClient.CoreV1().Nodes().Patch(node.Name, types.JSONPatchType, payloadBytes)
 		if err != nil {
 			return false, err
 		}
@@ -533,4 +547,23 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 	}
 
 	return true, nil
+}
+
+func (r *ElfMachineReconciler) getBootstrapData(ctx *context.MachineContext) (string, error) {
+	secret := &corev1.Secret{}
+	secretKey := apitypes.NamespacedName{
+		Namespace: ctx.Machine.Namespace,
+		Name:      *ctx.Machine.Spec.Bootstrap.DataSecretName,
+	}
+
+	if err := ctx.Client.Get(ctx, secretKey, secret); err != nil {
+		return "", errors.Wrapf(err, "failed to retrieve bootstrap data secret for %s %s", secretKey.Namespace, secretKey.Name)
+	}
+
+	value, ok := secret.Data["value"]
+	if !ok {
+		return "", errors.New("error retrieving bootstrap data: secret value key is missing")
+	}
+
+	return string(value), nil
 }

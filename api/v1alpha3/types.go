@@ -146,7 +146,7 @@ func (j *VMJob) IsFinished() bool {
 
 func (j *VMJob) GetVMUUID() string {
 	res := j.Resources.(map[string]interface{})
-	UUID := ""
+	uuid := ""
 
 	for _, v := range res {
 		resource := v.(map[string]interface{})
@@ -154,8 +154,14 @@ func (j *VMJob) GetVMUUID() string {
 			continue
 		}
 
-		UUID = resource["uuid"].(string)
+		uuid = resource["uuid"].(string)
 	}
 
-	return UUID
+	return uuid
+}
+
+type PatchStringValue struct {
+	Op    string      `json:"op"`
+	Path  string      `json:"path"`
+	Value interface{} `json:"value"`
 }

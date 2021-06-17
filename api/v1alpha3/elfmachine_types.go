@@ -156,9 +156,9 @@ func (m *ElfMachine) SetConditions(conditions clusterv1.Conditions) {
 	m.Status.Conditions = conditions
 }
 
-func (m *ElfMachine) SetVM(UUID string) {
+func (m *ElfMachine) SetVM(uuid string) {
 	m.Status.TaskRef = ""
-	m.Status.VMRef = UUID
+	m.Status.VMRef = uuid
 }
 
 func (m *ElfMachine) WithVM() bool {

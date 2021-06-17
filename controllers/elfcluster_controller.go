@@ -23,10 +23,12 @@ import (
 
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	clusterutilv1 "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -37,7 +39,6 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	infrautilv1 "github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
@@ -90,11 +91,9 @@ type ElfClusterReconciler struct {
 
 // Reconcile ensures the back-end state reflects the Kubernetes resource state intent.
 func (r *ElfClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
-	clusterService := service.NewClusterSrevice(r.Client)
-
 	// Get the ElfCluster resource for this request.
-	elfCluster, err := clusterService.GetElfClusterByName(r, req.Namespace, req.Name)
-	if err != nil {
+	elfCluster := &infrav1.ElfCluster{}
+	if err := r.Client.Get(r, req.NamespacedName, elfCluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.Logger.Info("ElfCluster not found, won't reconcile", "key", req.NamespacedName)
 
@@ -105,7 +104,7 @@ func (r *ElfClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 	}
 
 	// Fetch the CAPI Cluster.
-	cluster, err := clusterService.GetOwnerCluster(r, elfCluster.ObjectMeta)
+	cluster, err := clusterutilv1.GetOwnerCluster(r, r.Client, elfCluster.ObjectMeta)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -170,9 +169,7 @@ func (r *ElfClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (reconcile.Result, error) {
 	ctx.Logger.Info("Reconciling ElfCluster delete")
 
-	machineSrevice := service.NewMachineSrevice(ctx.Client)
-
-	elfMachines, err := machineSrevice.FindElfMachinesInCluster(ctx, ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
+	elfMachines, err := infrautilv1.GetElfMachinesInCluster(ctx, ctx.Client, ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
 	if err != nil {
 		return reconcile.Result{}, errors.Wrapf(err,
 			"Unable to list ElfMachines part of ElfCluster %s/%s", ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
@@ -231,18 +228,17 @@ func (r *ElfClusterReconciler) reconcileControlPlaneEndpoint(ctx *context.Cluste
 }
 
 func (r *ElfClusterReconciler) isAPIServerOnline(ctx *context.ClusterContext) bool {
-	if nodeService, err := service.NewNodeSrevice(ctx, ctx.Client, ctx.Cluster); err == nil {
-		// The target cluster is online. To make sure the correct control
-		// plane endpoint information is logged, it is necessary to fetch
-		// an up-to-date Cluster resource. If this fails, then set the
-		// control plane endpoint information to the values from the
-		// ElfCluster resource, as it must have the correct information
-		// if the API server is online.
-		if _, err := nodeService.FindAll(); err == nil {
-			clusterService := service.NewClusterSrevice(ctx.Client)
-
-			cluster, err := clusterService.GetByName(ctx, ctx.Cluster.Namespace, ctx.Cluster.Name)
-			if err != nil {
+	if kubeClient, err := infrautilv1.NewKubeClient(ctx, ctx.Client, ctx.Cluster); err == nil {
+		if _, err := kubeClient.CoreV1().Nodes().List(metav1.ListOptions{}); err == nil {
+			// The target cluster is online. To make sure the correct control
+			// plane endpoint information is logged, it is necessary to fetch
+			// an up-to-date Cluster resource. If this fails, then set the
+			// control plane endpoint information to the values from the
+			// ElfCluster resource, as it must have the correct information
+			// if the API server is online.
+			cluster := &clusterv1.Cluster{}
+			clusterKey := client.ObjectKey{Namespace: ctx.Cluster.Namespace, Name: ctx.Cluster.Name}
+			if err := ctx.Client.Get(ctx, clusterKey, cluster); err != nil {
 				cluster = ctx.Cluster.DeepCopy()
 				cluster.Spec.ControlPlaneEndpoint.Host = ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host
 				cluster.Spec.ControlPlaneEndpoint.Port = ctx.ElfCluster.Spec.ControlPlaneEndpoint.Port
