@@ -58,6 +58,7 @@ import (
 // ElfMachineReconciler reconciles a ElfMachine object
 type ElfMachineReconciler struct {
 	*context.ControllerContext
+	VMService service.VMService
 }
 
 // AddMachineControllerToManager adds the machine controller to the provided
@@ -172,6 +173,12 @@ func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 		PatchHelper:       patchHelper,
 	}
 
+	if r.VMService == nil {
+		if r.VMService, err = service.NewVMService(elfCluster.Auth(), logger); err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
 	// Always issue a patch when exiting this function so changes to the
 	// resource are patched back to the API server.
 	defer func() {
@@ -195,14 +202,6 @@ func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 }
 
 func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) (*infrav1.VirtualMachine, error) {
-	vmService, err := service.NewVMService(
-		ctx.ElfCluster.Auth(),
-		ctx.Logger,
-	)
-	if err != nil {
-		return nil, err
-	}
-
 	if !ctx.ElfMachine.HasVM() || !ctx.ElfMachine.WithVM() {
 		ctx.Logger.Info("VM has been deleted")
 
@@ -213,7 +212,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) (*
 
 	// Handle pending task
 	if ctx.ElfMachine.HasTask() {
-		job, err = vmService.GetJob(ctx.ElfMachine.Status.TaskRef)
+		job, err := r.VMService.GetJob(ctx.ElfMachine.Status.TaskRef)
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +235,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) (*
 		}
 	}
 
-	vm, err := vmService.Get(ctx.ElfMachine.Status.VMRef)
+	vm, err := r.VMService.Get(ctx.ElfMachine.Status.VMRef)
 	if err != nil {
 		if service.IsVMNotFound(err) {
 			ctx.Logger.Info("VM be deleted")
@@ -248,7 +247,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) (*
 	}
 
 	if vm.IsPoweredOn() {
-		job, err := vmService.PowerOff(ctx.ElfMachine.Status.VMRef)
+		job, err := r.VMService.PowerOff(ctx.ElfMachine.Status.VMRef)
 		if err != nil {
 			return nil, err
 		}
@@ -264,7 +263,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) (*
 	ctx.Logger.V(6).Info("Destroying VM",
 		"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
 
-	job, err = vmService.Delete(ctx.ElfMachine.Status.VMRef)
+	job, err = r.VMService.Delete(ctx.ElfMachine.Status.VMRef)
 	if err != nil {
 		return nil, err
 	} else {
@@ -388,11 +387,6 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 
 // Reconcile ELF VM, create or get VM.
 func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*infrav1.VirtualMachine, error) {
-	vmService, err := service.NewVMService(ctx.ElfCluster.Auth(), ctx.Logger)
-	if err != nil {
-		return nil, err
-	}
-
 	// If there is no pending taskRef or no vmRef then no VM exists, create one
 	if !ctx.ElfMachine.WithVM() {
 		ctx.Logger.Info("vmRef and taskRef not exist")
@@ -406,7 +400,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*infrav
 		}
 
 		ctx.Logger.V(6).Info("Create VM for ElfMachine")
-		job, err := vmService.Clone(ctx.Machine, ctx.ElfMachine, bootstrapData)
+		job, err := r.VMService.Clone(ctx.Machine, ctx.ElfMachine, bootstrapData)
 		if err != nil {
 			ctx.Logger.Error(err, "failed to create VM",
 				"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
@@ -419,7 +413,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*infrav
 
 	// Handle pending task
 	if ctx.ElfMachine.HasTask() {
-		job, err := vmService.WaitJob(ctx.ElfMachine.Status.TaskRef)
+		job, err := r.VMService.WaitJob(ctx.ElfMachine.Status.TaskRef)
 		if err != nil {
 			return nil, err
 		}
@@ -446,7 +440,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*infrav
 		}
 	}
 
-	vm, err := vmService.Get(ctx.ElfMachine.Status.VMRef)
+	vm, err := r.VMService.Get(ctx.ElfMachine.Status.VMRef)
 	if err != nil {
 		return nil, err
 	}
