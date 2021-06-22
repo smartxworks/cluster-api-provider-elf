@@ -17,31 +17,28 @@ limitations under the License.
 package controllers
 
 import (
-	"path/filepath"
+	"context"
+	"fmt"
+	"os"
 	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	infrastructurev1alpha3 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/manager"
+	"github.com/smartxworks/cluster-api-provider-elf/test/helpers"
 	//+kubebuilder:scaffold:imports
 )
 
-// These tests use Ginkgo (BDD-style Go testing framework). Refer to
-// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
-
-var cfg *rest.Config
-var k8sClient client.Client
-var testEnv *envtest.Environment
-
-func TestAPIs(t *testing.T) {
+func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	RunSpecsWithDefaultAndCustomReporters(t,
@@ -49,35 +46,59 @@ func TestAPIs(t *testing.T) {
 		[]Reporter{printer.NewlineReporter{}})
 }
 
-var _ = BeforeSuite(func() {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+var (
+	testEnv *helpers.TestEnvironment
+	ctx     = context.Background()
+)
 
-	By("bootstrapping test environment")
-	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
-		ErrorIfCRDPathMissing: true,
+func TestMain(m *testing.M) {
+	setup()
+
+	defer func() {
+		fmt.Println("Tearing down test suite")
+		teardown()
+	}()
+
+	code := m.Run()
+
+	os.Exit(code)
+}
+
+func setup() {
+	fmt.Println("Creating new test environment")
+
+	utilruntime.Must(infrav1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
+
+	testEnv = helpers.NewTestEnvironment()
+
+	if err := AddClusterControllerToManager(testEnv.GetContext(), testEnv.Manager); err != nil {
+		panic(fmt.Sprintf("unable to setup ElfCluster controller: %v", err))
+	}
+	if err := AddMachineControllerToManager(testEnv.GetContext(), testEnv.Manager); err != nil {
+		panic(fmt.Sprintf("unable to setup ElfMachine controller: %v", err))
 	}
 
-	cfg, err := testEnv.Start()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(cfg).NotTo(BeNil())
+	go func() {
+		fmt.Println("Starting the manager")
+		if err := testEnv.StartManager(); err != nil {
+			panic(fmt.Sprintf("failed to start the envtest manager: %v", err))
+		}
+	}()
 
-	err = infrastructurev1alpha3.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
+	// create manager pod namespace
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: manager.DefaultPodNamespace,
+		},
+	}
+	if err := testEnv.Create(ctx, ns); err != nil {
+		panic("unable to create controller namespace")
+	}
+}
 
-	err = infrastructurev1alpha3.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	//+kubebuilder:scaffold:scheme
-
-	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-	Expect(err).NotTo(HaveOccurred())
-	Expect(k8sClient).NotTo(BeNil())
-
-}, 60)
-
-var _ = AfterSuite(func() {
-	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
-})
+func teardown() {
+	if err := testEnv.Stop(); err != nil {
+		panic(fmt.Sprintf("Failed to stop envtest: %v", err))
+	}
+}
