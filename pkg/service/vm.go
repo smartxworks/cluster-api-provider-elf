@@ -14,22 +14,32 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/session"
 )
 
-func NewVMService(auth infrav1.ElfAuth, logger logr.Logger) (*VMService, error) {
+type VMService interface {
+	Clone(machine *clusterv1.Machine, elfMachine *infrav1.ElfMachine, bootstrapData string) (*infrav1.VMJob, error)
+	Delete(uuid string) (*infrav1.VMJob, error)
+	PowerOff(uuid string) (*infrav1.VMJob, error)
+	Get(uuid string) (*infrav1.VirtualMachine, error)
+	GetVMTemplate(templateUUID string) (*client.VmTemplate, error)
+	GetJob(jobId string) (*infrav1.VMJob, error)
+	WaitJob(jobId string) (*infrav1.VMJob, error)
+}
+
+func NewVMService(auth infrav1.ElfAuth, logger logr.Logger) (VMService, error) {
 	authSession, err := session.NewElfSession(auth)
 	if err != nil {
 		return nil, err
 	}
 
-	return &VMService{authSession, logger}, nil
+	return &ElfVMService{authSession, logger}, nil
 }
 
-type VMService struct {
+type ElfVMService struct {
 	Session *session.Session `json:"session"`
 	Logger  logr.Logger      `json:"logger"`
 }
 
 // Create VM using VM template.
-func (svr *VMService) Clone(
+func (svr *ElfVMService) Clone(
 	machine *clusterv1.Machine,
 	elfMachine *infrav1.ElfMachine,
 	bootstrapData string) (*infrav1.VMJob, error) {
@@ -85,7 +95,7 @@ func (svr *VMService) Clone(
 }
 
 // Delete VM.
-func (svr *VMService) Delete(uuid string) (*infrav1.VMJob, error) {
+func (svr *ElfVMService) Delete(uuid string) (*infrav1.VMJob, error) {
 	job, err := svr.Session.VmDelete(uuid, true)
 	if err != nil {
 		return nil, err
@@ -95,7 +105,7 @@ func (svr *VMService) Delete(uuid string) (*infrav1.VMJob, error) {
 }
 
 // Power Off VM.
-func (svr *VMService) PowerOff(uuid string) (*infrav1.VMJob, error) {
+func (svr *ElfVMService) PowerOff(uuid string) (*infrav1.VMJob, error) {
 	svr.Logger.Info("Power off VM", "VM", uuid)
 
 	vmStopBody := client.VmStopBody{
@@ -110,7 +120,7 @@ func (svr *VMService) PowerOff(uuid string) (*infrav1.VMJob, error) {
 }
 
 // Get the VM.
-func (svr *VMService) Get(uuid string) (*infrav1.VirtualMachine, error) {
+func (svr *ElfVMService) Get(uuid string) (*infrav1.VirtualMachine, error) {
 	if uuid == "" {
 		return nil, nil
 	} else {
@@ -124,7 +134,7 @@ func (svr *VMService) Get(uuid string) (*infrav1.VirtualMachine, error) {
 }
 
 // Get the VM template.
-func (svr *VMService) GetVMTemplate(templateUUID string) (*client.VmTemplate, error) {
+func (svr *ElfVMService) GetVMTemplate(templateUUID string) (*client.VmTemplate, error) {
 	svr.Logger.Info("Get VM template", "UUID", templateUUID)
 
 	if _, err := uuid.Parse(templateUUID); err != nil {
@@ -144,7 +154,7 @@ func (svr *VMService) GetVMTemplate(templateUUID string) (*client.VmTemplate, er
 }
 
 // Get the job by id.
-func (svr *VMService) GetJob(jobId string) (*infrav1.VMJob, error) {
+func (svr *ElfVMService) GetJob(jobId string) (*infrav1.VMJob, error) {
 	if jobId == "" {
 		return nil, nil
 	}
@@ -165,7 +175,7 @@ func (svr *VMService) GetJob(jobId string) (*infrav1.VMJob, error) {
 }
 
 // Wait job done.
-func (svr *VMService) WaitJob(jobId string) (*infrav1.VMJob, error) {
+func (svr *ElfVMService) WaitJob(jobId string) (*infrav1.VMJob, error) {
 	for {
 		svr.Logger.Info("Waiting for VM job done...")
 		job, err := svr.Session.JobGet(jobId)
