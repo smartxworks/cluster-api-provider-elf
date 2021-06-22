@@ -160,6 +160,7 @@ func (j *VMJob) GetVMUUID() string {
 	return uuid
 }
 
+//+kubebuilder:object:generate=false
 type PatchStringValue struct {
 	Op    string      `json:"op"`
 	Path  string      `json:"path"`
