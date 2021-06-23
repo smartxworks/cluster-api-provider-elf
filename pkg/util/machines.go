@@ -30,10 +30,10 @@ func GetElfMachinesInCluster(
 	namespace, clusterName string) ([]*infrav1.ElfMachine, error) {
 
 	labels := map[string]string{clusterv1.ClusterLabelName: clusterName}
-	machineList := &infrav1.ElfMachineList{}
+	var machineList infrav1.ElfMachineList
 
 	if err := controllerClient.List(
-		ctx, machineList,
+		ctx, &machineList,
 		client.InNamespace(namespace),
 		client.MatchingLabels(labels)); err != nil {
 		return nil, err

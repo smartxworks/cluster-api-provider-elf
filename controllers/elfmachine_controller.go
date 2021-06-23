@@ -98,8 +98,8 @@ func AddMachineControllerToManager(ctx *context.ControllerManagerContext, mgr ma
 // Reconcile ensures the back-end state reflects the Kubernetes resource state intent.
 func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
 	// Get the ElfMachine resource for this request.
-	elfMachine := &infrav1.ElfMachine{}
-	if err := r.Client.Get(r, req.NamespacedName, elfMachine); err != nil {
+	var elfMachine infrav1.ElfMachine
+	if err := r.Client.Get(r, req.NamespacedName, &elfMachine); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.Logger.Info("ElfMachine not found, won't reconcile", "key", req.NamespacedName)
 
@@ -129,7 +129,7 @@ func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 
 		return reconcile.Result{}, nil
 	}
-	if clusterutilv1.IsPaused(cluster, elfMachine) {
+	if clusterutilv1.IsPaused(cluster, &elfMachine) {
 		r.Logger.V(4).Info("ElfMachine linked to a cluster that is paused",
 			"namespace", elfMachine.Namespace, "elfMachine", elfMachine.Name)
 
@@ -137,12 +137,12 @@ func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 	}
 
 	// Fetch the ElfCluster
-	elfCluster := &infrav1.ElfCluster{}
+	var elfCluster infrav1.ElfCluster
 	elfClusterName := client.ObjectKey{
 		Namespace: elfMachine.Namespace,
 		Name:      cluster.Spec.InfrastructureRef.Name,
 	}
-	if err := r.Client.Get(r, elfClusterName, elfCluster); err != nil {
+	if err := r.Client.Get(r, elfClusterName, &elfCluster); err != nil {
 		r.Logger.Info("ElfMachine Waiting for ElfCluster",
 			"namespace", elfMachine.Namespace, "elfMachine", elfMachine.Name)
 
@@ -150,7 +150,7 @@ func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 	}
 
 	// Create the patch helper.
-	patchHelper, err := patch.NewHelper(elfMachine, r.Client)
+	patchHelper, err := patch.NewHelper(&elfMachine, r.Client)
 	if err != nil {
 		return reconcile.Result{}, errors.Wrapf(
 			err,
@@ -166,9 +166,9 @@ func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 	machineContext := &context.MachineContext{
 		ControllerContext: r.ControllerContext,
 		Cluster:           cluster,
-		ElfCluster:        elfCluster,
+		ElfCluster:        &elfCluster,
 		Machine:           machine,
-		ElfMachine:        elfMachine,
+		ElfMachine:        &elfMachine,
 		Logger:            logger,
 		PatchHelper:       patchHelper,
 	}

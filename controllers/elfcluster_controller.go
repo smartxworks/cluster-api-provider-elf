@@ -92,8 +92,8 @@ type ElfClusterReconciler struct {
 // Reconcile ensures the back-end state reflects the Kubernetes resource state intent.
 func (r *ElfClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
 	// Get the ElfCluster resource for this request.
-	elfCluster := &infrav1.ElfCluster{}
-	if err := r.Client.Get(r, req.NamespacedName, elfCluster); err != nil {
+	var elfCluster infrav1.ElfCluster
+	if err := r.Client.Get(r, req.NamespacedName, &elfCluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.Logger.Info("ElfCluster not found, won't reconcile", "key", req.NamespacedName)
 
@@ -116,7 +116,7 @@ func (r *ElfClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 		return reconcile.Result{}, nil
 	}
 
-	if clusterutilv1.IsPaused(cluster, elfCluster) {
+	if clusterutilv1.IsPaused(cluster, &elfCluster) {
 		r.Logger.V(4).Info("ElfCluster linked to a cluster that is paused",
 			"namespace", elfCluster.Namespace,
 			"elfCluster", elfCluster.Name)
@@ -125,7 +125,7 @@ func (r *ElfClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 	}
 
 	// Create the patch helper.
-	patchHelper, err := patch.NewHelper(elfCluster, r.Client)
+	patchHelper, err := patch.NewHelper(&elfCluster, r.Client)
 	if err != nil {
 		return reconcile.Result{}, errors.Wrapf(
 			err,
@@ -140,7 +140,7 @@ func (r *ElfClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 	clusterContext := &context.ClusterContext{
 		ControllerContext: r.ControllerContext,
 		Cluster:           cluster,
-		ElfCluster:        elfCluster,
+		ElfCluster:        &elfCluster,
 		Logger:            logger,
 		PatchHelper:       patchHelper,
 	}
