@@ -39,6 +39,12 @@ type Options struct {
 	// Defaults to the eponymous constant in this package.
 	MaxConcurrentReconciles int
 
+	// MetricsAddr is the net.Addr string for the metrics server.
+	MetricsAddr string
+
+	// HealthAddr is the net.Addr string for the healthcheck server
+	HealthAddr string
+
 	// LeaderElectionNamespace is the namespace in which the pod running the
 	// controller maintains a leader election lock
 	//
@@ -49,6 +55,12 @@ type Options struct {
 	//
 	// Defaults to the eponymous constant in this package.
 	PodName string
+
+	// WatchNamespace is the namespace the controllers watch for changes. If
+	// no value is specified then all namespaces are watched.
+	//
+	// Defaults to the eponymous constant in this package.
+	WatchNamespace string
 
 	Logger logr.Logger
 
@@ -69,10 +81,6 @@ func (o *Options) defaults() {
 
 	if o.PodName == "" {
 		o.PodName = DefaultPodName
-	}
-
-	if o.LeaderElectionNamespace == "" {
-		o.LeaderElectionNamespace = DefaultPodNamespace
 	}
 
 	if o.SyncPeriod == 0 {

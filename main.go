@@ -52,6 +52,11 @@ func main() {
 		klog.Fatalf("failed to set log level: %v", err)
 	}
 
+	flag.StringVar(
+		&managerOpts.MetricsAddr,
+		"metrics-addr",
+		":8080",
+		"The address the metric endpoint binds to.")
 	flag.BoolVar(
 		&managerOpts.LeaderElectionEnabled,
 		"enable-leader-election",
@@ -62,13 +67,36 @@ func main() {
 		"leader-election-id",
 		defaultLeaderElectionID,
 		"Name of the config map to use as the locking resource when configuring leader election.")
+	flag.StringVar(
+		&managerOpts.WatchNamespace,
+		"namespace",
+		"",
+		"Namespace that the controller watches to reconcile cluster-api objects. If unspecified, the controller watches for cluster-api objects across all namespaces.")
+	flag.StringVar(
+		&managerOpts.LeaderElectionNamespace,
+		"leader-election-namespace",
+		"",
+		"Namespace that the controller performs leader election in. If unspecified, the controller will discover which namespace it is running in.",
+	)
 	flag.IntVar(
 		&managerOpts.MaxConcurrentReconciles,
 		"max-concurrent-reconciles",
 		10,
 		"The maximum number of allowed, concurrent reconciles.")
+	flag.StringVar(
+		&managerOpts.HealthAddr,
+		"health-addr",
+		":9440",
+		"The address the health endpoint binds to.",
+	)
 
 	flag.Parse()
+
+	if managerOpts.WatchNamespace != "" {
+		setupLog.Info(
+			"Watching objects only in namespace for reconciliation",
+			"namespace", managerOpts.WatchNamespace)
+	}
 
 	// Create a function that adds all of the controllers and webhooks to the manager.
 	addToManager := func(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {

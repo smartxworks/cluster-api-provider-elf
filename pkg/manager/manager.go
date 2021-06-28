@@ -37,10 +37,13 @@ func New(opts Options) (Manager, error) {
 	// Build the controller manager.
 	mgr, err := ctrl.NewManager(opts.KubeConfig, ctrl.Options{
 		Scheme:                  opts.Scheme,
+		MetricsBindAddress:      opts.MetricsAddr,
 		LeaderElection:          opts.LeaderElectionEnabled,
 		LeaderElectionID:        opts.LeaderElectionID,
 		LeaderElectionNamespace: opts.LeaderElectionNamespace,
 		SyncPeriod:              &opts.SyncPeriod,
+		Namespace:               opts.WatchNamespace,
+		HealthProbeBindAddress:  opts.HealthAddr,
 		NewClient:               clusterutilv1.ManagerDelegatingClientFunc,
 	})
 	if err != nil {
@@ -50,6 +53,7 @@ func New(opts Options) (Manager, error) {
 	// Build the controller manager context.
 	controllerManagerContext := &context.ControllerManagerContext{
 		Context:                 goctx.Background(),
+		WatchNamespace:          opts.WatchNamespace,
 		Name:                    opts.PodName,
 		LeaderElectionID:        opts.LeaderElectionID,
 		LeaderElectionNamespace: opts.LeaderElectionNamespace,
