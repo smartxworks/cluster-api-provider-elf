@@ -5,6 +5,12 @@ testbin/*
 # Editor
 .vscode
 
+# Generated yaml in out/
+out/
+
+# Files for build
+.build
+
 
 # https://raw.githubusercontent.com/github/gitignore/master/Go.gitignore
 
