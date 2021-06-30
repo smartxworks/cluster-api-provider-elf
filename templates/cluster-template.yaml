@@ -24,14 +24,12 @@ kind: ElfCluster
 metadata:
   name: '${CLUSTER_NAME}'
   namespace: '${NAMESPACE}'
-  labels:
-    cluster.x-k8s.io/v1alpha3: "v1alpha3"
 spec:
   server: '${ELF_SERVER}'
   username: '${ELF_SERVER_USERNAME}'
   password: '${ELF_SERVER_PASSWORD}'
   controlPlaneEndpoint:
-    host: '${CONTROL_PLANE_IP}'
+    host: '${CONTROL_PLANE_ENDPOINT_IP}'
     port: 6443
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
@@ -44,13 +42,9 @@ spec:
     spec:
       template: '${ELF_TEMPLATE}'
       network:
-        preferredAPIServerCidr: 192.168.67.0/20
         devices:
           - networkIndex: 0
-            networkType: ipv4
-            ipAddrs: '${CONTROL_PLANE_IP}'
-            netmask: '${CONTROL_PLANE_NETMASK}'
-            gateway: '${CONTROL_PLANE_GATEWAY}'
+            networkType: ipv4_dhcp
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
 kind: KubeadmControlPlane
@@ -68,17 +62,72 @@ spec:
     clusterConfiguration:
       clusterName: '${CLUSTER_NAME}'
       imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
+      apiServer:
+        extraArgs:
+          cloud-provider: external
+      controllerManager:
+        extraArgs:
+          cloud-provider: external
     initConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
-          eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+          cloud-provider: external
+        name: '{{ ds.meta_data.hostname }}'
     preKubeadmCommands:
       - hostname "{{ ds.meta_data.hostname }}"
       - echo "::1         ipv6-localhost ipv6-loopback" >/etc/hosts
       - echo "127.0.0.1   localhost" >>/etc/hosts
       - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
       - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
-    verbosity: 5
+    useExperimentalRetryJoin: true
+    files:
+    - content: |
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          creationTimestamp: null
+          name: kube-vip
+          namespace: kube-system
+        spec:
+          containers:
+          - args:
+            - start
+            env:
+            - name: vip_arp
+              value: "true"
+            - name: vip_leaderelection
+              value: "true"
+            - name: vip_address
+              value: ${CONTROL_PLANE_ENDPOINT_IP}
+            - name: vip_interface
+              value: eth0
+            - name: vip_leaseduration
+              value: "15"
+            - name: vip_renewdeadline
+              value: "10"
+            - name: vip_retryperiod
+              value: "2"
+            image: plndr/kube-vip:0.3.2
+            imagePullPolicy: IfNotPresent
+            name: kube-vip
+            resources: {}
+            securityContext:
+              capabilities:
+                add:
+                - NET_ADMIN
+                - SYS_TIME
+            volumeMounts:
+            - mountPath: /etc/kubernetes/admin.conf
+              name: kubeconfig
+          hostNetwork: true
+          volumes:
+          - hostPath:
+              path: /etc/kubernetes/admin.conf
+              type: FileOrCreate
+            name: kubeconfig
+        status: {}
+      owner: root:root
+      path: /etc/kubernetes/manifests/kube-vip.yaml
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 kind: KubeadmConfigTemplate
@@ -88,20 +137,20 @@ metadata:
 spec:
   template:
     spec:
-      verbosity: 5
       clusterConfiguration:
         clusterName: '${CLUSTER_NAME}'
         imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-provider: external
+          name: '{{ ds.meta_data.hostname }}'
       preKubeadmCommands:
         - hostname "{{ ds.meta_data.hostname }}"
         - echo "::1         ipv6-localhost ipv6-loopback" >/etc/hosts
         - echo "127.0.0.1   localhost" >>/etc/hosts
         - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
         - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
-      joinConfiguration:
-        nodeRegistration:
-          kubeletExtraArgs:
-            eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
 kind: ElfMachineTemplate
@@ -113,7 +162,6 @@ spec:
     spec:
       template: '${ELF_TEMPLATE}'
       network:
-        preferredAPIServerCidr: 192.168.67.0/20
         devices:
           - networkIndex: 0
             networkType: ipv4_dhcp
@@ -129,8 +177,7 @@ spec:
   clusterName: '${CLUSTER_NAME}'
   replicas: ${WORKER_MACHINE_COUNT}
   selector:
-    matchLabels:
-      cluster.x-k8s.io/cluster-name: '${CLUSTER_NAME}'
+    matchLabels: {}
   template:
     metadata:
       labels:
