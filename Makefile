@@ -29,6 +29,18 @@ rm -rf $$TMP_DIR ;\
 }
 endef
 
+# Directories
+ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+BIN_DIR := $(ROOT_DIR)/bin
+TOOLS_DIR := $(ROOT_DIR)/hack/tools
+TOOLS_BIN_DIR := $(TOOLS_DIR)/bin
+export PATH := $(abspath $(TOOLS_BIN_DIR)):$(PATH)
+
+REPO_ROOT := $(shell git rev-parse --show-toplevel)
+ARTIFACTS ?= ${REPO_ROOT}/_artifacts
+E2E_CONF_FILE  ?= "$(abspath test/e2e/config/elf-dev.yaml)"
+E2E_TEMPLATE_DIR := "$(abspath test/e2e/data/infrastructure-elf/)"
+
 # Allow overriding manifest generation destination directory
 MANIFEST_ROOT ?= ./config
 CRD_ROOT ?= $(MANIFEST_ROOT)/crd/bases
@@ -65,8 +77,25 @@ help: ## Display this help.
 ## Testing
 ## --------------------------------------
 
+$(ARTIFACTS):
+	mkdir -p $@
+
 test: generate fmt vet ## Run tests.
 	source ./hack/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v ./api/... ./controllers/... ./pkg/... -coverprofile cover.out
+
+.PHONY: e2e-image
+e2e-image: ## Build the e2e manager image
+	docker build --tag="gcr.io/k8s-staging-cluster-api/cape-manager:e2e" .
+
+.PHONY: e2e
+# e2e: e2e-image
+e2e: ginkgo kustomize kind ## Run e2e tests
+	$(MAKE) release-manifests
+	cp $(RELEASE_DIR)/cluster-template.yaml $(E2E_TEMPLATE_DIR)/kustomization/cluster-template.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization > $(E2E_TEMPLATE_DIR)/cluster-template.yaml
+	cp $(RELEASE_DIR)/metadata.yaml $(E2E_TEMPLATE_DIR)/metadata.yaml
+
+	time $(GINKGO) -v ./test/e2e -- -e2e.config="$(E2E_CONF_FILE)" -e2e.artifacts-folder="$(ARTIFACTS)"
 
 ## --------------------------------------
 ## Tooling Binaries
@@ -79,6 +108,14 @@ kustomize: ## Download kustomize locally if necessary.
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1)
+
+GINKGO := $(shell pwd)/bin/ginkgo
+ginkgo: ## Download ginkgo locally if necessary.
+	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/ginkgo@v1.12.1)
+
+KIND := $(shell pwd)/bin/kind
+kind: ## Download kind locally if necessary.
+	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@v0.7.0)
 
 ## --------------------------------------
 ## Linting and fixing linter errors
@@ -100,14 +137,14 @@ generate: ## Generate code
 	$(MAKE) generate-manifests
 
 .PHONY: generate-go
-generate-go: $(CONTROLLER_GEN) $(CONVERSION_GEN) ## Runs Go related generate targets
+generate-go: controller-gen ## Runs Go related generate targets
 	go generate ./...
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
 		object:headerFile=./hack/boilerplate.go.txt
 
 .PHONY: generate-manifests
-generate-manifests: $(CONTROLLER_GEN) ## Generate manifests e.g. CRD, RBAC etc.
+generate-manifests: controller-gen ## Generate manifests e.g. CRD, RBAC etc.
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
 		crd:crdVersions=v1 \
@@ -146,7 +183,7 @@ dev-manifests:
 	cp metadata.yaml $(OVERRIDES_DIR)/metadata.yaml
 
 .PHONY: manifests
-manifests: $(MANIFEST_DIR) $(BUILD_DIR) $(KUSTOMIZE)
+manifests: $(MANIFEST_DIR) $(BUILD_DIR) kustomize
 	rm -rf $(BUILD_DIR)/config
 	cp -R config $(BUILD_DIR)
 	cp templates/cluster-template.yaml $(MANIFEST_DIR)/cluster-template.yaml
@@ -188,7 +225,7 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 ## --------------------------------------
 
 .PHONY: docker-build
-docker-build: vendor ## Build the docker image for controller-manager
+docker-build: ## Build the docker image for controller-manager
 	docker build --pull --build-arg ARCH=$(ARCH) . -t $(DEV_CONTROLLER_IMG):$(DEV_TAG)
 
 .PHONY: docker-push
