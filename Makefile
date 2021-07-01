@@ -88,7 +88,7 @@ e2e-image: ## Build the e2e manager image
 	docker build --tag="gcr.io/k8s-staging-cluster-api/cape-manager:e2e" .
 
 .PHONY: e2e
-# e2e: e2e-image
+e2e: e2e-image
 e2e: ginkgo kustomize kind ## Run e2e tests
 	$(MAKE) release-manifests
 	cp $(RELEASE_DIR)/cluster-template.yaml $(E2E_TEMPLATE_DIR)/kustomization/cluster-template.yaml
