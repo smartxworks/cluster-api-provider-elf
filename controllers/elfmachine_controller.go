@@ -26,12 +26,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	clustererror "sigs.k8s.io/cluster-api/errors"
 	clusterutilv1 "sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -175,13 +175,24 @@ func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 
 	if r.VMService == nil {
 		if r.VMService, err = service.NewVMService(elfCluster.Auth(), logger); err != nil {
+			conditions.MarkFalse(machineContext.ElfMachine, infrav1.ElfAvailableCondition, infrav1.ElfUnreachableReason, clusterv1.ConditionSeverityError, err.Error())
+
 			return reconcile.Result{}, err
 		}
 	}
+	conditions.MarkTrue(machineContext.ElfMachine, infrav1.ElfAvailableCondition)
 
 	// Always issue a patch when exiting this function so changes to the
 	// resource are patched back to the API server.
 	defer func() {
+		// always update the readyCondition.
+		conditions.SetSummary(machineContext.ElfMachine,
+			conditions.WithConditions(
+				infrav1.VMProvisionedCondition,
+				infrav1.ElfAvailableCondition,
+			),
+		)
+
 		// Patch the ElfMachine resource.
 		if err := machineContext.Patch(); err != nil {
 			if reterr == nil {
@@ -208,6 +219,8 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) (*
 		return nil, nil
 	}
 
+	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.DeletingReason, clusterv1.ConditionSeverityInfo, "")
+
 	var job *infrav1.VMJob
 
 	// Handle pending task
@@ -224,6 +237,8 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) (*
 				"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", job.Id)
 		} else if job.IsFailed() {
 			ctx.ElfMachine.SetTask("")
+
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailure, clusterv1.ConditionSeverityInfo, job.Description)
 
 			ctx.Logger.Error(errors.New("Delete VM job failed"),
 				"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", job.Id)
@@ -288,6 +303,8 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 			return reconcile.Result{}, nil
 		}
 
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.DeletionFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+
 		return reconcile.Result{}, err
 	}
 
@@ -316,6 +333,8 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 		ctx.Logger.Info("Cluster infrastructure is not ready yet",
 			"cluster", ctx.Cluster.Name)
 
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForClusterInfrastructureReason, clusterv1.ConditionSeverityInfo, "")
+
 		return reconcile.Result{}, nil
 	}
 
@@ -324,10 +343,14 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 		if !infrautilv1.IsControlPlaneMachine(ctx.ElfMachine) && !ctx.Cluster.Status.ControlPlaneInitialized {
 			ctx.Logger.Info("Waiting for the control plane to be initialized")
 
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.WaitingForControlPlaneAvailableReason, clusterv1.ConditionSeverityInfo, "")
+
 			return ctrl.Result{}, nil
 		}
 
 		ctx.Logger.Info("Waiting for bootstrap data to be available")
+
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForBootstrapDataReason, clusterv1.ConditionSeverityInfo, "")
 
 		return reconcile.Result{}, nil
 	}
@@ -365,10 +388,13 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 		ctx.Logger.Info("network is not reconciled",
 			"namespace", ctx.ElfMachine.Namespace, "elfMachine", ctx.ElfMachine.Name)
 
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityInfo, "")
+
 		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
 	}
 
 	ctx.ElfMachine.Status.Ready = true
+	conditions.MarkTrue(ctx.ElfMachine, infrav1.VMProvisionedCondition)
 
 	// Reconcile node providerID
 	if ok, err := r.reconcileNodeProviderID(ctx, vm); !ok {
@@ -391,8 +417,16 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*infrav
 	if !ctx.ElfMachine.WithVM() {
 		ctx.Logger.Info("vmRef and taskRef not exist")
 
+		// We are setting this condition only in case it does not exists so we avoid to get flickering LastConditionTime
+		// in case of cloning errors or powering on errors.
+		if !conditions.Has(ctx.ElfMachine, infrav1.VMProvisionedCondition) {
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.CloningReason, clusterv1.ConditionSeverityInfo, "")
+		}
+
 		bootstrapData, err := r.getBootstrapData(ctx)
 		if err != nil {
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.CloningFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+
 			return nil, err
 		}
 		if bootstrapData == "" {
@@ -404,6 +438,8 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*infrav
 		if err != nil {
 			ctx.Logger.Error(err, "failed to create VM",
 				"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
+
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.CloningFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 
 			return nil, err
 		}
@@ -426,6 +462,8 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*infrav
 				"taskRef", job.Id)
 		} else if job.IsFailed() {
 			ctx.ElfMachine.SetTask("")
+
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailure, clusterv1.ConditionSeverityInfo, job.Description)
 
 			ctx.Logger.Error(errors.New("Create VM job failed"),
 				"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", job.Id)
@@ -503,7 +541,7 @@ func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineConte
 				Value: providerID,
 			})
 		payloadBytes, _ := json.Marshal(payloads)
-		_, err := kubeClient.CoreV1().Nodes().Patch(node.Name, types.JSONPatchType, payloadBytes)
+		_, err := kubeClient.CoreV1().Nodes().Patch(node.Name, apitypes.JSONPatchType, payloadBytes)
 		if err != nil {
 			return false, err
 		}
