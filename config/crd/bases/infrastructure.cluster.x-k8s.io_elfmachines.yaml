@@ -36,13 +36,214 @@ spec:
           spec:
             description: ElfMachineSpec defines the desired state of ElfMachine
             properties:
-              foo:
-                description: Foo is an example field of ElfMachine. Edit elfmachine_types.go
-                  to remove/update
+              auto_schedule:
+                type: boolean
+              diskGiB:
+                format: int32
+                type: integer
+              failureDomain:
+                description: FailureDomain is the failure domain unique identifier
+                  this Machine should be attached to, as defined in Cluster API. For
+                  this infrastructure provider, the name is equivalent to the name
+                  of the ElfDeploymentZone.
                 type: string
+              ha:
+                type: boolean
+              memoryMiB:
+                format: int64
+                type: integer
+              network:
+                description: Network is the network configuration for this machin's
+                  VM.
+                properties:
+                  devices:
+                    description: Devices is the list of network devices used by the
+                      virtual machine.
+                    items:
+                      description: NetworkDeviceSpec defines the network configuration
+                        for a virtual machine's network device.
+                      properties:
+                        gateway:
+                          description: Gateway4 is the IPv4 gateway used by this device.
+                            Required when DHCP4 is false.
+                          type: string
+                        ipAddrs:
+                          description: IPAddrs is a list of one or more IPv4 and/or
+                            IPv6 addresses to assign to this device. Required when
+                            DHCP4 and DHCP6 are both false.
+                          type: string
+                        netmask:
+                          type: string
+                        networkIndex:
+                          type: integer
+                        networkType:
+                          type: string
+                      required:
+                      - networkIndex
+                      - networkType
+                      type: object
+                    type: array
+                  preferredAPIServerCidr:
+                    description: PreferredAPIServeCIDR is the preferred CIDR for the
+                      Kubernetes API server endpoint on this machine
+                    type: string
+                required:
+                - devices
+                type: object
+              numCPUS:
+                description: NumCPUS is the number of virtual processors in a VM.
+                  Defaults to the analogue property value in the template from which
+                  this machine is cloned.
+                format: int32
+                type: integer
+              numCoresPerSocket:
+                description: NumCoresPerSocket is the number of cores among which
+                  to distribute CPUs in this VM.
+                format: int32
+                type: integer
+              providerID:
+                description: ProviderID is the virtual machine's UUID formatted as
+                  elf://f0f6f65d-0786-4170-9ab9-d02187a61ad6
+                type: string
+              template:
+                description: Template is the name or UUID of the template used to
+                  clone new machines.
+                type: string
+            required:
+            - template
             type: object
           status:
             description: ElfMachineStatus defines the observed state of ElfMachine
+            properties:
+              addresses:
+                description: Addresses contains the Elf instance associated addresses.
+                items:
+                  description: MachineAddress contains information for the node's
+                    address.
+                  properties:
+                    address:
+                      description: The machine address.
+                      type: string
+                    type:
+                      description: Machine address type, one of Hostname, ExternalIP
+                        or InternalIP.
+                      type: string
+                  required:
+                  - address
+                  - type
+                  type: object
+                type: array
+              conditions:
+                description: Conditions defines current service state of the ElfMachine.
+                items:
+                  description: Condition defines an observation of a Cluster API resource
+                    operational state.
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transitioned from one status
+                        to another. This should be when the underlying condition changed.
+                        If that is not known, then using the time when the API field
+                        changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human readable message indicating details about
+                        the transition. This field may be empty.
+                      type: string
+                    reason:
+                      description: The reason for the condition's last transition
+                        in CamelCase. The specific API may choose whether or not this
+                        field is considered a guaranteed API. This field may not be
+                        empty.
+                      type: string
+                    severity:
+                      description: Severity provides an explicit classification of
+                        Reason code, so the users or machines can immediately understand
+                        the current situation and act accordingly. The Severity field
+                        MUST be set only when Status=False.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown.
+                      type: string
+                    type:
+                      description: Type of condition in CamelCase or in foo.example.com/CamelCase.
+                        Many .condition.type values are consistent across resources
+                        like Available, but because arbitrary conditions can be useful
+                        (see .node.status.conditions), the ability to deconflict is
+                        important.
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+              failureMessage:
+                description: "FailureMessage will be set in the event that there is
+                  a terminal problem reconciling the Machine and will contain a more
+                  verbose string suitable for logging and human consumption. \n This
+                  field should not be set for transitive errors that a controller
+                  faces that are expected to be fixed automatically over time (like
+                  service outages), but instead indicate that something is fundamentally
+                  wrong with the Machine's spec or the configuration of the controller,
+                  and that manual intervention is required. Examples of terminal errors
+                  would be invalid combinations of settings in the spec, values that
+                  are unsupported by the controller, or the responsible controller
+                  itself being critically misconfigured. \n Any transient errors that
+                  occur during the reconciliation of Machines can be added as events
+                  to the Machine object and/or logged in the controller's output."
+                type: string
+              failureReason:
+                description: "FailureReason will be set in the event that there is
+                  a terminal problem reconciling the Machine and will contain a succinct
+                  value suitable for machine interpretation. \n This field should
+                  not be set for transitive errors that a controller faces that are
+                  expected to be fixed automatically over time (like service outages),
+                  but instead indicate that something is fundamentally wrong with
+                  the Machine's spec or the configuration of the controller, and that
+                  manual intervention is required. Examples of terminal errors would
+                  be invalid combinations of settings in the spec, values that are
+                  unsupported by the controller, or the responsible controller itself
+                  being critically misconfigured. \n Any transient errors that occur
+                  during the reconciliation of Machines can be added as events to
+                  the Machine object and/or logged in the controller's output."
+                type: string
+              network:
+                description: Network returns the network status for each of the machine's
+                  configured network interfaces.
+                items:
+                  description: NetworkStatus provides information about one of a VM's
+                    networks.
+                  properties:
+                    connected:
+                      description: Connected is a flag that indicates whether this
+                        network is currently connected to the VM.
+                      type: boolean
+                    ipAddrs:
+                      description: IPAddrs is one or more IP addresses reported by
+                        vm-tools.
+                      type: string
+                    macAddr:
+                      description: MACAddr is the MAC address of the network device.
+                      type: string
+                    networkIndex:
+                      type: integer
+                    networkName:
+                      description: NetworkName is the name of the network.
+                      type: string
+                  required:
+                  - macAddr
+                  - networkIndex
+                  type: object
+                type: array
+              ready:
+                description: Ready is true when the provider resource is ready.
+                type: boolean
+              taskRef:
+                type: string
+              vmRef:
+                description: This value is set automatically at runtime and should
+                  not be set or modified by users. VMRef is used to lookup the VM.
+                type: string
             type: object
         type: object
     served: true
