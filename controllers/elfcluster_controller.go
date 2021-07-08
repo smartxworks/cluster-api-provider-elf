@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	goctx "context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -24,8 +25,9 @@ import (
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
 	clusterutilv1 "sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,7 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	infrautilv1 "github.com/smartxworks/cluster-api-provider-elf/pkg/util"
@@ -76,9 +78,7 @@ func AddClusterControllerToManager(ctx *context.ControllerManagerContext, mgr ma
 		// Watch the CAPI resource that owns this infrastructure resource.
 		Watches(
 			&source.Kind{Type: &clusterv1.Cluster{}},
-			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: clusterutilv1.ClusterToInfrastructureMapFunc(clusterControlledTypeGVK),
-			},
+			handler.EnqueueRequestsFromMapFunc(clusterutilv1.ClusterToInfrastructureMapFunc(clusterControlledTypeGVK)),
 		).
 		WithOptions(controller.Options{MaxConcurrentReconciles: ctx.MaxConcurrentReconciles}).
 		Complete(reconciler)
@@ -90,7 +90,7 @@ type ElfClusterReconciler struct {
 }
 
 // Reconcile ensures the back-end state reflects the Kubernetes resource state intent.
-func (r *ElfClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
+func (r *ElfClusterReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	// Get the ElfCluster resource for this request.
 	var elfCluster infrav1.ElfCluster
 	if err := r.Client.Get(r, req.NamespacedName, &elfCluster); err != nil {
@@ -116,7 +116,7 @@ func (r *ElfClusterReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 		return reconcile.Result{}, nil
 	}
 
-	if clusterutilv1.IsPaused(cluster, &elfCluster) {
+	if annotations.IsPaused(cluster, &elfCluster) {
 		r.Logger.V(4).Info("ElfCluster linked to a cluster that is paused",
 			"namespace", elfCluster.Namespace,
 			"elfCluster", elfCluster.Name)
@@ -229,7 +229,7 @@ func (r *ElfClusterReconciler) reconcileControlPlaneEndpoint(ctx *context.Cluste
 
 func (r *ElfClusterReconciler) isAPIServerOnline(ctx *context.ClusterContext) bool {
 	if kubeClient, err := infrautilv1.NewKubeClient(ctx, ctx.Client, ctx.Cluster); err == nil {
-		if _, err := kubeClient.CoreV1().Nodes().List(metav1.ListOptions{}); err == nil {
+		if _, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{}); err == nil {
 			// The target cluster is online. To make sure the correct control
 			// plane endpoint information is logged, it is necessary to fetch
 			// an up-to-date Cluster resource. If this fails, then set the

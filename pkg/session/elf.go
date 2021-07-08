@@ -1,7 +1,7 @@
 package session
 
 import (
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 	"github.smartx.com/smartx/elf-sdk-go/client"
 )
 

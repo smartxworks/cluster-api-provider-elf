@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.smartx.com/smartx/elf-sdk-go/client"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/session"
 )
 

@@ -5,12 +5,11 @@ import (
 
 	"github.com/pkg/errors"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha3"
-	clusterutilv1 "sigs.k8s.io/cluster-api/util"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
+	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha4"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	infrav1a3 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	infrav1a3 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 )
 
@@ -37,14 +36,13 @@ func New(opts Options) (Manager, error) {
 	// Build the controller manager.
 	mgr, err := ctrl.NewManager(opts.KubeConfig, ctrl.Options{
 		Scheme:                  opts.Scheme,
-		MetricsBindAddress:      opts.MetricsAddr,
+		MetricsBindAddress:      opts.MetricsBindAddr,
 		LeaderElection:          opts.LeaderElectionEnabled,
 		LeaderElectionID:        opts.LeaderElectionID,
 		LeaderElectionNamespace: opts.LeaderElectionNamespace,
 		SyncPeriod:              &opts.SyncPeriod,
 		Namespace:               opts.WatchNamespace,
 		HealthProbeBindAddress:  opts.HealthAddr,
-		NewClient:               clusterutilv1.ManagerDelegatingClientFunc,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to create manager")
