@@ -1,5 +1,5 @@
 ---
-apiVersion: cluster.x-k8s.io/v1alpha3
+apiVersion: cluster.x-k8s.io/v1alpha4
 kind: Cluster
 metadata:
   name: '${CLUSTER_NAME}'
@@ -11,15 +11,15 @@ spec:
     pods:
       cidrBlocks: ["100.96.0.0/11"]
   infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
     kind: ElfCluster
     name: '${CLUSTER_NAME}'
   controlPlaneRef:
     kind: KubeadmControlPlane
-    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha4
     name: '${CLUSTER_NAME}-control-plane'
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
 kind: ElfCluster
 metadata:
   name: '${CLUSTER_NAME}'
@@ -32,7 +32,7 @@ spec:
     host: '${CONTROL_PLANE_ENDPOINT_IP}'
     port: 6443
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
 kind: ElfMachineTemplate
 metadata:
   name: '${CLUSTER_NAME}-control-plane'
@@ -46,7 +46,7 @@ spec:
           - networkIndex: 0
             networkType: ipv4_dhcp
 ---
-apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha4
 kind: KubeadmControlPlane
 metadata:
   name: '${CLUSTER_NAME}-control-plane'
@@ -54,10 +54,11 @@ metadata:
 spec:
   replicas: ${CONTROL_PLANE_MACHINE_COUNT}
   version: '${KUBERNETES_VERSION}'
-  infrastructureTemplate:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
-    kind: ElfMachineTemplate
-    name: '${CLUSTER_NAME}-control-plane'
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+      kind: ElfMachineTemplate
+      name: '${CLUSTER_NAME}-control-plane'
   kubeadmConfigSpec:
     clusterConfiguration:
       clusterName: '${CLUSTER_NAME}'
@@ -129,7 +130,7 @@ spec:
       owner: root:root
       path: /etc/kubernetes/manifests/kube-vip.yaml
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha4
 kind: KubeadmConfigTemplate
 metadata:
   name: '${CLUSTER_NAME}-md-0'
@@ -152,7 +153,7 @@ spec:
         - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
         - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
 kind: ElfMachineTemplate
 metadata:
   name: '${CLUSTER_NAME}-worker'
@@ -166,7 +167,7 @@ spec:
           - networkIndex: 0
             networkType: ipv4_dhcp
 ---
-apiVersion: cluster.x-k8s.io/v1alpha3
+apiVersion: cluster.x-k8s.io/v1alpha4
 kind: MachineDeployment
 metadata:
   name: '${CLUSTER_NAME}-md-0'
@@ -187,10 +188,10 @@ spec:
       version: '${KUBERNETES_VERSION}'
       bootstrap:
         configRef:
-          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha4
           kind: KubeadmConfigTemplate
           name: '${CLUSTER_NAME}-md-0'
       infrastructureRef:
-        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
         kind: ElfMachineTemplate
         name: '${CLUSTER_NAME}-worker'

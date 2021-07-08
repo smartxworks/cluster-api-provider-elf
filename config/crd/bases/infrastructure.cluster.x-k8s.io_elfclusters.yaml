@@ -16,7 +16,7 @@ spec:
     singular: elfcluster
   scope: Namespaced
   versions:
-  - name: v1alpha3
+  - name: v1alpha4
     schema:
       openAPIV3Schema:
         description: ElfCluster is the Schema for the elfclusters API
