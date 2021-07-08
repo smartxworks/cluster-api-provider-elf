@@ -11,19 +11,19 @@
 # - from the CAPE repository root, `make e2e` to build the elf provider image and run e2e tests.
 
 images:
-  - name: gcr.io/k8s-staging-cluster-api/cluster-api-controller-amd64:v0.3.14
+  - name: gcr.io/k8s-staging-cluster-api/cluster-api-controller-amd64:v0.4.0
     loadBehavior: tryLoad
-  - name: gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controller-amd64:v0.3.14
+  - name: gcr.io/k8s-staging-cluster-api/kubeadm-bootstrap-controller-amd64:v0.4.0
     loadBehavior: tryLoad
-  - name: gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller-amd64:v0.3.14
+  - name: gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller-amd64:v0.4.0
     loadBehavior: tryLoad
   - name: gcr.io/k8s-staging-cluster-api/cape-manager:e2e
     loadBehavior: mustLoad
-  - name: quay.io/jetstack/cert-manager-cainjector:v0.16.1
+  - name: quay.io/jetstack/cert-manager-cainjector:v1.0.1
     loadBehavior: tryLoad
-  - name: quay.io/jetstack/cert-manager-webhook:v0.16.1
+  - name: quay.io/jetstack/cert-manager-webhook:v1.0.1
     loadBehavior: tryLoad
-  - name: quay.io/jetstack/cert-manager-controller:v0.16.1
+  - name: quay.io/jetstack/cert-manager-controller:v1.0.1
     loadBehavior: tryLoad
 
 providers:
@@ -31,58 +31,74 @@ providers:
   - name: cluster-api
     type: CoreProvider
     versions:
-      - name: v0.3.14
+      - name: v0.4.0
         # Use manifest from source files
-        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.14/core-components.yaml"
+        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.0/core-components.yaml"
         type: "url"
+        files:
+          - sourcePath: "../data/shared/metadata.yaml"
         replacements:
           - old: "imagePullPolicy: Always"
             new: "imagePullPolicy: IfNotPresent"
-          - old: "--enable-leader-election"
-            new: "--enable-leader-election=false"
+          - old: "--leader-elect"
+            new: "--leader-elect=false"
+          - old: --metrics-bind-addr=127.0.0.1:8080
+            new: --metrics-bind-addr=:8080
 
   - name: kubeadm
     type: BootstrapProvider
+    files:
+       - sourcePath: "../data/shared/metadata.yaml"
     versions:
-      - name: v0.3.14
+      - name: v0.4.0
         # Use manifest from source files
-        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.14/bootstrap-components.yaml"
+        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.0/bootstrap-components.yaml"
         type: "url"
         replacements:
           - old: "imagePullPolicy: Always"
             new: "imagePullPolicy: IfNotPresent"
-          - old: "--enable-leader-election"
-            new: "--enable-leader-election=false"
+          - old: "--leader-elect"
+            new: "--leader-elect=false"
+          - old: --metrics-bind-addr=127.0.0.1:8080
+            new: --metrics-bind-addr=:8080
 
   - name: kubeadm
     type: ControlPlaneProvider
+    files:
+      - sourcePath: "../data/shared/metadata.yaml"
     versions:
-      - name: v0.3.14
+      - name: v0.4.0
         # Use manifest from source files
-        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.3.14/control-plane-components.yaml"
+        value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/v0.4.0/control-plane-components.yaml"
         type: "url"
         replacements:
           - old: "imagePullPolicy: Always"
             new: "imagePullPolicy: IfNotPresent"
-          - old: "--enable-leader-election"
-            new: "--enable-leader-election=false"
+          - old: "--leader-elect"
+            new: "--leader-elect=false"
+          - old: --metrics-bind-addr=127.0.0.1:8080
+            new: --metrics-bind-addr=:8080
 
   - name: elf
     type: InfrastructureProvider
     versions:
       - name: v0.1.0
         # Use manifest from source files
-        value: ../../../../cluster-api-provider-elf/config
+        value: ../../../../cluster-api-provider-elf/config/default
         replacements:
           - old: gcr.io/cluster-api-provider-elf/release/manager:latest
             new: gcr.io/k8s-staging-cluster-api/cape-manager:e2e
           - old: "imagePullPolicy: Always"
             new: "imagePullPolicy: IfNotPresent"
+          - old: "--leader-elect"
+            new: "--leader-elect=false"
+          - old: --metrics-bind-addr=127.0.0.1:8080
+            new: --metrics-bind-addr=:8080
 
     files:
       # Add a cluster template
       - sourcePath: "../../../test/e2e/data/infrastructure-elf/cluster-template.yaml"
-      - sourcePath: "../../../test/e2e/data/infrastructure-elf/metadata.yaml"
+      - sourcePath: "../../../metadata.yaml"
 
 variables:
   KUBERNETES_VERSION: "v1.20.6"
@@ -90,6 +106,7 @@ variables:
   EXP_CLUSTER_RESOURCE_SET: "true"
   CONTROL_PLANE_MACHINE_COUNT: 1
   WORKER_MACHINE_COUNT: 1
+  IP_FAMILY: "IPv4"
   # Following CAPE variables should be set before testing
   ELF_TEMPLATE: "336820d7-5ba5-4707-9d0c-8f3e583b950f"
   # Also following variables are required but it is recommended to use env variables to avoid disclosure of sensitive data
