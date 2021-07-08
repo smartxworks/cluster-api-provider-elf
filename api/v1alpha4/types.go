@@ -1,4 +1,4 @@
-package v1alpha3
+package v1alpha4
 
 import (
 	"fmt"
@@ -87,6 +87,9 @@ type NetworkDeviceSpec struct {
 type VirtualMachineState string
 
 const (
+	// VirtualMachineStatePending is the string representing a VM with a running task.
+	VirtualMachineStatePending = "pending"
+
 	// VirtualMachineStateReady is the string representing a powered-on VM with reported IP addresses.
 	VirtualMachineStateReady = "ready"
 
