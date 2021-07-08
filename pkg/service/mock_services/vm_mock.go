@@ -8,9 +8,9 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	v1alpha3 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	v1alpha4 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 	client "github.smartx.com/smartx/elf-sdk-go/client"
-	v1alpha30 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	v1alpha40 "sigs.k8s.io/cluster-api/api/v1alpha4"
 )
 
 // MockVMService is a mock of VMService interface.
@@ -37,10 +37,10 @@ func (m *MockVMService) EXPECT() *MockVMServiceMockRecorder {
 }
 
 // Clone mocks base method.
-func (m *MockVMService) Clone(machine *v1alpha30.Machine, elfMachine *v1alpha3.ElfMachine, bootstrapData string) (*v1alpha3.VMJob, error) {
+func (m *MockVMService) Clone(machine *v1alpha40.Machine, elfMachine *v1alpha4.ElfMachine, bootstrapData string) (*v1alpha4.VMJob, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Clone", machine, elfMachine, bootstrapData)
-	ret0, _ := ret[0].(*v1alpha3.VMJob)
+	ret0, _ := ret[0].(*v1alpha4.VMJob)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -52,10 +52,10 @@ func (mr *MockVMServiceMockRecorder) Clone(machine, elfMachine, bootstrapData in
 }
 
 // Delete mocks base method.
-func (m *MockVMService) Delete(uuid string) (*v1alpha3.VMJob, error) {
+func (m *MockVMService) Delete(uuid string) (*v1alpha4.VMJob, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", uuid)
-	ret0, _ := ret[0].(*v1alpha3.VMJob)
+	ret0, _ := ret[0].(*v1alpha4.VMJob)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -67,10 +67,10 @@ func (mr *MockVMServiceMockRecorder) Delete(uuid interface{}) *gomock.Call {
 }
 
 // Get mocks base method.
-func (m *MockVMService) Get(uuid string) (*v1alpha3.VirtualMachine, error) {
+func (m *MockVMService) Get(uuid string) (*v1alpha4.VirtualMachine, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", uuid)
-	ret0, _ := ret[0].(*v1alpha3.VirtualMachine)
+	ret0, _ := ret[0].(*v1alpha4.VirtualMachine)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -82,10 +82,10 @@ func (mr *MockVMServiceMockRecorder) Get(uuid interface{}) *gomock.Call {
 }
 
 // GetJob mocks base method.
-func (m *MockVMService) GetJob(jobId string) (*v1alpha3.VMJob, error) {
+func (m *MockVMService) GetJob(jobId string) (*v1alpha4.VMJob, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetJob", jobId)
-	ret0, _ := ret[0].(*v1alpha3.VMJob)
+	ret0, _ := ret[0].(*v1alpha4.VMJob)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -112,10 +112,10 @@ func (mr *MockVMServiceMockRecorder) GetVMTemplate(templateUUID interface{}) *go
 }
 
 // PowerOff mocks base method.
-func (m *MockVMService) PowerOff(uuid string) (*v1alpha3.VMJob, error) {
+func (m *MockVMService) PowerOff(uuid string) (*v1alpha4.VMJob, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PowerOff", uuid)
-	ret0, _ := ret[0].(*v1alpha3.VMJob)
+	ret0, _ := ret[0].(*v1alpha4.VMJob)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -127,10 +127,10 @@ func (mr *MockVMServiceMockRecorder) PowerOff(uuid interface{}) *gomock.Call {
 }
 
 // WaitJob mocks base method.
-func (m *MockVMService) WaitJob(jobId string) (*v1alpha3.VMJob, error) {
+func (m *MockVMService) WaitJob(jobId string) (*v1alpha4.VMJob, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WaitJob", jobId)
-	ret0, _ := ret[0].(*v1alpha3.VMJob)
+	ret0, _ := ret[0].(*v1alpha4.VMJob)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

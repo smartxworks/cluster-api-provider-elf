@@ -8,10 +8,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/storage/names"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
 	"sigs.k8s.io/cluster-api/util/patch"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 )
 
