@@ -1,0 +1,5 @@
+bases:
+  - ../bases/cluster-template.yaml
+  - ../bases/cluster-resource-set.yaml
+patchesStrategicMerge:
+  - ../bases/cluster-resource-set-label.yaml

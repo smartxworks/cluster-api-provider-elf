@@ -98,14 +98,17 @@ providers:
     files:
       # Add a cluster template
       - sourcePath: "../../../test/e2e/data/infrastructure-elf/cluster-template.yaml"
+      - sourcePath: "../../../test/e2e/data/infrastructure-elf/cluster-template-cp-ha.yaml"
+      - sourcePath: "../../../test/e2e/data/infrastructure-elf/cluster-template-kcp-remediation.yaml"
+      - sourcePath: "../../../test/e2e/data/infrastructure-elf/cluster-template-md-remediation.yaml"
       - sourcePath: "../../../metadata.yaml"
 
 variables:
-  KUBERNETES_VERSION: "v1.20.6"
+  KUBERNETES_VERSION: "v1.21.2"
   CNI: "./data/cni/calico/calico.yaml"
   EXP_CLUSTER_RESOURCE_SET: "true"
-  CONTROL_PLANE_MACHINE_COUNT: 1
-  WORKER_MACHINE_COUNT: 1
+  # CONTROL_PLANE_MACHINE_COUNT: 1
+  # WORKER_MACHINE_COUNT: 1
   IP_FAMILY: "IPv4"
   # Following CAPE variables should be set before testing
   ELF_TEMPLATE: "336820d7-5ba5-4707-9d0c-8f3e583b950f"
@@ -118,7 +121,10 @@ variables:
 intervals:
   default/wait-controllers: ["5m", "10s"]
   default/wait-cluster: ["5m", "10s"]
-  default/wait-control-plane: ["5m", "10s"]
+  default/wait-control-plane: ["7m", "10s"]
   default/wait-worker-nodes: ["5m", "10s"]
   default/wait-delete-cluster: ["5m", "10s"]
   default/wait-machine-upgrade: ["15m", "1m"]
+  default/wait-nodes-ready: ["7m", "10s"]
+  default/wait-machine-remediation: ["5m", "10s"]
+  default/wait-vm-job: ["3m", "10s"]
