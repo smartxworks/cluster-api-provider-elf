@@ -18,6 +18,7 @@ var (
 	elfServerPassword = os.Getenv("ELF_SERVER_PASSWORD")
 
 	elfServer string
+	vmService service.VMService
 )
 
 func init() {
@@ -25,7 +26,8 @@ func init() {
 }
 
 func initElfSession() {
-	vmService, err := service.NewVMService(infrav1.ElfAuth{
+	var err error
+	vmService, err = service.NewVMService(infrav1.ElfAuth{
 		Host:     elfServer,
 		Username: elfServerUsername,
 		Password: elfServerPassword}, ctrllog.Log)
