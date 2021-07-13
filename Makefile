@@ -80,6 +80,14 @@ help: ## Display this help.
 $(ARTIFACTS):
 	mkdir -p $@
 
+.PHONY: cluster-templates
+cluster-templates: kustomize ## Generate cluster templates
+	cp $(RELEASE_DIR)/cluster-template.yaml $(E2E_TEMPLATE_DIR)/bases/cluster-template.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-cp-ha --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-cp-ha.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-kcp-remediation --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-kcp-remediation.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-md-remediation --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-md-remediation.yaml
+
 test: generate fmt vet ## Run tests.
 	source ./hack/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v ./api/... ./controllers/... ./pkg/... -coverprofile cover.out
 
@@ -91,8 +99,7 @@ e2e-image: ## Build the e2e manager image
 e2e: e2e-image
 e2e: ginkgo kustomize kind ## Run e2e tests
 	$(MAKE) release-manifests
-	cp $(RELEASE_DIR)/cluster-template.yaml $(E2E_TEMPLATE_DIR)/kustomization/cluster-template.yaml
-	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization > $(E2E_TEMPLATE_DIR)/cluster-template.yaml
+	$(MAKE) cluster-templates
 
 	time $(GINKGO) -v ./test/e2e -- -e2e.config="$(E2E_CONF_FILE)" -e2e.artifacts-folder="$(ARTIFACTS)"
 
