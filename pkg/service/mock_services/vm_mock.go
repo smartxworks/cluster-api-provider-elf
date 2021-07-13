@@ -126,6 +126,21 @@ func (mr *MockVMServiceMockRecorder) PowerOff(uuid interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PowerOff", reflect.TypeOf((*MockVMService)(nil).PowerOff), uuid)
 }
 
+// PowerOn mocks base method.
+func (m *MockVMService) PowerOn(uuid string) (*v1alpha4.VMJob, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PowerOn", uuid)
+	ret0, _ := ret[0].(*v1alpha4.VMJob)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PowerOn indicates an expected call of PowerOn.
+func (mr *MockVMServiceMockRecorder) PowerOn(uuid interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PowerOn", reflect.TypeOf((*MockVMService)(nil).PowerOn), uuid)
+}
+
 // WaitJob mocks base method.
 func (m *MockVMService) WaitJob(jobId string) (*v1alpha4.VMJob, error) {
 	m.ctrl.T.Helper()
