@@ -1,10 +1,17 @@
 package helpers
 
 import (
+	goctx "context"
 	"flag"
+	"fmt"
+	"go/build"
+	"io/ioutil"
+	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	goruntime "runtime"
+	"strings"
 
 	"github.com/onsi/ginkgo"
 
@@ -15,16 +22,16 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/klog"
-	"k8s.io/klog/klogr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/log"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/manager"
 )
@@ -46,8 +53,9 @@ func init() {
 }
 
 var (
-	scheme = runtime.NewScheme()
-	env    *envtest.Environment
+	scheme                 = runtime.NewScheme()
+	env                    *envtest.Environment
+	clusterAPIVersionRegex = regexp.MustCompile(`^(\W)sigs.k8s.io/cluster-api v(.+)`)
 )
 
 func init() {
@@ -66,6 +74,11 @@ func init() {
 		filepath.Join(root, "config", "crd", "bases"),
 	}
 
+	// append CAPI CRDs path
+	if capiPath := getFilePathToCAPICRDs(root); capiPath != "" {
+		crdPaths = append(crdPaths, capiPath)
+	}
+
 	// Create the test environment.
 	env = &envtest.Environment{
 		ErrorIfCRDPathMissing: true,
@@ -79,7 +92,7 @@ type TestEnvironment struct {
 	client.Client
 	Config *rest.Config
 
-	doneMgr chan struct{}
+	cancel goctx.CancelFunc
 }
 
 // NewTestEnvironment creates a new environment spinning up a local api-server.
@@ -106,15 +119,49 @@ func NewTestEnvironment() *TestEnvironment {
 		Manager: mgr,
 		Client:  mgr.GetClient(),
 		Config:  mgr.GetConfig(),
-		doneMgr: make(chan struct{}),
 	}
 }
 
-func (t *TestEnvironment) StartManager() error {
-	return t.Manager.Start(t.doneMgr)
+func (t *TestEnvironment) StartManager(ctx goctx.Context) error {
+	ctx, cancel := goctx.WithCancel(ctx)
+	t.cancel = cancel
+
+	return t.Manager.Start(ctx)
 }
 
 func (t *TestEnvironment) Stop() error {
-	t.doneMgr <- struct{}{}
+	t.cancel()
+
 	return env.Stop()
+}
+
+func getFilePathToCAPICRDs(root string) string {
+	modBits, err := ioutil.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		return ""
+	}
+
+	var clusterAPIVersion string
+	for _, line := range strings.Split(string(modBits), "\n") {
+		matches := clusterAPIVersionRegex.FindStringSubmatch(line)
+		if len(matches) == 3 {
+			clusterAPIVersion = matches[2]
+		}
+	}
+
+	if clusterAPIVersion == "" {
+		return ""
+	}
+
+	gopath := envOr("GOPATH", build.Default.GOPATH)
+
+	return filepath.Join(gopath, "pkg", "mod", "sigs.k8s.io", fmt.Sprintf("cluster-api@v%s", clusterAPIVersion), "config", "crd", "bases")
+}
+
+func envOr(envKey, defaultValue string) string {
+	if value, ok := os.LookupEnv(envKey); ok {
+		return value
+	}
+
+	return defaultValue
 }

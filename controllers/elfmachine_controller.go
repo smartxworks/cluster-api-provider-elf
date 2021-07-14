@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	goctx "context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -28,9 +29,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
-	clustererror "sigs.k8s.io/cluster-api/errors"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
 	clusterutilv1 "sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -42,7 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
@@ -87,16 +88,14 @@ func AddMachineControllerToManager(ctx *context.ControllerManagerContext, mgr ma
 		// Watch the CAPI resource that owns this infrastructure resource.
 		Watches(
 			&source.Kind{Type: &clusterv1.Machine{}},
-			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: clusterutilv1.MachineToInfrastructureMapFunc(controlledTypeGVK),
-			},
+			handler.EnqueueRequestsFromMapFunc(clusterutilv1.MachineToInfrastructureMapFunc(controlledTypeGVK)),
 		).
 		WithOptions(controller.Options{MaxConcurrentReconciles: ctx.MaxConcurrentReconciles}).
 		Complete(reconciler)
 }
 
 // Reconcile ensures the back-end state reflects the Kubernetes resource state intent.
-func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reterr error) {
+func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	// Get the ElfMachine resource for this request.
 	var elfMachine infrav1.ElfMachine
 	if err := r.Client.Get(r, req.NamespacedName, &elfMachine); err != nil {
@@ -129,7 +128,7 @@ func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 
 		return reconcile.Result{}, nil
 	}
-	if clusterutilv1.IsPaused(cluster, &elfMachine) {
+	if annotations.IsPaused(cluster, &elfMachine) {
 		r.Logger.V(4).Info("ElfMachine linked to a cluster that is paused",
 			"namespace", elfMachine.Namespace, "elfMachine", elfMachine.Name)
 
@@ -213,14 +212,6 @@ func (r *ElfMachineReconciler) Reconcile(req ctrl.Request) (_ ctrl.Result, reter
 }
 
 func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) (*infrav1.VirtualMachine, error) {
-	if !ctx.ElfMachine.HasVM() || !ctx.ElfMachine.WithVM() {
-		ctx.Logger.Info("VM has been deleted")
-
-		return nil, nil
-	}
-
-	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.DeletingReason, clusterv1.ConditionSeverityInfo, "")
-
 	var job *infrav1.VMJob
 
 	// Handle pending task
@@ -246,7 +237,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) (*
 			ctx.Logger.Info("Waiting for delete VM job done",
 				"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
 
-			return nil, &clustererror.RequeueAfterError{RequeueAfter: config.DefaultRequeue}
+			return &infrav1.VirtualMachine{State: infrav1.VirtualMachineStatePending}, nil
 		}
 	}
 
@@ -260,6 +251,8 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) (*
 
 		return nil, err
 	}
+
+	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.DeletingReason, clusterv1.ConditionSeverityInfo, "")
 
 	if vm.IsPoweredOn() {
 		job, err := r.VMService.PowerOff(ctx.ElfMachine.Status.VMRef)
@@ -294,7 +287,13 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) (*
 func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (reconcile.Result, error) {
 	ctx.Logger.Info("Reconciling ElfMachine delete")
 
-	vm, err := r.reconcileDeleteVM(ctx)
+	if !ctx.ElfMachine.HasVM() || !ctx.ElfMachine.WithVM() {
+		ctx.Logger.Info("VM has been deleted")
+
+		return reconcile.Result{}, nil
+	}
+
+	_, err := r.reconcileDeleteVM(ctx)
 	if err != nil {
 		if service.IsVMNotFound(err) {
 			// The VM is deleted so remove the finalizer.
@@ -308,14 +307,10 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 		return reconcile.Result{}, err
 	}
 
-	if vm != nil {
-		ctx.Logger.Info("Waiting for VM to be deleted",
-			"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
+	ctx.Logger.Info("Waiting for VM to be deleted",
+		"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
 
-		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
-	}
-
-	return reconcile.Result{}, nil
+	return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
 }
 
 func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (reconcile.Result, error) {
@@ -340,7 +335,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 
 	// Make sure bootstrap data is available and populated.
 	if ctx.Machine.Spec.Bootstrap.DataSecretName == nil {
-		if !infrautilv1.IsControlPlaneMachine(ctx.ElfMachine) && !ctx.Cluster.Status.ControlPlaneInitialized {
+		if !infrautilv1.IsControlPlaneMachine(ctx.ElfMachine) && !conditions.IsTrue(ctx.Cluster, clusterv1.ControlPlaneInitializedCondition) {
 			ctx.Logger.Info("Waiting for the control plane to be initialized")
 
 			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.WaitingForControlPlaneAvailableReason, clusterv1.ConditionSeverityInfo, "")
@@ -516,7 +511,7 @@ func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineConte
 		)
 	}
 
-	nodeList, err := kubeClient.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return false, err
 	}
@@ -541,7 +536,7 @@ func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineConte
 				Value: providerID,
 			})
 		payloadBytes, _ := json.Marshal(payloads)
-		_, err := kubeClient.CoreV1().Nodes().Patch(node.Name, apitypes.JSONPatchType, payloadBytes)
+		_, err := kubeClient.CoreV1().Nodes().Patch(ctx, node.Name, apitypes.JSONPatchType, payloadBytes, metav1.PatchOptions{})
 		if err != nil {
 			return false, err
 		}

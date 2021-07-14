@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.smartx.com/smartx/elf-sdk-go/client"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/session"
 )
 
@@ -18,6 +18,7 @@ type VMService interface {
 	Clone(machine *clusterv1.Machine, elfMachine *infrav1.ElfMachine, bootstrapData string) (*infrav1.VMJob, error)
 	Delete(uuid string) (*infrav1.VMJob, error)
 	PowerOff(uuid string) (*infrav1.VMJob, error)
+	PowerOn(uuid string) (*infrav1.VMJob, error)
 	Get(uuid string) (*infrav1.VirtualMachine, error)
 	GetVMTemplate(templateUUID string) (*client.VmTemplate, error)
 	GetJob(jobId string) (*infrav1.VMJob, error)
@@ -112,6 +113,21 @@ func (svr *ElfVMService) PowerOff(uuid string) (*infrav1.VMJob, error) {
 		Force: true,
 	}
 	job, err := svr.Session.VmStop(uuid, &vmStopBody)
+	if err != nil {
+		return nil, err
+	}
+
+	return ToVMJob(job), nil
+}
+
+// Power On VM.
+func (svr *ElfVMService) PowerOn(uuid string) (*infrav1.VMJob, error) {
+	svr.Logger.Info("Power on VM", "VM", uuid)
+
+	vmStartBody := client.VmStartBody{
+		AutoSchedule: true,
+	}
+	job, err := svr.Session.VmStart(uuid, &vmStartBody)
 	if err != nil {
 		return nil, err
 	}

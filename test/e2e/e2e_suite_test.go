@@ -20,7 +20,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	"github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 )
 
 // Test suite flags
@@ -138,7 +138,7 @@ var _ = SynchronizedAfterSuite(func() {
 func initScheme() *runtime.Scheme {
 	sc := runtime.NewScheme()
 	framework.TryAddDefaultSchemes(sc)
-	_ = v1alpha3.AddToScheme(sc)
+	_ = v1alpha4.AddToScheme(sc)
 
 	return sc
 }

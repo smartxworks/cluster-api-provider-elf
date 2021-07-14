@@ -8,7 +8,7 @@ import (
 
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
@@ -18,6 +18,7 @@ var (
 	elfServerPassword = os.Getenv("ELF_SERVER_PASSWORD")
 
 	elfServer string
+	vmService service.VMService
 )
 
 func init() {
@@ -25,7 +26,8 @@ func init() {
 }
 
 func initElfSession() {
-	vmService, err := service.NewVMService(infrav1.ElfAuth{
+	var err error
+	vmService, err = service.NewVMService(infrav1.ElfAuth{
 		Host:     elfServer,
 		Username: elfServerUsername,
 		Password: elfServerPassword}, ctrllog.Log)

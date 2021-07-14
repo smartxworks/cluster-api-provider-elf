@@ -80,6 +80,14 @@ help: ## Display this help.
 $(ARTIFACTS):
 	mkdir -p $@
 
+.PHONY: cluster-templates
+cluster-templates: kustomize ## Generate cluster templates
+	cp $(RELEASE_DIR)/cluster-template.yaml $(E2E_TEMPLATE_DIR)/bases/cluster-template.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-cp-ha --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-cp-ha.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-kcp-remediation --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-kcp-remediation.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-md-remediation --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-md-remediation.yaml
+
 test: generate fmt vet ## Run tests.
 	source ./hack/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v ./api/... ./controllers/... ./pkg/... -coverprofile cover.out
 
@@ -91,9 +99,7 @@ e2e-image: ## Build the e2e manager image
 e2e: e2e-image
 e2e: ginkgo kustomize kind ## Run e2e tests
 	$(MAKE) release-manifests
-	cp $(RELEASE_DIR)/cluster-template.yaml $(E2E_TEMPLATE_DIR)/kustomization/cluster-template.yaml
-	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization > $(E2E_TEMPLATE_DIR)/cluster-template.yaml
-	cp $(RELEASE_DIR)/metadata.yaml $(E2E_TEMPLATE_DIR)/metadata.yaml
+	$(MAKE) cluster-templates
 
 	time $(GINKGO) -v ./test/e2e -- -e2e.config="$(E2E_CONF_FILE)" -e2e.artifacts-folder="$(ARTIFACTS)"
 
@@ -103,7 +109,7 @@ e2e: ginkgo kustomize kind ## Run e2e tests
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
-	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v3@v3.8.7)
+	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v3@v3.9.1)
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
@@ -111,11 +117,11 @@ controller-gen: ## Download controller-gen locally if necessary.
 
 GINKGO := $(shell pwd)/bin/ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
-	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/ginkgo@v1.12.1)
+	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/ginkgo@v1.16.4)
 
 KIND := $(shell pwd)/bin/kind
 kind: ## Download kind locally if necessary.
-	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@v0.7.0)
+	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@v0.11.0)
 
 ## --------------------------------------
 ## Linting and fixing linter errors
@@ -187,9 +193,9 @@ manifests: $(MANIFEST_DIR) $(BUILD_DIR) kustomize
 	rm -rf $(BUILD_DIR)/config
 	cp -R config $(BUILD_DIR)
 	cp templates/cluster-template.yaml $(MANIFEST_DIR)/cluster-template.yaml
-	sed -i'' -e 's@imagePullPolicy: .*@imagePullPolicy: '"$(PULL_POLICY)"'@' $(BUILD_DIR)/config/manager/manager_pull_policy.yaml
-	sed -i'' -e 's@image: .*@image: '"$(IMAGE)"'@' $(BUILD_DIR)/config/manager/manager_image_patch.yaml
-	$(KUSTOMIZE) build $(BUILD_DIR)/config > $(MANIFEST_DIR)/infrastructure-components.yaml
+	sed -i'' -e 's@imagePullPolicy: .*@imagePullPolicy: '"$(PULL_POLICY)"'@' $(BUILD_DIR)/config/default/manager_pull_policy.yaml
+	sed -i'' -e 's@image: .*@image: '"$(IMAGE)"'@' $(BUILD_DIR)/config/default/manager_image_patch.yaml
+	$(KUSTOMIZE) build $(BUILD_DIR)/config/default > $(MANIFEST_DIR)/infrastructure-components.yaml
 
 ## --------------------------------------
 ## Development
@@ -213,12 +219,12 @@ uninstall: generate kustomize ## Uninstall CRDs from the K8s cluster specified i
 
 .PHONY: deploy
 deploy: generate kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	sed -i'' -e 's@image: .*@image: '"$(DEV_CONTROLLER_IMG):$(DEV_TAG)"'@' config/manager/manager_image_patch.yaml
-	$(KUSTOMIZE) build config/ | kubectl apply -f -
+	sed -i'' -e 's@image: .*@image: '"$(DEV_CONTROLLER_IMG):$(DEV_TAG)"'@' config/default/manager_image_patch.yaml
+	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
 .PHONY: undeploy
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/ | kubectl delete -f -
+	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
 ## --------------------------------------
 ## Docker

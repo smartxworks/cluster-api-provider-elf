@@ -22,8 +22,8 @@ import (
 	"os"
 	"time"
 
-	"k8s.io/klog"
-	"k8s.io/klog/klogr"
+	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
@@ -53,13 +53,13 @@ func main() {
 	}
 
 	flag.StringVar(
-		&managerOpts.MetricsAddr,
-		"metrics-addr",
+		&managerOpts.MetricsBindAddr,
+		"metrics-bind-addr",
 		":8080",
 		"The address the metric endpoint binds to.")
 	flag.BoolVar(
 		&managerOpts.LeaderElectionEnabled,
-		"enable-leader-election",
+		"leader-elect",
 		true,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(

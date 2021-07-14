@@ -5,11 +5,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha3"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha3"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 )
 
@@ -41,7 +41,7 @@ func NewControllerManagerContext(initObjects ...runtime.Object) *context.Control
 
 	return &context.ControllerManagerContext{
 		Context:                 goctx.Background(),
-		Client:                  fake.NewFakeClientWithScheme(scheme, initObjects...),
+		Client:                  fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(initObjects...).Build(),
 		Logger:                  ctrllog.Log.WithName(ControllerManagerName),
 		Scheme:                  scheme,
 		Name:                    ControllerManagerName,

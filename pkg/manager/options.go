@@ -39,8 +39,8 @@ type Options struct {
 	// Defaults to the eponymous constant in this package.
 	MaxConcurrentReconciles int
 
-	// MetricsAddr is the net.Addr string for the metrics server.
-	MetricsAddr string
+	// MetricsBindAddr is the net.Addr string for the metrics server.
+	MetricsBindAddr string
 
 	// HealthAddr is the net.Addr string for the healthcheck server
 	HealthAddr string
