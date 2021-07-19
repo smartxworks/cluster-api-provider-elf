@@ -100,11 +100,16 @@ providers:
       - sourcePath: "../../../test/e2e/data/infrastructure-elf/cluster-template.yaml"
       - sourcePath: "../../../test/e2e/data/infrastructure-elf/cluster-template-cp-ha.yaml"
       - sourcePath: "../../../test/e2e/data/infrastructure-elf/cluster-template-kcp-remediation.yaml"
+      - sourcePath: "../../../test/e2e/data/infrastructure-elf/cluster-template-kcp-scale-in.yaml"
       - sourcePath: "../../../test/e2e/data/infrastructure-elf/cluster-template-md-remediation.yaml"
       - sourcePath: "../../../metadata.yaml"
 
 variables:
-  KUBERNETES_VERSION: "v1.21.2"
+  KUBERNETES_VERSION: "v1.20.6"
+  KUBERNETES_VERSION_UPGRADE_TO: "v1.21.2"
+  KUBERNETES_VERSION_UPGRADE_FROM: "v1.20.6"
+  ETCD_VERSION_UPGRADE_TO: "3.4.13-0"
+  COREDNS_VERSION_UPGRADE_TO: "v1.8.0"
   CNI: "./data/cni/calico/calico.yaml"
   EXP_CLUSTER_RESOURCE_SET: "true"
   # CONTROL_PLANE_MACHINE_COUNT: 1
@@ -112,6 +117,7 @@ variables:
   IP_FAMILY: "IPv4"
   # Following CAPE variables should be set before testing
   ELF_TEMPLATE: "336820d7-5ba5-4707-9d0c-8f3e583b950f"
+  ELF_TEMPLATE_UPGRADE_TO: "c1347c27-ddd7-4b97-82e3-ca4e124623b4"
   # Also following variables are required but it is recommended to use env variables to avoid disclosure of sensitive data
   # CONTROL_PLANE_ENDPOINT_IP: "127.0.0.1"
   # ELF_SERVER: "127.0.0.1"
