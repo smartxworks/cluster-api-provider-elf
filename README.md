@@ -2,77 +2,55 @@
 
 [![build](https://github.com/smartxworks/cluster-api-provider-elf/actions/workflows/build.yml/badge.svg)](https://github.com/smartxworks/cluster-api-provider-elf/actions/workflows/build.yml)
 
-## 依赖
+<a href="https://github.com/kubernetes/kubernetes"><img src="https://github.com/kubernetes/kubernetes/raw/master/logo/logo.png" width="100" height="100" /></a><a href="https://www.smartx.com"><img height="100" hspace="90px" src="https://avatars.githubusercontent.com/u/13521339" alt="Powered by Elf" /></a>
 
-### K8s 基础集群
+------
 
-一个普通的 k8s 集群，用来作为 k8s 管理集群。
+Kubernetes-native declarative infrastructure for Elf.
 
-### 管理集群
+## What is the Cluster API Provider Elf
 
-k8s 基础集群安装 [cluster-api](https://github.com/kubernetes-sigs/cluster-api) 后变成 k8s 管理集群（嵌套集群），管理集群负责 k8s 集群的管理（创建、删除等）。
+The [Cluster API][cluster_api] brings declarative, Kubernetes-style APIs to cluster creation, configuration and management. Cluster API Provider for Elf is a concrete implementation of Cluster API for Elf.
 
-### 虚拟机模板
+The API itself is shared across multiple cloud providers allowing for true Elf hybrid deployments of Kubernetes. It is built atop the lessons learned from previous cluster managers such as [kops][kops] and [kubicorn][kubicorn].
 
-创建 k8s 集群时，先在 ELF 创建虚拟机，然后在虚拟机部署 k8s 节点。创建 k8s 集群，需要提供符合 cluster-api 要求的虚拟机。
-可以使用 [image-builder](https://github.smartx.com/yiran/image-builder) 构建满足 cluster-api 要求的虚拟机模板，在创建 k8s 集群的时候使用指定的模板。
+## Launching a Kubernetes cluster on Elf
 
-## 使用方式
+Check out the [getting started guide](./docs/getting_started.md) for launching a cluster on Elf.
 
-**生成创建嵌套集群的配置文件**
+## Features
 
-提示：请根据​实际情况修改下述配置信息。
+- Native Kubernetes manifests and API
+- Manages the bootstrapping of VMs on cluster.
+- CentOS 7 using VM Templates.
+- Deploys Kubernetes control planes into provided clusters on Elf.
+- Doesn't use SSH for bootstrapping nodes.
+- Installs only the minimal components to bootstrap a control plane and workers.
 
-```shell
-# 嵌套集群的名称
-export CLUSTER_NAME=cluster
+------
 
-# 嵌套集群的版本
-export KUBERNETES_VERSION=v1.20.6
+## Compatibility with Cluster API and Kubernetes Versions
 
-# 嵌套集群 Master 节点数
-export CONTROL_PLANE_MACHINE_COUNT=1
+This provider's versions are compatible with the following versions of Cluster API:
 
-# 嵌套集群 Worker 节点数
-export WORKER_MACHINE_COUNT=1
+|                              | Cluster API v1alpha3 (v0.3) | Cluster API v1alpha4 (v0.4) |
+| ---------------------------- | :---------------------------: | :---------------------------: |
+| Elf Provider v1alpha4 (v0.1, master) |              ☓              |              ✓              |
 
-# ELF 集群
-export ELF_SERVER=127.0.0.1
-export ELF_SERVER_USERNAME=root
-export ELF_SERVER_PASSWORD=root
 
-# ELF Master 节点
-export CONTROL_PLANE_ENDPOINT_IP=127.0.0.1
+This provider's versions are able to install and manage the following versions of Kubernetes:
 
-# ELF 虚拟机模板
-export ELF_TEMPLATE=336820d7-5ba5-4707-9d0c-8f3e583b950f
+|                              | Kubernetes 1.19 | Kubernetes 1.20 | Kubernetes 1.21 |
+| ---------------------------- | :---------------: | :---------------: | :---------------: |
+| Elf Provider v1alpha4 (v0.1, master) |        ✓          |         ✓         |         ✓         |
 
-# 创建嵌套集群的配置文件
-clusterctl generate yaml --from templates/cluster-template.yaml > cluster.yaml
-```
+**NOTE:** As the versioning for this project is tied to the versioning of Cluster API, future modifications to this policy may be made to more closely align with other providers in the Cluster API ecosystem.
 
-**创建嵌套集群**
+## Documentation
 
-```shell
-kubectl apply -f name.yaml
-```
+Further documentation is available in the [docs](./docs) directory.
 
-**检查嵌套集群部署情况**
-
-```shell
-# 获取嵌套集群的 kubeconfig 配置
-clusterctl get kubeconfig cluster > cluster.kubeconfig
-
-# 部署 CNI, 可以选择 flannel 或者 calico（可选）
-kubectl --kubeconfig=./cluster.kubeconfig \
-  apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
-
-kubectl --kubeconfig=./cluster.kubeconfig \
-  apply -f https://docs.projectcalico.org/v3.15/manifests/calico.yaml
-
-# 检查集群的节点
-KUBECONFIG=cluster.kubeconfig kubectl get nodes
-
-# 检查集群的组件
-KUBECONFIG=cluster.kubeconfig kubectl get pods -n kube-system -o wide
-```
+<!-- References -->
+[cluster_api]: https://github.com/kubernetes-sigs/cluster-api
+[kops]: https://github.com/kubernetes/kops
+[kubicorn]: http://kubicorn.io/
