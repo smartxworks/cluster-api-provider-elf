@@ -62,8 +62,8 @@ RELEASE_REGISTRY := gcr.io/cluster-api-provider-elf/release
 RELEASE_CONTROLLER_IMG := $(RELEASE_REGISTRY)/$(IMAGE_NAME)
 
 # Development Docker variables
-DEV_REGISTRY ?= harbor.smartx.com
-DEV_CONTROLLER_IMG ?= $(DEV_REGISTRY)/cape/$(IMAGE_NAME)
+DEV_REGISTRY ?= gcr.io/$(shell gcloud config get-value project)
+DEV_CONTROLLER_IMG ?= $(DEV_REGISTRY)/elf-$(IMAGE_NAME)
 DEV_TAG ?= dev
 
 ## --------------------------------------
