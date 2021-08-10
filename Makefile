@@ -86,6 +86,7 @@ cluster-templates: kustomize ## Generate cluster templates
 	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template.yaml
 	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-cp-ha --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-cp-ha.yaml
 	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-kcp-remediation --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-kcp-remediation.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-kcp-scale-in --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-kcp-scale-in.yaml
 	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-md-remediation --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-md-remediation.yaml
 
 test: generate fmt vet ## Run tests.

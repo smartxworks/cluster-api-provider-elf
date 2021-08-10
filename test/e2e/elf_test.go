@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	elfTemplate       = os.Getenv("ELF_TEMPLATE")
-	elfServerUsername = os.Getenv("ELF_SERVER_USERNAME")
-	elfServerPassword = os.Getenv("ELF_SERVER_PASSWORD")
+	elfTemplate          = os.Getenv(ElfTemplate)
+	elfTemplateUpgradeTo = os.Getenv(ElfTemplateUpgradeTo)
+	elfServerUsername    = os.Getenv(ElfServerUsername)
+	elfServerPassword    = os.Getenv(ElfServerPassword)
 
 	elfServer string
 	vmService service.VMService
@@ -34,6 +35,9 @@ func initElfSession() {
 	Expect(err).ShouldNot(HaveOccurred())
 
 	template, err := vmService.GetVMTemplate(elfTemplate)
+	Expect(err).ShouldNot(HaveOccurred())
+	Expect(template.Uuid).ShouldNot(BeEmpty())
+	template, err = vmService.GetVMTemplate(elfTemplateUpgradeTo)
 	Expect(err).ShouldNot(HaveOccurred())
 	Expect(template.Uuid).ShouldNot(BeEmpty())
 }

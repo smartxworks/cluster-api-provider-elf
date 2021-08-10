@@ -13,6 +13,14 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 )
 
+// Test suite constants for e2e config variables.
+const (
+	ElfTemplateUpgradeTo = "ELF_TEMPLATE_UPGRADE_TO"
+	ElfTemplate          = "ELF_TEMPLATE"
+	ElfServerUsername    = "ELF_SERVER_USERNAME"
+	ElfServerPassword    = "ELF_SERVER_PASSWORD"
+)
+
 func Byf(format string, a ...interface{}) {
 	By(fmt.Sprintf(format, a...))
 }

@@ -22,7 +22,8 @@ The first step to running the e2e tests is setting up the required environment v
 
 | Environment variable | Description | Example |
 | -------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `ELF_TEMPLATE` | The VM template to use for management cluster | `336820d7-5ba5-4707-9d0c-8f3e583b950f`|
+| `ELF_TEMPLATE` | The VM template to use for workload cluster | `336820d7-5ba5-4707-9d0c-8f3e583b950f`|
+| `ELF_TEMPLATE_UPGRADE_TO` | The VM template to use for upgrading workload cluster | `c1347c27-ddd7-4b97-82e3-ca4e124623b4`|
 | `CONTROL_PLANE_ENDPOINT_IP` | The IP that kube-vip is going to use as a control plane endpoint | `127.0.0.1`|
 | `ELF_SERVER` | The IP address or DNS of a ELF server | `127.0.0.1`|
 | `ELF_SERVER_USERNAME` | The username used to access the ELF server | `root`|
