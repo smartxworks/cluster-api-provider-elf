@@ -25,9 +25,11 @@ metadata:
   name: '${CLUSTER_NAME}'
   namespace: '${NAMESPACE}'
 spec:
-  server: '${ELF_SERVER}'
-  username: '${ELF_SERVER_USERNAME}'
-  password: '${ELF_SERVER_PASSWORD}'
+  cluster: '${ELF_CLUSTER}'
+  tower:
+    server: '${TOWER_SERVER}'
+    username: '${TOWER_USERNAME}'
+    password: '${TOWER_PASSWORD}'
   controlPlaneEndpoint:
     host: '${CONTROL_PLANE_ENDPOINT_IP}'
     port: 6443
@@ -41,7 +43,10 @@ spec:
   template:
     spec:
       template: '${ELF_TEMPLATE}'
+      ha: true
+      autoSchedule: true
       network:
+        vlan: '${ELF_VLAN}'
         devices:
           - networkIndex: 0
             networkType: ipv4_dhcp
@@ -162,7 +167,10 @@ spec:
   template:
     spec:
       template: '${ELF_TEMPLATE}'
+      ha: true
+      autoSchedule: true
       network:
+        vlan: '${ELF_VLAN}'
         devices:
           - networkIndex: 0
             networkType: ipv4_dhcp
