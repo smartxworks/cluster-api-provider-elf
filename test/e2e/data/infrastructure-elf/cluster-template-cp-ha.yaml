@@ -181,12 +181,14 @@ metadata:
   name: ${CLUSTER_NAME}
   namespace: ${NAMESPACE}
 spec:
+  cluster: ${ELF_CLUSTER}
   controlPlaneEndpoint:
     host: ${CONTROL_PLANE_ENDPOINT_IP}
     port: 6443
-  password: ${ELF_SERVER_PASSWORD}
-  server: ${ELF_SERVER}
-  username: ${ELF_SERVER_USERNAME}
+  tower:
+    password: ${TOWER_PASSWORD}
+    server: ${TOWER_SERVER}
+    username: ${TOWER_USERNAME}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
 kind: ElfMachineTemplate
@@ -196,10 +198,13 @@ metadata:
 spec:
   template:
     spec:
+      autoSchedule: true
+      ha: true
       network:
         devices:
         - networkIndex: 0
           networkType: ipv4_dhcp
+        vlan: ${ELF_VLAN}
       template: ${ELF_TEMPLATE}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
@@ -210,8 +215,11 @@ metadata:
 spec:
   template:
     spec:
+      autoSchedule: true
+      ha: true
       network:
         devices:
         - networkIndex: 0
           networkType: ipv4_dhcp
+        vlan: ${ELF_VLAN}
       template: ${ELF_TEMPLATE}

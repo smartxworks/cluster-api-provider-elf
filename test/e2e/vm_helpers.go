@@ -5,6 +5,8 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/haijianyang/cloudtower-go-sdk/models"
+
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
@@ -17,19 +19,19 @@ type PowerOffVMInput struct {
 
 // PowerOffVM power off a VM.
 func PowerOffVM(ctx context.Context, input PowerOffVMInput) {
-	job, err := input.VMService.PowerOff(input.UUID)
+	task, err := input.VMService.PowerOff(input.UUID)
 	Expect(err).ShouldNot(HaveOccurred())
 
 	Eventually(func() (bool, error) {
-		job, err = input.VMService.GetJob(job.Id)
+		task, err = input.VMService.GetTask(*task.ID)
 		if err != nil {
 			return false, err
 		}
 
-		if job.IsDone() {
+		if *task.Status == models.TaskStatusSUCCESSED {
 			return true, nil
-		} else if job.IsFailed() {
-			job, err = input.VMService.PowerOff(input.UUID)
+		} else if *task.Status == models.TaskStatusFAILED {
+			task, err = input.VMService.PowerOff(input.UUID)
 
 			return false, err
 		}
@@ -47,19 +49,19 @@ type PowerOnVMInput struct {
 
 // PowerOnVM power on a VM.
 func PowerOnVM(ctx context.Context, input PowerOnVMInput, intervals ...interface{}) {
-	job, err := input.VMService.PowerOn(input.UUID)
+	task, err := input.VMService.PowerOn(input.UUID)
 	Expect(err).ShouldNot(HaveOccurred())
 
 	Eventually(func() (bool, error) {
-		job, err = input.VMService.GetJob(job.Id)
+		task, err = input.VMService.GetTask(*task.ID)
 		if err != nil {
 			return false, err
 		}
 
-		if job.IsDone() {
+		if *task.Status == models.TaskStatusSUCCESSED {
 			return true, nil
-		} else if job.IsFailed() {
-			job, err = input.VMService.PowerOn(input.UUID)
+		} else if *task.Status == models.TaskStatusFAILED {
+			task, err = input.VMService.PowerOn(input.UUID)
 
 			return false, err
 		}
