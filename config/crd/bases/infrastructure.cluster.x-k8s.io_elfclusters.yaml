@@ -36,6 +36,9 @@ spec:
           spec:
             description: ElfClusterSpec defines the desired state of ElfCluster
             properties:
+              cluster:
+                description: Cluster is a unique identifier for a Elf cluster.
+                type: string
               controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to
                   communicate with the control plane.
@@ -51,15 +54,20 @@ spec:
                 - host
                 - port
                 type: object
-              password:
-                description: Password is the password used to log into the Elf server.
-                type: string
-              server:
-                description: Server is address of the elf VIP
-                type: string
-              username:
-                description: Username is the name used to log into the Elf server.
-                type: string
+              tower:
+                description: Tower is the config of tower.
+                properties:
+                  password:
+                    description: Password is the password used to access the tower
+                      server.
+                    type: string
+                  server:
+                    description: Server is address of the tower server.
+                    type: string
+                  username:
+                    description: Username is the name used to log into the tower server.
+                    type: string
+                type: object
             type: object
           status:
             description: ElfClusterStatus defines the observed state of ElfCluster

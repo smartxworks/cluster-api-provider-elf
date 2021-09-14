@@ -19,6 +19,14 @@ const (
 	// CloningReason documents (Severity=Info) ElfMachine currently executing the clone operation.
 	CloningReason = "Cloning"
 
+	// PoweringOnReason documents (Severity=Info) a ElfMachine currently executing the power on sequence.
+	PoweringOnReason = "PoweringOn"
+
+	// PoweringOnFailedReason (Severity=Warning) documents a ElfMachine controller detecting
+	// an error while powering on; those kind of errors are usually transient and failed provisioning
+	// are automatically re-tried by the controller.
+	PoweringOnFailedReason = "PoweringOnFailed"
+
 	// CloningFailedReason (Severity=Warning) documents a ElfMachine controller detecting
 	// an error while provisioning; those kind of errors are usually transient and failed provisioning
 	// are automatically re-tried by the controller.
@@ -33,13 +41,13 @@ const (
 	WaitingForNetworkAddressesReason = "WaitingForNetworkAddresses"
 )
 
-// Conditions and Reasons related to make connections to a ELF. Can currently be used by ElfCluster and ElfMachine
+// Conditions and Reasons related to make connections to a Tower. Can currently be used by ElfCluster and ElfMachine
 
 const (
-	// ELfAvailableCondition documents the connectivity with elf
-	ElfAvailableCondition clusterv1.ConditionType = "ElfAvailable"
+	// TowerAvailableCondition documents the connectivity with tower
+	TowerAvailableCondition clusterv1.ConditionType = "TowerAvailable"
 
-	// ElfUnreachableReason (Severity=Error) documents a controller detecting
-	// issues with Elf reachability;
-	ElfUnreachableReason = "ElfUnreachable"
+	// TowerUnreachableReason (Severity=Error) documents a controller detecting
+	// issues with tower reachability;
+	TowerUnreachableReason = "TowerUnreachable"
 )

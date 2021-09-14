@@ -28,14 +28,11 @@ const (
 
 // ElfClusterSpec defines the desired state of ElfCluster
 type ElfClusterSpec struct {
-	// Server is address of the elf VIP
-	Server string `json:"server,omitempty"`
+	// Cluster is a unique identifier for a Elf cluster.
+	Cluster string `json:"cluster,omitempty"`
 
-	// Username is the name used to log into the Elf server.
-	Username string `json:"username,omitempty"`
-
-	// Password is the password used to log into the Elf server.
-	Password string `json:"password,omitempty"`
+	// Tower is the config of tower.
+	Tower Tower `json:"tower,omitempty"`
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
@@ -72,12 +69,8 @@ func (c *ElfCluster) SetConditions(conditions clusterv1.Conditions) {
 	c.Status.Conditions = conditions
 }
 
-func (c *ElfCluster) Auth() ElfAuth {
-	return ElfAuth{
-		Host:     c.Spec.Server,
-		Username: c.Spec.Username,
-		Password: c.Spec.Password,
-	}
+func (c *ElfCluster) GetTower() Tower {
+	return c.Spec.Tower
 }
 
 //+kubebuilder:object:root=true

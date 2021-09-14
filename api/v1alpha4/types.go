@@ -4,10 +4,15 @@ import (
 	"fmt"
 )
 
-type ElfAuth struct {
-	Host     string `json:"host"`
-	Username string `json:"user"`
-	Password string `json:"password"`
+type Tower struct {
+	// Server is address of the tower server.
+	Server string `json:"server,omitempty"`
+
+	// Username is the name used to log into the tower server.
+	Username string `json:"username,omitempty"`
+
+	// Password is the password used to access the tower server.
+	Password string `json:"password,omitempty"`
 }
 
 // ElfMachineTemplateResource describes the data needed to create a ElfMachine from a template
@@ -43,7 +48,7 @@ type NetworkStatus struct {
 
 	// IPAddrs is one or more IP addresses reported by vm-tools.
 	// +optional
-	IPAddrs string `json:"ipAddrs,omitempty"`
+	IPAddrs []string `json:"ipAddrs,omitempty"`
 
 	// MACAddr is the MAC address of the network device.
 	MACAddr string `json:"macAddr"`
@@ -63,6 +68,9 @@ type NetworkSpec struct {
 	// PreferredAPIServeCIDR is the preferred CIDR for the Kubernetes API
 	// server endpoint on this machine
 	PreferredAPIServerCIDR string `json:"preferredAPIServerCidr,omitempty"`
+
+	// Vlan is the virtual LAN used by the virtual machine.
+	Vlan string `json:"vlan,omitempty"`
 }
 
 // NetworkDeviceSpec defines the network configuration for a virtual machine's
@@ -74,93 +82,13 @@ type NetworkDeviceSpec struct {
 	// IPAddrs is a list of one or more IPv4 and/or IPv6 addresses to assign
 	// to this device.
 	// Required when DHCP4 and DHCP6 are both false.
-	IPAddrs string `json:"ipAddrs,omitempty"`
+	IPAddrs []string `json:"ipAddrs,omitempty"`
 
 	Netmask string `json:"netmask,omitempty"`
 
 	// Gateway4 is the IPv4 gateway used by this device.
 	// Required when DHCP4 is false.
 	Gateway string `json:"gateway,omitempty"`
-}
-
-// VirtualMachineState describes the state of a VM
-type VirtualMachineState string
-
-const (
-	// VirtualMachineStatePending is the string representing a VM with a running task.
-	VirtualMachineStatePending = "pending"
-
-	// VirtualMachineStateReady is the string representing a powered-on VM with reported IP addresses.
-	VirtualMachineStateReady = "ready"
-
-	// VirtualMachineStatePoweredOn is the string representing a VM in powered on state
-	VirtualMachineStatePoweredOn = "running"
-)
-
-// VirtualMachine represents data about a Elf virtual machine object.
-type VirtualMachine struct {
-	// VM's UUID
-	UUID string `json:"uuid"`
-
-	// Name is the VM's name.
-	Name string `json:"name"`
-
-	// State is the VM's state.
-	State VirtualMachineState `json:"state"`
-
-	// Network is the status of the VM's network devices.
-	Network []NetworkStatus `json:"network"`
-}
-
-func (vm *VirtualMachine) IsReady() bool {
-	return vm.State == VirtualMachineStateReady
-}
-
-func (vm *VirtualMachine) IsPoweredOn() bool {
-	return vm.State == VirtualMachineStatePoweredOn
-}
-
-const (
-	VMJobPending   string = "pending"
-	VMJobProcesing string = "processing"
-	VMJobDone      string = "done"
-	VMJobFailed    string = "failed"
-)
-
-//+kubebuilder:object:generate=false
-type VMJob struct {
-	Id          string      `json:"id"`
-	Description string      `json:"description"`
-	State       string      `json:"state"`
-	Resources   interface{} `json:"resources"`
-}
-
-func (j *VMJob) IsDone() bool {
-	return j.State == VMJobDone
-}
-
-func (j *VMJob) IsFailed() bool {
-	return j.State == VMJobFailed
-}
-
-func (j *VMJob) IsFinished() bool {
-	return j.State == VMJobDone || j.State == VMJobFailed
-}
-
-func (j *VMJob) GetVMUUID() string {
-	res := j.Resources.(map[string]interface{})
-	uuid := ""
-
-	for _, v := range res {
-		resource := v.(map[string]interface{})
-		if resource["type"] != "KVM_VM" {
-			continue
-		}
-
-		uuid = resource["uuid"].(string)
-	}
-
-	return uuid
 }
 
 //+kubebuilder:object:generate=false

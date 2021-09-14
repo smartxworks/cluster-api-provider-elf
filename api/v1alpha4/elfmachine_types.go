@@ -47,11 +47,11 @@ type ElfMachineSpec struct {
 	// +optional
 	Network NetworkSpec `json:"network,omitempty"`
 
-	// NumCPUS is the number of virtual processors in a VM.
+	// NumCPUs is the number of virtual processors in a VM.
 	// Defaults to the analogue property value in the template from which this
 	// machine is cloned.
 	// +optional
-	NumCPUS int32 `json:"numCPUS,omitempty"`
+	NumCPUs int32 `json:"numCPUS,omitempty"`
 
 	// NumCoresPerSocket is the number of cores among which to distribute CPUs
 	// in this VM.
@@ -65,7 +65,7 @@ type ElfMachineSpec struct {
 	DiskGiB int32 `json:"diskGiB,omitempty"`
 
 	// +optional
-	AutoSchedule bool `json:"auto_schedule,omitempty"`
+	AutoSchedule bool `json:"autoSchedule,omitempty"`
 
 	// +optional
 	HA bool `json:"ha,omitempty"`
@@ -173,8 +173,8 @@ func (m *ElfMachine) HasTask() bool {
 	return m.Status.TaskRef != ""
 }
 
-func (m *ElfMachine) SetTask(jobId string) {
-	m.Status.TaskRef = jobId
+func (m *ElfMachine) SetTask(taskId string) {
+	m.Status.TaskRef = taskId
 }
 
 func (m *ElfMachine) IsFailed() bool {
