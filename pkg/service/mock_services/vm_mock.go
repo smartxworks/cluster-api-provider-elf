@@ -8,8 +8,8 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	models "github.com/haijianyang/cloudtower-go-sdk/models"
 	v1alpha4 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
-	client "github.smartx.com/smartx/elf-sdk-go/client"
 	v1alpha40 "sigs.k8s.io/cluster-api/api/v1alpha4"
 )
 
@@ -37,25 +37,25 @@ func (m *MockVMService) EXPECT() *MockVMServiceMockRecorder {
 }
 
 // Clone mocks base method.
-func (m *MockVMService) Clone(machine *v1alpha40.Machine, elfMachine *v1alpha4.ElfMachine, bootstrapData string) (*v1alpha4.VMJob, error) {
+func (m *MockVMService) Clone(elfCluster *v1alpha4.ElfCluster, machine *v1alpha40.Machine, elfMachine *v1alpha4.ElfMachine, bootstrapData string) (*models.WithTaskVM, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Clone", machine, elfMachine, bootstrapData)
-	ret0, _ := ret[0].(*v1alpha4.VMJob)
+	ret := m.ctrl.Call(m, "Clone", elfCluster, machine, elfMachine, bootstrapData)
+	ret0, _ := ret[0].(*models.WithTaskVM)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Clone indicates an expected call of Clone.
-func (mr *MockVMServiceMockRecorder) Clone(machine, elfMachine, bootstrapData interface{}) *gomock.Call {
+func (mr *MockVMServiceMockRecorder) Clone(elfCluster, machine, elfMachine, bootstrapData interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockVMService)(nil).Clone), machine, elfMachine, bootstrapData)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockVMService)(nil).Clone), elfCluster, machine, elfMachine, bootstrapData)
 }
 
 // Delete mocks base method.
-func (m *MockVMService) Delete(uuid string) (*v1alpha4.VMJob, error) {
+func (m *MockVMService) Delete(uuid string) (*models.Task, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", uuid)
-	ret0, _ := ret[0].(*v1alpha4.VMJob)
+	ret0, _ := ret[0].(*models.Task)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -67,40 +67,70 @@ func (mr *MockVMServiceMockRecorder) Delete(uuid interface{}) *gomock.Call {
 }
 
 // Get mocks base method.
-func (m *MockVMService) Get(uuid string) (*v1alpha4.VirtualMachine, error) {
+func (m *MockVMService) Get(id string) (*models.VM, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", uuid)
-	ret0, _ := ret[0].(*v1alpha4.VirtualMachine)
+	ret := m.ctrl.Call(m, "Get", id)
+	ret0, _ := ret[0].(*models.VM)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockVMServiceMockRecorder) Get(uuid interface{}) *gomock.Call {
+func (mr *MockVMServiceMockRecorder) Get(id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockVMService)(nil).Get), uuid)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockVMService)(nil).Get), id)
 }
 
-// GetJob mocks base method.
-func (m *MockVMService) GetJob(jobId string) (*v1alpha4.VMJob, error) {
+// GetByName mocks base method.
+func (m *MockVMService) GetByName(name string) (*models.VM, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetJob", jobId)
-	ret0, _ := ret[0].(*v1alpha4.VMJob)
+	ret := m.ctrl.Call(m, "GetByName", name)
+	ret0, _ := ret[0].(*models.VM)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetJob indicates an expected call of GetJob.
-func (mr *MockVMServiceMockRecorder) GetJob(jobId interface{}) *gomock.Call {
+// GetByName indicates an expected call of GetByName.
+func (mr *MockVMServiceMockRecorder) GetByName(name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetJob", reflect.TypeOf((*MockVMService)(nil).GetJob), jobId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByName", reflect.TypeOf((*MockVMService)(nil).GetByName), name)
+}
+
+// GetCluster mocks base method.
+func (m *MockVMService) GetCluster(id string) (*models.Cluster, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCluster", id)
+	ret0, _ := ret[0].(*models.Cluster)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCluster indicates an expected call of GetCluster.
+func (mr *MockVMServiceMockRecorder) GetCluster(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCluster", reflect.TypeOf((*MockVMService)(nil).GetCluster), id)
+}
+
+// GetTask mocks base method.
+func (m *MockVMService) GetTask(id string) (*models.Task, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTask", id)
+	ret0, _ := ret[0].(*models.Task)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTask indicates an expected call of GetTask.
+func (mr *MockVMServiceMockRecorder) GetTask(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTask", reflect.TypeOf((*MockVMService)(nil).GetTask), id)
 }
 
 // GetVMTemplate mocks base method.
-func (m *MockVMService) GetVMTemplate(templateUUID string) (*client.VmTemplate, error) {
+func (m *MockVMService) GetVMTemplate(templateUUID string) (*models.VMTemplate, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetVMTemplate", templateUUID)
-	ret0, _ := ret[0].(*client.VmTemplate)
+	ret0, _ := ret[0].(*models.VMTemplate)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -111,11 +141,26 @@ func (mr *MockVMServiceMockRecorder) GetVMTemplate(templateUUID interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMTemplate", reflect.TypeOf((*MockVMService)(nil).GetVMTemplate), templateUUID)
 }
 
+// GetVlan mocks base method.
+func (m *MockVMService) GetVlan(id string) (*models.Vlan, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVlan", id)
+	ret0, _ := ret[0].(*models.Vlan)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetVlan indicates an expected call of GetVlan.
+func (mr *MockVMServiceMockRecorder) GetVlan(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVlan", reflect.TypeOf((*MockVMService)(nil).GetVlan), id)
+}
+
 // PowerOff mocks base method.
-func (m *MockVMService) PowerOff(uuid string) (*v1alpha4.VMJob, error) {
+func (m *MockVMService) PowerOff(uuid string) (*models.Task, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PowerOff", uuid)
-	ret0, _ := ret[0].(*v1alpha4.VMJob)
+	ret0, _ := ret[0].(*models.Task)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -127,10 +172,10 @@ func (mr *MockVMServiceMockRecorder) PowerOff(uuid interface{}) *gomock.Call {
 }
 
 // PowerOn mocks base method.
-func (m *MockVMService) PowerOn(uuid string) (*v1alpha4.VMJob, error) {
+func (m *MockVMService) PowerOn(uuid string) (*models.Task, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PowerOn", uuid)
-	ret0, _ := ret[0].(*v1alpha4.VMJob)
+	ret0, _ := ret[0].(*models.Task)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -139,19 +184,4 @@ func (m *MockVMService) PowerOn(uuid string) (*v1alpha4.VMJob, error) {
 func (mr *MockVMServiceMockRecorder) PowerOn(uuid interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PowerOn", reflect.TypeOf((*MockVMService)(nil).PowerOn), uuid)
-}
-
-// WaitJob mocks base method.
-func (m *MockVMService) WaitJob(jobId string) (*v1alpha4.VMJob, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitJob", jobId)
-	ret0, _ := ret[0].(*v1alpha4.VMJob)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// WaitJob indicates an expected call of WaitJob.
-func (mr *MockVMServiceMockRecorder) WaitJob(jobId interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitJob", reflect.TypeOf((*MockVMService)(nil).WaitJob), jobId)
 }

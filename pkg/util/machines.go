@@ -3,6 +3,7 @@ package util
 import (
 	"context"
 	"regexp"
+	"strings"
 
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,14 +70,41 @@ func ConvertProviderIDToUUID(providerID *string) string {
 }
 
 func ConvertUUIDToProviderID(uuid string) string {
-	if uuid == "" {
-		return ""
-	}
-
-	pattern := regexp.MustCompile(UUIDPattern)
-	if !pattern.MatchString(uuid) {
+	if !IsUUID(uuid) {
 		return ""
 	}
 
 	return ProviderIDPrefix + uuid
+}
+
+func IsUUID(uuid string) bool {
+	if uuid == "" {
+		return false
+	}
+
+	pattern := regexp.MustCompile(UUIDPattern)
+
+	return pattern.MatchString(uuid)
+}
+
+func GetNetworkStatus(ipsStr string) []infrav1.NetworkStatus {
+	var network []infrav1.NetworkStatus
+
+	if ipsStr == "" {
+		return network
+	}
+
+	ips := strings.Split(ipsStr, ",")
+	for index, ip := range ips {
+		if ip == "127.0.0.1" || strings.HasPrefix(ip, "169.254.") || strings.HasPrefix(ip, "172.17.0") {
+			continue
+		}
+
+		network = append(network, infrav1.NetworkStatus{
+			NetworkIndex: index,
+			IPAddrs:      []string{ip},
+		})
+	}
+
+	return network
 }
