@@ -4,7 +4,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/storage/names"
@@ -26,24 +25,6 @@ const (
 
 	ElfMachineKind = "ElfMachine"
 )
-
-func NewVM() *infrav1.VirtualMachine {
-	return &infrav1.VirtualMachine{
-		UUID: uuid.New().String(),
-		Network: []infrav1.NetworkStatus{{
-			IPAddrs: "127.0.0.1",
-		}},
-	}
-}
-
-func NewVMJob() *infrav1.VMJob {
-	job := &infrav1.VMJob{
-		Id:    uuid.New().String(),
-		State: infrav1.VMJobPending,
-	}
-
-	return job
-}
 
 func NewClusterObjects() (*infrav1.ElfCluster, *clusterv1.Cluster) {
 	elfCluster := &infrav1.ElfCluster{

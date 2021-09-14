@@ -52,16 +52,15 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	code := 0
+
+	defer func() { os.Exit(code) }()
+
 	setup()
 
-	defer func() {
-		fmt.Println("Tearing down test suite")
-		teardown()
-	}()
+	defer teardown()
 
-	code := m.Run()
-
-	os.Exit(code)
+	code = m.Run()
 }
 
 func setup() {
@@ -99,6 +98,8 @@ func setup() {
 }
 
 func teardown() {
+	fmt.Println("Tearing down test suite")
+
 	if err := testEnv.Stop(); err != nil {
 		panic(fmt.Sprintf("Failed to stop envtest: %v", err))
 	}
