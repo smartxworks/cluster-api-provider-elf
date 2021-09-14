@@ -36,12 +36,18 @@ export CONTROL_PLANE_MACHINE_COUNT=1
 # 嵌套集群 Worker 节点数
 export WORKER_MACHINE_COUNT=1
 
-# ELF 集群
-export ELF_SERVER=127.0.0.1
-export ELF_SERVER_USERNAME=root
-export ELF_SERVER_PASSWORD=root
+# TOWER
+export TOWER_SERVER=127.0.0.1
+export TOWER_USERNAME=root
+export TOWER_PASSWORD=root
 
-# ELF Master 节点
+# ELF 集群 ID
+export ELF_CLUSTER=576ad467-d09e-4235-9dec-b615814ddc7e
+
+# ELF 虚拟网络 ID
+export ELF_VLAN=576ad467-d09e-4235-9dec-b615814ddc7e_c8a1e42d-e0f3-4d50-a190-53209a98f157
+
+# Control plane endpoint
 export CONTROL_PLANE_ENDPOINT_IP=127.0.0.1
 
 # ELF 虚拟机模板
