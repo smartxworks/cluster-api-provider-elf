@@ -146,10 +146,9 @@ func (svr *TowerVMService) Clone(
 			},
 		},
 		CloudInit: &models.VMCreateVMFromTemplateParamsCloudInit{
-			Hostname:            elfMachine.Name,
-			DefaultUserPassword: config.VMPassword,
-			UserData:            bootstrapData,
-			Networks:            networks,
+			Hostname: elfMachine.Name,
+			UserData: bootstrapData,
+			Networks: networks,
 		},
 	}
 	if elfMachine.Spec.AutoSchedule {
