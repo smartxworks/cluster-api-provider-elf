@@ -563,6 +563,8 @@ github.com/grpc-ecosystem/grpc-gateway v1.9.5/go.mod h1:vNeuVxBJEsws4ogUvrchl83t
 github.com/grpc-ecosystem/grpc-gateway v1.16.0/go.mod h1:BDjrQk3hbvj6Nolgz8mAMFbcEtjT1g+wF4CSlocrBnw=
 github.com/haijianyang/cloudtower-go-sdk v0.0.0-20210909034659-6721d9738aae h1:qbuRVc4CcpMQiLulv7jhqCwHjp5qWM2KtcyNIfUKABA=
 github.com/haijianyang/cloudtower-go-sdk v0.0.0-20210909034659-6721d9738aae/go.mod h1:a3iOQ2MmxNs2RljJaB/6j+yeLIbm0tVNAkL+vUn6yPo=
+github.com/haijianyang/cloudtower-go-sdk v0.0.0-20210922061435-19d2dbd083b4 h1:C0yUCX2IFKXDKOiseGlT0ByH7/iZJOXoxTXoOntm3ao=
+github.com/haijianyang/cloudtower-go-sdk v0.0.0-20210922061435-19d2dbd083b4/go.mod h1:a3iOQ2MmxNs2RljJaB/6j+yeLIbm0tVNAkL+vUn6yPo=
 github.com/hashicorp/consul/api v1.1.0/go.mod h1:VmuI/Lkw1nC05EYQWNKwWGbkg+FbDBtguAZLlVdkD9Q=
 github.com/hashicorp/consul/sdk v0.1.1/go.mod h1:VKf9jXwCTEY1QZP2MOLRhb5i/I/ssyNV1vwHyQBF0x8=
 github.com/hashicorp/errwrap v0.0.0-20141028054710-7554cd9344ce/go.mod h1:YH+1FKiLXxHSkmPseP+kNlulaMuP3n2brvKWEqk/Jc4=
