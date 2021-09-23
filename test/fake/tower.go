@@ -7,7 +7,7 @@ import (
 	"github.com/haijianyang/cloudtower-go-sdk/models"
 )
 
-func NewTowerVM() *models.VM {
+func NewVM() *models.VM {
 	id := strings.ReplaceAll(uuid.New().String(), "-", "")
 	localID := uuid.New().String()
 	status := models.VMStatusRUNNING
@@ -20,7 +20,7 @@ func NewTowerVM() *models.VM {
 	}
 }
 
-func NewTowerTask() *models.Task {
+func NewTask() *models.Task {
 	id := uuid.New().String()
 	status := models.TaskStatusPENDING
 

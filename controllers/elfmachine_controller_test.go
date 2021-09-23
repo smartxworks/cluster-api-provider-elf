@@ -227,9 +227,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should create a new VM if none exists", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.Name = &machine.Name
-			task := fake.NewTowerTask()
+			task := fake.NewTask()
 			withTaskVM := fake.NewWithTaskVM(vm, task)
 
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
@@ -256,7 +256,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should recover from lost task", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.Name = &machine.Name
 
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
@@ -303,7 +303,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should set failure when VM was deleted", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.EntityAsyncStatus = nil
 			elfMachine.Status.VMRef = *vm.LocalID
 
@@ -325,8 +325,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should retry when create a VM if failed", func() {
-			vm := fake.NewTowerVM()
-			task := fake.NewTowerTask()
+			vm := fake.NewVM()
+			task := fake.NewTask()
 			status := models.TaskStatusFAILED
 			task.Status = &status
 			elfMachine.Status.VMRef = *vm.ID
@@ -352,14 +352,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should power on the VM after it is created", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
 			vm.Status = &status
-			task1 := fake.NewTowerTask()
+			task1 := fake.NewTask()
 			taskStatus := models.TaskStatusSUCCESSED
 			task1.Status = &taskStatus
-			task2 := fake.NewTowerTask()
+			task2 := fake.NewTask()
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task1.ID
 
@@ -389,11 +389,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle power on error", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
 			vm.Status = &status
-			task1 := fake.NewTowerTask()
+			task1 := fake.NewTask()
 			taskStatus := models.TaskStatusSUCCESSED
 			task1.Status = &taskStatus
 			elfMachine.Status.VMRef = *vm.ID
@@ -421,14 +421,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle power on task failed", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
 			vm.Status = &status
-			task1 := fake.NewTowerTask()
+			task1 := fake.NewTask()
 			taskStatus := models.TaskStatusFAILED
 			task1.Status = &taskStatus
-			task2 := fake.NewTowerTask()
+			task2 := fake.NewTask()
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task1.ID
 
@@ -465,7 +465,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			cluster.Status.InfrastructureReady = true
 			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			elfMachine.Status.VMRef = *vm.LocalID
 			vm.EntityAsyncStatus = nil
 
@@ -493,7 +493,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should wait VM network ready", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.EntityAsyncStatus = nil
 			vm.Ips = infrautilv1.TowerString("")
 			elfMachine.Status.VMRef = *vm.LocalID
@@ -522,7 +522,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should set ElfMachine to ready when VM network is ready", func() {
 			ip := "116.116.116.116"
 
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.EntityAsyncStatus = nil
 			vm.Ips = infrautilv1.TowerString("116.116.116.116")
 			elfMachine.Status.VMRef = *vm.LocalID
@@ -579,8 +579,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should remove vmRef when VM not found", func() {
-			vm := fake.NewTowerVM()
-			task := fake.NewTowerTask()
+			vm := fake.NewVM()
+			task := fake.NewTask()
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task.ID
 
@@ -607,11 +607,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle task - pending", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			status := models.VMStatusRUNNING
 			vm.Status = &status
 			vm.EntityAsyncStatus = "UPDATING"
-			task := fake.NewTowerTask()
+			task := fake.NewTask()
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task.ID
 
@@ -635,9 +635,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle task - failed", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.EntityAsyncStatus = nil
-			task := fake.NewTowerTask()
+			task := fake.NewTask()
 			status := models.TaskStatusFAILED
 			task.Status = &status
 			elfMachine.Status.VMRef = *vm.LocalID
@@ -666,9 +666,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle task - done", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.EntityAsyncStatus = nil
-			task := fake.NewTowerTask()
+			task := fake.NewTask()
 			status := models.TaskStatusSUCCESSED
 			task.Status = &status
 			elfMachine.Status.VMRef = *vm.LocalID
@@ -697,9 +697,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should power off when VM is powered on", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.EntityAsyncStatus = nil
-			task := fake.NewTowerTask()
+			task := fake.NewTask()
 			elfMachine.Status.VMRef = *vm.LocalID
 
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
@@ -726,7 +726,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle delete error", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
 			vm.Status = &status
@@ -755,11 +755,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should delete when VM is not running", func() {
-			vm := fake.NewTowerVM()
+			vm := fake.NewVM()
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
 			vm.Status = &status
-			task := fake.NewTowerTask()
+			task := fake.NewTask()
 			elfMachine.Status.VMRef = *vm.LocalID
 
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
