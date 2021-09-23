@@ -50,21 +50,20 @@ BUILD_DIR := .build
 OVERRIDES_DIR := $(HOME)/.cluster-api/overrides/infrastructure-elf/$(VERSION)
 
 # Architecture variables
+TAG ?= dev
 ARCH ?= amd64
 ALL_ARCH = amd64 arm arm64 ppc64le s390x
 
+# Set build time variables including version details
+LDFLAGS := $(shell hack/version.sh)
+
 # Common docker variables
-IMAGE_NAME ?= manager
+IMAGE_NAME ?= cape-manager
 PULL_POLICY ?= Always
 
 # Release docker variables
-RELEASE_REGISTRY := gcr.io/cluster-api-provider-elf/release
-RELEASE_CONTROLLER_IMG := $(RELEASE_REGISTRY)/$(IMAGE_NAME)
-
-# Development Docker variables
-DEV_REGISTRY ?= harbor.smartx.com
-DEV_CONTROLLER_IMG ?= $(DEV_REGISTRY)/cape/$(IMAGE_NAME)
-DEV_TAG ?= dev
+REGISTRY ?= smartxrocks
+CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 
 ## --------------------------------------
 ## Help
@@ -89,12 +88,12 @@ cluster-templates: kustomize ## Generate cluster templates
 	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-kcp-scale-in --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-kcp-scale-in.yaml
 	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-md-remediation --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-md-remediation.yaml
 
-test: generate fmt vet ## Run tests.
-	source ./hack/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v ./api/... ./controllers/... ./pkg/... -coverprofile cover.out
+test: generate ## Run tests.
+	source ./hack/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v ./api/... ./controllers/... ./pkg/... -coverprofile=cover.out
 
 .PHONY: e2e-image
-e2e-image: ## Build the e2e manager image
-	docker build --tag="gcr.io/k8s-staging-cluster-api/cape-manager:e2e" .
+e2e-image: docker-pull-prerequisites ## Build the e2e manager image
+	docker build --tag="smartxrocks/cape-manager:e2e" .
 
 .PHONY: e2e
 e2e: e2e-image
@@ -124,15 +123,21 @@ KIND := $(shell pwd)/bin/kind
 kind: ## Download kind locally if necessary.
 	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@v0.11.0)
 
+GOLANGCI_LINT := $(shell pwd)/bin/golangci-lint
+golangci-lint: ## Download golangci-lint locally if necessary.
+	$(call go-get-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.42.1)
+
 ## --------------------------------------
 ## Linting and fixing linter errors
 ## --------------------------------------
 
-fmt: ## Run go fmt against code.
-	go fmt ./...
+.PHONY: lint
+lint: golangci-lint ## Lint codebase
+	$(GOLANGCI_LINT) run -v --fast=false
 
-vet: ## Run go vet against code.
-	go vet ./...
+.PHONY: lint-fix
+lint-fix: $(GOLANGCI_LINT) ## Lint the codebase and run auto-fixers if supported by the linter.
+	GOLANGCI_LINT_EXTRA_ARGS=--fix $(MAKE) lint
 
 ## --------------------------------------
 ## Generate
@@ -175,18 +180,24 @@ $(BUILD_DIR):
 $(OVERRIDES_DIR):
 	@mkdir -p $(OVERRIDES_DIR)
 
+.PHONY: release
+release: clean-release
+	$(MAKE) docker-build-all
+	$(MAKE) docker-push-all
+	$(MAKE) release-manifests
+
 .PHONY: release-manifests
 release-manifests:
-	$(MAKE) manifests MANIFEST_DIR=$(RELEASE_DIR) PULL_POLICY=IfNotPresent IMAGE=$(RELEASE_CONTROLLER_IMG):$(VERSION)
+	$(MAKE) manifests MANIFEST_DIR=$(RELEASE_DIR) PULL_POLICY=IfNotPresent IMAGE=$(CONTROLLER_IMG):$(TAG)
 	cp metadata.yaml $(RELEASE_DIR)/metadata.yaml
 
 .PHONY: release-overrides
 release-overrides:
-	$(MAKE) manifests MANIFEST_DIR=$(OVERRIDES_DIR) PULL_POLICY=IfNotPresent IMAGE=$(RELEASE_CONTROLLER_IMG):$(VERSION)
+	$(MAKE) manifests MANIFEST_DIR=$(OVERRIDES_DIR) PULL_POLICY=IfNotPresent IMAGE=$(CONTROLLER_IMG):$(TAG)
 
 .PHONY: dev-manifests
 dev-manifests:
-	$(MAKE) manifests MANIFEST_DIR=$(OVERRIDES_DIR) PULL_POLICY=Always IMAGE=$(DEV_CONTROLLER_IMG):$(DEV_TAG)
+	$(MAKE) manifests MANIFEST_DIR=$(OVERRIDES_DIR) PULL_POLICY=Always IMAGE=$(CONTROLLER_IMG):$(TAG)
 	cp metadata.yaml $(OVERRIDES_DIR)/metadata.yaml
 
 .PHONY: manifests
@@ -199,15 +210,23 @@ manifests: $(MANIFEST_DIR) $(BUILD_DIR) kustomize
 	$(KUSTOMIZE) build $(BUILD_DIR)/config/default > $(MANIFEST_DIR)/infrastructure-components.yaml
 
 ## --------------------------------------
+## Cleanup / Verification
+## --------------------------------------
+
+.PHONY: clean-release
+clean-release: ## Remove the release folder
+	rm -rf $(RELEASE_DIR)
+
+## --------------------------------------
 ## Development
 ## --------------------------------------
 
 .PHONY: build
-build: generate fmt vet ## Build manager binary.
+build: generate ## Build manager binary.
 	go build -o bin/manager main.go
 
 .PHONY: run
-run: generate fmt vet ## Run a controller from your host.
+run: generate ## Run a controller from your host.
 	go run ./main.go
 
 .PHONY: install
@@ -220,7 +239,7 @@ uninstall: generate kustomize ## Uninstall CRDs from the K8s cluster specified i
 
 .PHONY: deploy
 deploy: generate kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	sed -i'' -e 's@image: .*@image: '"$(DEV_CONTROLLER_IMG):$(DEV_TAG)"'@' config/default/manager_image_patch.yaml
+	sed -i'' -e 's@image: .*@image: '"$(CONTROLLER_IMG):$(TAG)"'@' config/default/manager_image_patch.yaml
 	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
 .PHONY: undeploy
@@ -232,9 +251,38 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 ## --------------------------------------
 
 .PHONY: docker-build
-docker-build: ## Build the docker image for controller-manager
-	docker build --pull --build-arg ARCH=$(ARCH) . -t $(DEV_CONTROLLER_IMG):$(DEV_TAG)
+docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager
+	docker build --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(TAG)
 
 .PHONY: docker-push
 docker-push: ## Push the docker image
-	docker push $(DEV_CONTROLLER_IMG):$(DEV_TAG)
+	docker push $(CONTROLLER_IMG)-$(ARCH):$(TAG)
+
+.PHONY: docker-pull-prerequisites
+docker-pull-prerequisites:
+	docker pull docker.io/docker/dockerfile:1.1-experimental
+	docker pull gcr.io/distroless/static:latest
+
+## --------------------------------------
+## Docker — All ARCH
+## --------------------------------------
+
+.PHONY: docker-build-all ## Build all the architecture docker images
+docker-build-all: $(addprefix docker-build-,$(ALL_ARCH))
+
+docker-build-%:
+	$(MAKE) ARCH=$* docker-build
+
+.PHONY: docker-push-all ## Push all the architecture docker images
+docker-push-all: $(addprefix docker-push-,$(ALL_ARCH))
+	$(MAKE) docker-push-manifest
+
+docker-push-%:
+	$(MAKE) ARCH=$* docker-push
+
+.PHONY: docker-push-manifest
+docker-push-manifest: ## Push the fat manifest docker image.
+	## Minimum docker version 18.06.0 is required for creating and pushing manifest images.
+	docker manifest create --amend $(CONTROLLER_IMG):$(TAG) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(CONTROLLER_IMG)\-&:$(TAG)~g")
+	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${CONTROLLER_IMG}:${TAG} ${CONTROLLER_IMG}-$${arch}:${TAG}; done
+	docker manifest push --purge ${CONTROLLER_IMG}:${TAG}

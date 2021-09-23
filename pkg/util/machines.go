@@ -14,14 +14,20 @@ import (
 )
 
 const (
+	// ProviderIDPrefix is the string data prefixed to a BIOS UUID in order
+	// to build a provider ID.
 	ProviderIDPrefix = "elf://"
 
+	// ProviderIDPattern is a regex pattern and is used by ConvertProviderIDToUUID
+	// to convert a providerID into a UUID string.
 	ProviderIDPattern = `(?i)^` + ProviderIDPrefix + `([a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12})$`
 
+	// UUIDPattern is a regex pattern and is used by ConvertUUIDToProviderID
+	// to convert a UUID into a providerID string.
 	UUIDPattern = `(?i)^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$`
 )
 
-// ErrNoMachineIPAddr indicates that no valid IP addresses were found in a machine context
+// ErrNoMachineIPAddr indicates that no valid IP addresses were found in a machine context.
 var ErrNoMachineIPAddr = errors.New("no IP addresses found for machine")
 
 // GetElfMachinesInCluster gets a cluster's ElfMachine resources.
@@ -29,7 +35,6 @@ func GetElfMachinesInCluster(
 	ctx context.Context,
 	controllerClient client.Client,
 	namespace, clusterName string) ([]*infrav1.ElfMachine, error) {
-
 	labels := map[string]string{clusterv1.ClusterLabelName: clusterName}
 	var machineList infrav1.ElfMachineList
 
@@ -88,10 +93,10 @@ func IsUUID(uuid string) bool {
 }
 
 func GetNetworkStatus(ipsStr string) []infrav1.NetworkStatus {
-	var network []infrav1.NetworkStatus
+	networks := []infrav1.NetworkStatus{}
 
 	if ipsStr == "" {
-		return network
+		return networks
 	}
 
 	ips := strings.Split(ipsStr, ",")
@@ -100,11 +105,11 @@ func GetNetworkStatus(ipsStr string) []infrav1.NetworkStatus {
 			continue
 		}
 
-		network = append(network, infrav1.NetworkStatus{
+		networks = append(networks, infrav1.NetworkStatus{
 			NetworkIndex: index,
 			IPAddrs:      []string{ip},
 		})
 	}
 
-	return network
+	return networks
 }

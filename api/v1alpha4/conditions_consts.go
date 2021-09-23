@@ -44,10 +44,10 @@ const (
 // Conditions and Reasons related to make connections to a Tower. Can currently be used by ElfCluster and ElfMachine
 
 const (
-	// TowerAvailableCondition documents the connectivity with tower
+	// TowerAvailableCondition documents the connectivity with tower.
 	TowerAvailableCondition clusterv1.ConditionType = "TowerAvailable"
 
 	// TowerUnreachableReason (Severity=Error) documents a controller detecting
-	// issues with tower reachability;
+	// issues with tower reachability.
 	TowerUnreachableReason = "TowerUnreachable"
 )

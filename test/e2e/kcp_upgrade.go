@@ -14,7 +14,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/cluster-api/util"
+	capiutil "sigs.k8s.io/cluster-api/util"
 )
 
 // KCPUpgradeSpecInput is the input for KCPUpgradeSpec.
@@ -68,7 +68,7 @@ func KCPUpgradeSpec(ctx context.Context, inputGetter func() KCPUpgradeSpecInput)
 				InfrastructureProvider:   clusterctl.DefaultInfrastructureProvider,
 				Flavor:                   input.Flavor,
 				Namespace:                namespace.Name,
-				ClusterName:              fmt.Sprintf("%s-%s", specName, util.RandomString(6)),
+				ClusterName:              fmt.Sprintf("%s-%s", specName, capiutil.RandomString(6)),
 				KubernetesVersion:        input.E2EConfig.GetVariable(capi_e2e.KubernetesVersionUpgradeFrom),
 				ControlPlaneMachineCount: pointer.Int64Ptr(input.ControlPlaneMachineCount),
 				WorkerMachineCount:       pointer.Int64Ptr(1),

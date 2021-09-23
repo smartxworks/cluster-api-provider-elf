@@ -29,7 +29,7 @@ const (
 	MachineFinalizer = "elfmachine.infrastructure.cluster.x-k8s.io"
 )
 
-// ElfMachineSpec defines the desired state of ElfMachine
+// ElfMachineSpec defines the desired state of ElfMachine.
 type ElfMachineSpec struct {
 	// ProviderID is the virtual machine's UUID formatted as
 	// elf://f0f6f65d-0786-4170-9ab9-d02187a61ad6
@@ -40,7 +40,7 @@ type ElfMachineSpec struct {
 	// For this infrastructure provider, the name is equivalent to the name of the ElfDeploymentZone.
 	FailureDomain *string `json:"failureDomain,omitempty"`
 
-	//Template is the name or UUID of the template used to clone new machines.
+	// Template is the name or UUID of the template used to clone new machines.
 	Template string `json:"template"`
 
 	// Network is the network configuration for this machin's VM.
@@ -71,7 +71,7 @@ type ElfMachineSpec struct {
 	HA bool `json:"ha,omitempty"`
 }
 
-// ElfMachineStatus defines the observed state of ElfMachine
+// ElfMachineStatus defines the observed state of ElfMachine.
 type ElfMachineStatus struct {
 	// Ready is true when the provider resource is ready.
 	// +optional
@@ -139,7 +139,7 @@ type ElfMachineStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// ElfMachine is the Schema for the elfmachines API
+// ElfMachine is the Schema for the elfmachines API.
 type ElfMachine struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -173,8 +173,8 @@ func (m *ElfMachine) HasTask() bool {
 	return m.Status.TaskRef != ""
 }
 
-func (m *ElfMachine) SetTask(taskId string) {
-	m.Status.TaskRef = taskId
+func (m *ElfMachine) SetTask(taskID string) {
+	m.Status.TaskRef = taskID
 }
 
 func (m *ElfMachine) IsFailed() bool {
@@ -183,7 +183,7 @@ func (m *ElfMachine) IsFailed() bool {
 
 //+kubebuilder:object:root=true
 
-// ElfMachineList contains a list of ElfMachine
+// ElfMachineList contains a list of ElfMachine.
 type ElfMachineList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

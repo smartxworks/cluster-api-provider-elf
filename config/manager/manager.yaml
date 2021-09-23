@@ -21,7 +21,7 @@ spec:
         - --leader-elect
         - --logtostderr
         - --v=4
-        image: gcr.io/cluster-api-provider-elf/release/manager:latest
+        image: smartxrocks/cape-manager:latest
         imagePullPolicy: IfNotPresent
         name: manager
         ports:

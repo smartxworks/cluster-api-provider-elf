@@ -23,7 +23,6 @@ type Manager interface {
 
 // New returns a new CAPE controller manager.
 func New(opts Options) (Manager, error) {
-
 	// Ensure the default options are set.
 	opts.defaults()
 

@@ -42,7 +42,6 @@ var (
 	defaultLeaderElectionID = manager.DefaultLeaderElectionID
 )
 
-// nolint:gocognit
 func main() {
 	rand.Seed(time.Now().UnixNano())
 

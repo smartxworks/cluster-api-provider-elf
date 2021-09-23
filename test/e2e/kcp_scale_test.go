@@ -13,7 +13,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/cluster-api/util"
+	capiutil "sigs.k8s.io/cluster-api/util"
 )
 
 var _ = Describe("CAPE kcp scale e2e test", func() {
@@ -49,7 +49,7 @@ var _ = Describe("CAPE kcp scale e2e test", func() {
 				InfrastructureProvider:   clusterctl.DefaultInfrastructureProvider,
 				Flavor:                   clusterctl.DefaultFlavor,
 				Namespace:                namespace.Name,
-				ClusterName:              fmt.Sprintf("%s-%s", specName, util.RandomString(6)),
+				ClusterName:              fmt.Sprintf("%s-%s", specName, capiutil.RandomString(6)),
 				KubernetesVersion:        e2eConfig.GetVariable(capi_e2e.KubernetesVersion),
 				ControlPlaneMachineCount: pointer.Int64Ptr(1),
 				WorkerMachineCount:       pointer.Int64Ptr(1),

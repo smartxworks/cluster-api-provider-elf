@@ -46,7 +46,7 @@ type TowerVMService struct {
 	Logger  logr.Logger           `json:"logger"`
 }
 
-// Create VM using VM template.
+// Clone kicks off a clone operation on Elf to create a new virtual machine using VM template.
 func (svr *TowerVMService) Clone(
 	elfCluster *infrav1.ElfCluster,
 	machine *clusterv1.Machine,
@@ -78,11 +78,11 @@ func (svr *TowerVMService) Clone(
 	numCPUSockets := numCPUs / numCoresPerSocket
 
 	memoryMiB := elfMachine.Spec.MemoryMiB
-	if elfMachine.Spec.MemoryMiB <= 0 {
+	if memoryMiB <= 0 {
 		memoryMiB = config.VMMemoryMiB
 	}
 
-	diskGiB := elfMachine.Spec.DiskGiB
+	diskGiB := elfMachine.Spec.DiskGiB // nolint:ifshort
 	if diskGiB <= 0 {
 		diskGiB = config.VMDiskGiB
 	}
@@ -166,7 +166,7 @@ func (svr *TowerVMService) Clone(
 	return createVMFromTemplateResp.Payload[0], nil
 }
 
-// Delete VM.
+// Delete destroys a virtual machine.
 func (svr *TowerVMService) Delete(uuid string) (*models.Task, error) {
 	deleteVMParams := operations.NewDeleteVMParams()
 	deleteVMParams.RequestBody = &models.VMOperateParams{
@@ -181,7 +181,7 @@ func (svr *TowerVMService) Delete(uuid string) (*models.Task, error) {
 	return &models.Task{ID: deleteVMResp.Payload[0].TaskID}, nil
 }
 
-// Power Off VM.
+// PowerOff powers off a virtual machine.
 func (svr *TowerVMService) PowerOff(uuid string) (*models.Task, error) {
 	shutDownVMParams := operations.NewShutDownVMParams()
 	shutDownVMParams.RequestBody = &models.VMOperateParams{
@@ -196,7 +196,7 @@ func (svr *TowerVMService) PowerOff(uuid string) (*models.Task, error) {
 	return &models.Task{ID: shutDownVMResp.Payload[0].TaskID}, nil
 }
 
-// Power On VM.
+// PowerOn powers on a virtual machine.
 func (svr *TowerVMService) PowerOn(uuid string) (*models.Task, error) {
 	startVMParams := operations.NewStartVMParams()
 	startVMParams.RequestBody = &models.VMStartParams{
@@ -211,7 +211,7 @@ func (svr *TowerVMService) PowerOn(uuid string) (*models.Task, error) {
 	return &models.Task{ID: startVMResp.Payload[0].TaskID}, nil
 }
 
-// Get the VM.
+// Get searches for a virtual machine.
 func (svr *TowerVMService) Get(id string) (*models.VM, error) {
 	getVmsParams := operations.NewGetVmsParams()
 	getVmsParams.RequestBody = &models.GetVmsRequestBody{
@@ -232,7 +232,7 @@ func (svr *TowerVMService) Get(id string) (*models.VM, error) {
 	return getVmsResp.Payload[0], nil
 }
 
-// Get the VM by name.
+// GetByName searches for a virtual machine by name.
 func (svr *TowerVMService) GetByName(name string) (*models.VM, error) {
 	getVmsParams := operations.NewGetVmsParams()
 	getVmsParams.RequestBody = &models.GetVmsRequestBody{
@@ -253,7 +253,7 @@ func (svr *TowerVMService) GetByName(name string) (*models.VM, error) {
 	return getVmsResp.Payload[0], nil
 }
 
-// Get the cluster.
+// GetCluster searches for a cluster.
 func (svr *TowerVMService) GetCluster(id string) (*models.Cluster, error) {
 	getClustersParams := operations.NewGetClustersParams()
 	getClustersParams.RequestBody = &models.GetClustersRequestBody{
@@ -274,7 +274,7 @@ func (svr *TowerVMService) GetCluster(id string) (*models.Cluster, error) {
 	return getClustersResp.Payload[0], nil
 }
 
-// Get the vlan.
+// GetVlan searches for a vlan.
 func (svr *TowerVMService) GetVlan(id string) (*models.Vlan, error) {
 	getVlansParams := operations.NewGetVlansParams()
 	getVlansParams.RequestBody = &models.GetVlansRequestBody{
@@ -295,7 +295,7 @@ func (svr *TowerVMService) GetVlan(id string) (*models.Vlan, error) {
 	return getVlansResp.Payload[0], nil
 }
 
-// Get the VM template.
+// GetVMTemplate searches for a virtual machine template.
 func (svr *TowerVMService) GetVMTemplate(templateUUID string) (*models.VMTemplate, error) {
 	if _, err := uuid.Parse(templateUUID); err != nil {
 		return nil, err
@@ -320,7 +320,7 @@ func (svr *TowerVMService) GetVMTemplate(templateUUID string) (*models.VMTemplat
 	return vmTemplates[0], nil
 }
 
-// Get the task by id.
+// GetTask searches for a task.
 func (svr *TowerVMService) GetTask(id string) (*models.Task, error) {
 	getTasksParams := operations.NewGetTasksParams()
 	getTasksParams.RequestBody = &models.GetTasksRequestBody{

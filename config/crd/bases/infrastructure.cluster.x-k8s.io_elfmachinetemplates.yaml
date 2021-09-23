@@ -20,7 +20,7 @@ spec:
     schema:
       openAPIV3Schema:
         description: ElfMachineTemplate is the Schema for the elfmachinetemplates
-          API
+          API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -35,11 +35,11 @@ spec:
           metadata:
             type: object
           spec:
-            description: ElfMachineTemplateSpec defines the desired state of ElfMachineTemplate
+            description: ElfMachineTemplateSpec defines the desired state of ElfMachineTemplate.
             properties:
               template:
                 description: ElfMachineTemplateResource describes the data needed
-                  to create a ElfMachine from a template
+                  to create a ElfMachine from a template.
                 properties:
                   spec:
                     description: Spec is the specification of the desired behavior

@@ -19,7 +19,7 @@ spec:
   - name: v1alpha4
     schema:
       openAPIV3Schema:
-        description: ElfMachine is the Schema for the elfmachines API
+        description: ElfMachine is the Schema for the elfmachines API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -34,7 +34,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: ElfMachineSpec defines the desired state of ElfMachine
+            description: ElfMachineSpec defines the desired state of ElfMachine.
             properties:
               autoSchedule:
                 type: boolean
@@ -118,7 +118,7 @@ spec:
             - template
             type: object
           status:
-            description: ElfMachineStatus defines the observed state of ElfMachine
+            description: ElfMachineStatus defines the observed state of ElfMachine.
             properties:
               addresses:
                 description: Addresses contains the Elf instance associated addresses.

@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
-	"sigs.k8s.io/cluster-api/util"
+	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -60,7 +60,7 @@ func UpgradeMachineDeploymentInfrastructureRefAndWait(ctx context.Context, input
 
 		// Creates a new infra object
 		newInfraObj := infraObj
-		newInfraObjName := fmt.Sprintf("%s-%s", infraRef.Name, util.RandomString(6))
+		newInfraObjName := fmt.Sprintf("%s-%s", infraRef.Name, capiutil.RandomString(6))
 		newInfraObj.SetName(newInfraObjName)
 		newInfraObj.SetResourceVersion("")
 		Expect(mgmtClient.Create(ctx, newInfraObj)).NotTo(HaveOccurred())

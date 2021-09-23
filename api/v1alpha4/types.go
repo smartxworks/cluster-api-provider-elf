@@ -15,7 +15,7 @@ type Tower struct {
 	Password string `json:"password,omitempty"`
 }
 
-// ElfMachineTemplateResource describes the data needed to create a ElfMachine from a template
+// ElfMachineTemplateResource describes the data needed to create a ElfMachine from a template.
 type ElfMachineTemplateResource struct {
 	// Spec is the specification of the desired behavior of the machine.
 	Spec ElfMachineSpec `json:"spec"`
@@ -92,6 +92,8 @@ type NetworkDeviceSpec struct {
 }
 
 //+kubebuilder:object:generate=false
+
+// PatchStringValue is for patching resources.
 type PatchStringValue struct {
 	Op    string      `json:"op"`
 	Path  string      `json:"path"`

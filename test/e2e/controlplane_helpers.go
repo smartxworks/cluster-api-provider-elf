@@ -15,7 +15,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
 	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha4"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha4"
-	"sigs.k8s.io/cluster-api/util"
+	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -59,7 +59,7 @@ func ScaleAndWaitControlPlane(ctx context.Context, input ScaleAndWaitControlPlan
 		}
 
 		if len(machines) != nodeRefCount {
-			return -1, errors.New("Machine count does not match existing nodes count")
+			return -1, errors.New("machine count does not match existing nodes count")
 		}
 
 		return nodeRefCount, nil
@@ -114,7 +114,7 @@ func UpgradeControlPlaneAndWaitForUpgrade(ctx context.Context, input UpgradeCont
 
 	// Creates a new infra object
 	newInfraObj := infraObj
-	newInfraObjName := fmt.Sprintf("%s-%s", infraRef.Name, util.RandomString(6))
+	newInfraObjName := fmt.Sprintf("%s-%s", infraRef.Name, capiutil.RandomString(6))
 	newInfraObj.SetName(newInfraObjName)
 	newInfraObj.SetResourceVersion("")
 	Expect(mgmtClient.Create(ctx, newInfraObj)).NotTo(HaveOccurred())

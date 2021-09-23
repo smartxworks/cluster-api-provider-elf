@@ -14,9 +14,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/cluster-api/util"
+	capiutil "sigs.k8s.io/cluster-api/util"
 
-	infrautilv1 "github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
 var _ = Describe("CAPE HA e2e test", func() {
@@ -52,7 +52,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 				InfrastructureProvider:   clusterctl.DefaultInfrastructureProvider,
 				Flavor:                   "cp-ha",
 				Namespace:                namespace.Name,
-				ClusterName:              fmt.Sprintf("%s-%s", specName, util.RandomString(6)),
+				ClusterName:              fmt.Sprintf("%s-%s", specName, capiutil.RandomString(6)),
 				KubernetesVersion:        e2eConfig.GetVariable(capi_e2e.KubernetesVersion),
 				ControlPlaneMachineCount: pointer.Int64Ptr(3),
 				WorkerMachineCount:       pointer.Int64Ptr(1),
@@ -73,7 +73,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 
 		Logf("Powering off VM")
 		PowerOffVM(ctx, PowerOffVMInput{
-			UUID:               infrautilv1.ConvertProviderIDToUUID(machines[0].Spec.ProviderID),
+			UUID:               util.ConvertProviderIDToUUID(machines[0].Spec.ProviderID),
 			VMService:          vmService,
 			WaitVMJobIntervals: e2eConfig.GetIntervals(specName, "wait-vm-job"),
 		})
@@ -92,7 +92,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 		Byf("Wait for control plane nodes ready")
 		Logf("Powering on VM")
 		PowerOnVM(ctx, PowerOnVMInput{
-			UUID:               infrautilv1.ConvertProviderIDToUUID(machines[0].Spec.ProviderID),
+			UUID:               util.ConvertProviderIDToUUID(machines[0].Spec.ProviderID),
 			VMService:          vmService,
 			WaitVMJobIntervals: e2eConfig.GetIntervals(specName, "wait-vm-job"),
 		})

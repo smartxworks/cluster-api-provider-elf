@@ -158,22 +158,22 @@ func TestGetNetworkStatus(t *testing.T) {
 		{
 			name:          "empty",
 			ips:           "",
-			networkStatus: nil,
+			networkStatus: []infrav1.NetworkStatus{},
 		},
 		{
 			name:          "local ip",
 			ips:           "127.0.0.1",
-			networkStatus: nil,
+			networkStatus: []infrav1.NetworkStatus{},
 		},
 		{
 			name:          "169.254 prefix",
 			ips:           "169.254.0.1",
-			networkStatus: nil,
+			networkStatus: []infrav1.NetworkStatus{},
 		},
 		{
 			name:          "172.17.0 prefix",
 			ips:           "172.17.0.1",
-			networkStatus: nil,
+			networkStatus: []infrav1.NetworkStatus{},
 		},
 		{
 			name: "valid IP",

@@ -20,14 +20,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ElfMachineTemplateSpec defines the desired state of ElfMachineTemplate
+// ElfMachineTemplateSpec defines the desired state of ElfMachineTemplate.
 type ElfMachineTemplateSpec struct {
 	Template ElfMachineTemplateResource `json:"template"`
 }
 
 //+kubebuilder:object:root=true
 
-// ElfMachineTemplate is the Schema for the elfmachinetemplates API
+// ElfMachineTemplate is the Schema for the elfmachinetemplates API.
 type ElfMachineTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -37,7 +37,7 @@ type ElfMachineTemplate struct {
 
 //+kubebuilder:object:root=true
 
-// ElfMachineTemplateList contains a list of ElfMachineTemplate
+// ElfMachineTemplateList contains a list of ElfMachineTemplate.
 type ElfMachineTemplateList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

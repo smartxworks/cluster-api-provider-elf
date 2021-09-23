@@ -29,11 +29,11 @@ func WaitForNodeNotReady(ctx context.Context, input WaitForNodeNotReadyInput) {
 
 		nodeReadyCount := 0
 		notReadyNodeName := ""
-		for _, node := range nodeList.Items {
-			if noderefutil.IsNodeReady(&node) {
+		for i := range nodeList.Items {
+			if noderefutil.IsNodeReady(&nodeList.Items[i]) {
 				nodeReadyCount++
 			} else {
-				notReadyNodeName = node.Name
+				notReadyNodeName = nodeList.Items[i].Name
 			}
 		}
 

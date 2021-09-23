@@ -17,7 +17,7 @@ images:
     loadBehavior: tryLoad
   - name: gcr.io/k8s-staging-cluster-api/kubeadm-control-plane-controller-amd64:v0.4.0
     loadBehavior: tryLoad
-  - name: gcr.io/k8s-staging-cluster-api/cape-manager:e2e
+  - name: smartxrocks/cape-manager:e2e
     loadBehavior: mustLoad
   - name: quay.io/jetstack/cert-manager-cainjector:v1.0.1
     loadBehavior: tryLoad
@@ -86,8 +86,8 @@ providers:
         # Use manifest from source files
         value: ../../../../cluster-api-provider-elf/config/default
         replacements:
-          - old: gcr.io/cluster-api-provider-elf/release/manager:latest
-            new: gcr.io/k8s-staging-cluster-api/cape-manager:e2e
+          - old: smartxrocks/cape-manager:latest
+            new: smartxrocks/cape-manager:e2e
           - old: "imagePullPolicy: Always"
             new: "imagePullPolicy: IfNotPresent"
           - old: "--leader-elect"

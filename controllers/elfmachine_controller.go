@@ -32,7 +32,7 @@ import (
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
 	capierrors "sigs.k8s.io/cluster-api/errors"
-	clusterutilv1 "sigs.k8s.io/cluster-api/util"
+	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -50,7 +50,6 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
-	infrautilv1 "github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines,verbs=get;list;watch;create;update;patch;delete
@@ -59,7 +58,7 @@ import (
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch;create;update;patch
 
-// ElfMachineReconciler reconciles a ElfMachine object
+// ElfMachineReconciler reconciles a ElfMachine object.
 type ElfMachineReconciler struct {
 	*context.ControllerContext
 	VMService service.VMService
@@ -91,7 +90,7 @@ func AddMachineControllerToManager(ctx *context.ControllerManagerContext, mgr ma
 		// Watch the CAPI resource that owns this infrastructure resource.
 		Watches(
 			&source.Kind{Type: &clusterv1.Machine{}},
-			handler.EnqueueRequestsFromMapFunc(clusterutilv1.MachineToInfrastructureMapFunc(controlledTypeGVK)),
+			handler.EnqueueRequestsFromMapFunc(capiutil.MachineToInfrastructureMapFunc(controlledTypeGVK)),
 		).
 		WithOptions(controller.Options{MaxConcurrentReconciles: ctx.MaxConcurrentReconciles}).
 		Complete(reconciler)
@@ -112,7 +111,7 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 	}
 
 	// Fetch the CAPI Machine.
-	machine, err := clusterutilv1.GetOwnerMachine(r, r.Client, elfMachine.ObjectMeta)
+	machine, err := capiutil.GetOwnerMachine(r, r.Client, elfMachine.ObjectMeta)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -124,7 +123,7 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 	}
 
 	// Fetch the CAPI Cluster.
-	cluster, err := clusterutilv1.GetClusterFromMetadata(r, r.Client, machine.ObjectMeta)
+	cluster, err := capiutil.GetClusterFromMetadata(r, r.Client, machine.ObjectMeta)
 	if err != nil {
 		r.Logger.Info("Machine is missing cluster label or cluster does not exist",
 			"namespace", machine.Namespace, "machine", machine.Name)
@@ -339,7 +338,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 
 	// Make sure bootstrap data is available and populated.
 	if ctx.Machine.Spec.Bootstrap.DataSecretName == nil {
-		if !infrautilv1.IsControlPlaneMachine(ctx.ElfMachine) && !conditions.IsTrue(ctx.Cluster, clusterv1.ControlPlaneInitializedCondition) {
+		if !util.IsControlPlaneMachine(ctx.ElfMachine) && !conditions.IsTrue(ctx.Cluster, clusterv1.ControlPlaneInitializedCondition) {
 			ctx.Logger.Info("Waiting for the control plane to be initialized")
 
 			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.WaitingForControlPlaneAvailableReason, clusterv1.ConditionSeverityInfo, "")
@@ -378,12 +377,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 	}
 
 	// Reconcile the ElfMachine's node addresses from the VM's IP addresses.
-	if ok, err := r.reconcileNetwork(ctx, vm); !ok {
-		if err != nil {
-			return reconcile.Result{}, errors.Wrapf(err,
-				"unexpected error while reconciling network for %s", ctx)
-		}
-
+	if ok := r.reconcileNetwork(ctx, vm); !ok {
 		ctx.Logger.Info("network is not reconciled",
 			"namespace", ctx.ElfMachine.Namespace, "elfMachine", ctx.ElfMachine.Name)
 
@@ -543,7 +537,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 }
 
 func (r *ElfMachineReconciler) reconcileProviderID(ctx *context.MachineContext, vm *models.VM) (bool, error) {
-	providerID := infrautilv1.ConvertUUIDToProviderID(*vm.LocalID)
+	providerID := util.ConvertUUIDToProviderID(*vm.LocalID)
 	if providerID == "" {
 		return false, errors.Errorf("invalid VM UUID %s from %s %s/%s for %s",
 			*vm.LocalID,
@@ -564,7 +558,7 @@ func (r *ElfMachineReconciler) reconcileProviderID(ctx *context.MachineContext, 
 
 // ELF without cloud provider.
 func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineContext, vm *models.VM) (bool, error) {
-	providerID := infrautilv1.ConvertUUIDToProviderID(*vm.LocalID)
+	providerID := util.ConvertUUIDToProviderID(*vm.LocalID)
 	if providerID == "" {
 		return false, errors.Errorf("invalid VM UUID %s from %s %s/%s for %s",
 			*vm.LocalID,
@@ -574,7 +568,7 @@ func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineConte
 			ctx)
 	}
 
-	kubeClient, err := infrautilv1.NewKubeClient(ctx, ctx.Client, ctx.Cluster)
+	kubeClient, err := util.NewKubeClient(ctx, ctx.Client, ctx.Cluster)
 	if err != nil {
 		return false, errors.Wrapf(err,
 			"failed to get client for Cluster %s/%s",
@@ -618,19 +612,19 @@ func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineConte
 
 // If the VM is powered on then issue requeues until all of the VM's
 // networks have IP addresses.
-func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm *models.VM) (bool, error) {
+func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm *models.VM) bool {
 	if vm.Ips == nil {
-		return false, nil
+		return false
 	}
 
 	network := util.GetNetworkStatus(*vm.Ips)
 	if len(network) == 0 {
-		return false, nil
+		return false
 	}
 
 	ctx.ElfMachine.Status.Network = network
 
-	var ipAddrs []clusterv1.MachineAddress
+	ipAddrs := make([]clusterv1.MachineAddress, 0, len(ctx.ElfMachine.Status.Network))
 	for _, netStatus := range ctx.ElfMachine.Status.Network {
 		ipAddrs = append(ipAddrs, clusterv1.MachineAddress{
 			Type:    clusterv1.MachineInternalIP,
@@ -640,7 +634,7 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 
 	ctx.ElfMachine.Status.Addresses = ipAddrs
 
-	return true, nil
+	return true
 }
 
 func (r *ElfMachineReconciler) getBootstrapData(ctx *context.MachineContext) (string, error) {

@@ -19,7 +19,7 @@ spec:
   - name: v1alpha4
     schema:
       openAPIV3Schema:
-        description: ElfCluster is the Schema for the elfclusters API
+        description: ElfCluster is the Schema for the elfclusters API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -34,7 +34,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: ElfClusterSpec defines the desired state of ElfCluster
+            description: ElfClusterSpec defines the desired state of ElfCluster.
             properties:
               cluster:
                 description: Cluster is a unique identifier for a Elf cluster.
@@ -70,7 +70,7 @@ spec:
                 type: object
             type: object
           status:
-            description: ElfClusterStatus defines the observed state of ElfCluster
+            description: ElfClusterStatus defines the observed state of ElfCluster.
             properties:
               conditions:
                 description: Conditions defines current service state of the ElfCluster.

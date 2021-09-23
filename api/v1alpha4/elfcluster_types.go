@@ -22,11 +22,13 @@ import (
 )
 
 const (
-	ClusterFinalizer         = "elfcluster.infrastructure.cluster.x-k8s.io"
-	ControlPlaneEndpointPort = 6443
+	// ClusterFinalizer allows ReconcileElfCluster to clean up Elf
+	// resources associated with ElfCluster before removing it from the
+	// API server.
+	ClusterFinalizer = "elfcluster.infrastructure.cluster.x-k8s.io"
 )
 
-// ElfClusterSpec defines the desired state of ElfCluster
+// ElfClusterSpec defines the desired state of ElfCluster.
 type ElfClusterSpec struct {
 	// Cluster is a unique identifier for a Elf cluster.
 	Cluster string `json:"cluster,omitempty"`
@@ -39,7 +41,7 @@ type ElfClusterSpec struct {
 	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint"`
 }
 
-// ElfClusterStatus defines the observed state of ElfCluster
+// ElfClusterStatus defines the observed state of ElfCluster.
 type ElfClusterStatus struct {
 	// +optional
 	Ready bool `json:"ready,omitempty"`
@@ -52,7 +54,7 @@ type ElfClusterStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// ElfCluster is the Schema for the elfclusters API
+// ElfCluster is the Schema for the elfclusters API.
 type ElfCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -75,7 +77,7 @@ func (c *ElfCluster) GetTower() Tower {
 
 //+kubebuilder:object:root=true
 
-// ElfClusterList contains a list of ElfCluster
+// ElfClusterList contains a list of ElfCluster.
 type ElfClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

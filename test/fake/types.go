@@ -15,14 +15,19 @@ import (
 )
 
 const (
+	// Namespace is the fake namespace.
 	Namespace = "default"
 
+	// ClusterKind is the fake cluster kind.
 	ClusterKind = "Cluster"
 
+	// MachineKind is the fake machine kind.
 	MachineKind = "Machine"
 
+	// ElfClusterKind is the fake elf cluster kind.
 	ElfClusterKind = "ElfCluster"
 
+	// ElfMachineKind is the fake elf machine kind.
 	ElfMachineKind = "ElfMachine"
 )
 
@@ -132,7 +137,6 @@ func InitOwnerReferences(
 	ctrlContext *context.ControllerContext,
 	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
 	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine) {
-
 	if elfCluster != nil {
 		InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 	}

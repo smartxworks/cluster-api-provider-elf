@@ -7,5 +7,5 @@ spec:
   template:
     spec:
       containers:
-      - image: gcr.io/cluster-api-provider-elf/release/manager:latest
+      - image: smartxrocks/cape-manager:latest
         name: manager

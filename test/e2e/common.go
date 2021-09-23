@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"path/filepath"
 
-	. "github.com/onsi/ginkgo" // nolint:golint,stylecheck
+	. "github.com/onsi/ginkgo"
 	"sigs.k8s.io/cluster-api/test/framework"
 
 	corev1 "k8s.io/api/core/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
-	"sigs.k8s.io/cluster-api/util"
+	capiutil "sigs.k8s.io/cluster-api/util"
 )
 
 // Test suite constants for e2e config variables.
@@ -18,7 +18,7 @@ const (
 	ElfTemplateUpgradeTo = "ELF_TEMPLATE_UPGRADE_TO"
 	ElfTemplate          = "ELF_TEMPLATE"
 	ElfServerUsername    = "ELF_SERVER_USERNAME"
-	ElfServerPassword    = "ELF_SERVER_PASSWORD"
+	ElfServerPassword    = "ELF_SERVER_PASSWORD" // nolint:gosec
 )
 
 func Byf(format string, a ...interface{}) {
@@ -34,7 +34,7 @@ func setupSpecNamespace(ctx context.Context, specName string, clusterProxy frame
 	namespace, cancelWatches := framework.CreateNamespaceAndWatchEvents(ctx, framework.CreateNamespaceAndWatchEventsInput{
 		Creator:   clusterProxy.GetClient(),
 		ClientSet: clusterProxy.GetClientSet(),
-		Name:      fmt.Sprintf("%s-%s", specName, util.RandomString(6)),
+		Name:      fmt.Sprintf("%s-%s", specName, capiutil.RandomString(6)),
 		LogFolder: filepath.Join(artifactFolder, "clusters", clusterProxy.GetName()),
 	})
 

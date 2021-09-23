@@ -23,7 +23,7 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
 )
 
-// Test suite flags
+// Test suite flags.
 var (
 	// configPath is the path to the e2e config file.
 	configPath string
@@ -38,7 +38,7 @@ var (
 	skipCleanup bool
 )
 
-// Test suite global vars
+// Test suite global vars.
 var (
 	// e2eConfig to be used for this test, read from configPath.
 	e2eConfig *clusterctl.E2EConfig
