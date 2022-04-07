@@ -23,9 +23,9 @@ import (
 	capie2e "sigs.k8s.io/cluster-api/test/e2e"
 )
 
-var _ = Describe("Machines remediation using CAPI remediation test", func() {
-	capie2e.MachineRemediationSpec(context.TODO(), func() capie2e.MachineRemediationSpecInput {
-		return capie2e.MachineRemediationSpecInput{
+var _ = Describe("Machines rollout using CAPI rollout test", func() {
+	capie2e.MachineDeploymentRolloutSpec(context.TODO(), func() capie2e.MachineDeploymentRolloutSpecInput {
+		return capie2e.MachineDeploymentRolloutSpecInput{
 			E2EConfig:             e2eConfig,
 			ClusterctlConfigPath:  clusterctlConfigPath,
 			BootstrapClusterProxy: bootstrapClusterProxy,

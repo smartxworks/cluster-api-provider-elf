@@ -23,9 +23,9 @@ import (
 	capie2e "sigs.k8s.io/cluster-api/test/e2e"
 )
 
-var _ = Describe("Machines remediation using CAPI remediation test", func() {
-	capie2e.MachineRemediationSpec(context.TODO(), func() capie2e.MachineRemediationSpecInput {
-		return capie2e.MachineRemediationSpecInput{
+var _ = Describe("When testing node drain timeout", func() {
+	capie2e.NodeDrainTimeoutSpec(context.TODO(), func() capie2e.NodeDrainTimeoutSpecInput {
+		return capie2e.NodeDrainTimeoutSpecInput{
 			E2EConfig:             e2eConfig,
 			ClusterctlConfigPath:  clusterctlConfigPath,
 			BootstrapClusterProxy: bootstrapClusterProxy,

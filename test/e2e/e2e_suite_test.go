@@ -1,7 +1,22 @@
+/*
+Copyright 2022.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package e2e
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -13,14 +28,13 @@ import (
 	"github.com/onsi/ginkgo/config"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/bootstrap"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 
-	"k8s.io/apimachinery/pkg/runtime"
-
-	"github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	"github.com/smartxworks/cluster-api-provider-elf/test/helpers"
 )
 
 // Test suite flags.
@@ -86,18 +100,22 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	scheme := initScheme()
 
 	Byf("Loading the e2e test configuration from %q", configPath)
-	e2eConfig = loadE2EConfig(configPath)
+	var err error
+	e2eConfig, err = helpers.LoadE2EConfig(configPath)
+	Expect(err).NotTo(HaveOccurred())
 
-	By("Initializing the ElF session to ensure credentials are working", initElfSession)
+	By("Initializing the Elf session to ensure credentials are working", initElfSession)
 
 	Byf("Creating a clusterctl local repository into %q", artifactFolder)
-	clusterctlConfigPath = createClusterctlLocalRepository(e2eConfig, filepath.Join(artifactFolder, "repository"))
+	clusterctlConfigPath, err = helpers.CreateClusterctlLocalRepository(e2eConfig, filepath.Join(artifactFolder, "repository"), true)
+	Expect(err).NotTo(HaveOccurred())
 
 	By("Setting up the bootstrap cluster")
-	bootstrapClusterProvider, bootstrapClusterProxy = setupBootstrapCluster(e2eConfig, scheme, useExistingCluster)
+	bootstrapClusterProvider, bootstrapClusterProxy, err = helpers.SetupBootstrapCluster(e2eConfig, scheme, useExistingCluster)
+	Expect(err).NotTo(HaveOccurred())
 
 	By("Initializing the bootstrap cluster")
-	initBootstrapCluster(bootstrapClusterProxy, e2eConfig, clusterctlConfigPath, artifactFolder)
+	helpers.InitBootstrapCluster(bootstrapClusterProxy, e2eConfig, clusterctlConfigPath, artifactFolder)
 
 	return []byte(
 		strings.Join([]string{
@@ -117,7 +135,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	clusterctlConfigPath = parts[2]
 	kubeconfigPath := parts[3]
 
-	e2eConfig = loadE2EConfig(configPath)
+	var err error
+	e2eConfig, err = helpers.LoadE2EConfig(configPath)
+	Expect(err).NotTo(HaveOccurred())
 	bootstrapClusterProxy = framework.NewClusterProxy("bootstrap", kubeconfigPath, initScheme())
 })
 
@@ -131,77 +151,14 @@ var _ = SynchronizedAfterSuite(func() {
 
 	By("Tearing down the management cluster")
 	if !skipCleanup {
-		tearDown(bootstrapClusterProvider, bootstrapClusterProxy)
+		helpers.TearDown(bootstrapClusterProvider, bootstrapClusterProxy)
 	}
 })
 
 func initScheme() *runtime.Scheme {
 	sc := runtime.NewScheme()
 	framework.TryAddDefaultSchemes(sc)
-	_ = v1alpha4.AddToScheme(sc)
+	_ = infrav1.AddToScheme(sc)
 
 	return sc
-}
-
-func loadE2EConfig(configPath string) *clusterctl.E2EConfig {
-	config := clusterctl.LoadE2EConfig(context.TODO(), clusterctl.LoadE2EConfigInput{ConfigPath: configPath})
-	Expect(config).ToNot(BeNil(), "Failed to load E2E config from %s", configPath)
-
-	return config
-}
-
-func createClusterctlLocalRepository(config *clusterctl.E2EConfig, repositoryFolder string) string {
-	createRepositoryInput := clusterctl.CreateRepositoryInput{
-		E2EConfig:        config,
-		RepositoryFolder: repositoryFolder,
-	}
-	// Ensuring a CNI file is defined in the config and register a FileTransformation to inject the referenced file as in place of the CNI_RESOURCES envSubst variable.
-	Expect(config.Variables).To(HaveKey(capi_e2e.CNIPath), "Missing %s variable in the config", capi_e2e.CNIPath)
-	cniPath := config.GetVariable(capi_e2e.CNIPath)
-	Expect(cniPath).To(BeAnExistingFile(), "The %s variable should resolve to an existing file", capi_e2e.CNIPath)
-	createRepositoryInput.RegisterClusterResourceSetConfigMapTransformation(cniPath, capi_e2e.CNIResources)
-
-	clusterctlConfig := clusterctl.CreateRepository(context.TODO(), createRepositoryInput)
-	Expect(clusterctlConfig).To(BeAnExistingFile(), "The clusterctl config file does not exists in the local repository %s", repositoryFolder)
-	return clusterctlConfig
-}
-
-func setupBootstrapCluster(config *clusterctl.E2EConfig, scheme *runtime.Scheme, useExistingCluster bool) (bootstrap.ClusterProvider, framework.ClusterProxy) {
-	var clusterProvider bootstrap.ClusterProvider
-	kubeconfigPath := ""
-	if !useExistingCluster {
-		clusterProvider = bootstrap.CreateKindBootstrapClusterAndLoadImages(context.TODO(), bootstrap.CreateKindBootstrapClusterAndLoadImagesInput{
-			Name:               config.ManagementClusterName,
-			RequiresDockerSock: config.HasDockerProvider(),
-			Images:             config.Images,
-		})
-		Expect(clusterProvider).ToNot(BeNil(), "Failed to create a bootstrap cluster")
-
-		kubeconfigPath = clusterProvider.GetKubeconfigPath()
-		Expect(kubeconfigPath).To(BeAnExistingFile(), "Failed to get the kubeconfig file for the bootstrap cluster")
-	}
-
-	clusterProxy := framework.NewClusterProxy("bootstrap", kubeconfigPath, scheme)
-	Expect(clusterProxy).ToNot(BeNil(), "Failed to get a bootstrap cluster proxy")
-
-	return clusterProvider, clusterProxy
-}
-
-func initBootstrapCluster(bootstrapClusterProxy framework.ClusterProxy, config *clusterctl.E2EConfig, clusterctlConfig, artifactFolder string) {
-	clusterctl.InitManagementClusterAndWatchControllerLogs(context.TODO(), clusterctl.InitManagementClusterAndWatchControllerLogsInput{
-		ClusterProxy:            bootstrapClusterProxy,
-		ClusterctlConfigPath:    clusterctlConfig,
-		InfrastructureProviders: config.InfrastructureProviders(),
-		LogFolder:               filepath.Join(artifactFolder, "clusters", bootstrapClusterProxy.GetName()),
-	}, config.GetIntervals(bootstrapClusterProxy.GetName(), "wait-controllers")...)
-}
-
-func tearDown(bootstrapClusterProvider bootstrap.ClusterProvider, bootstrapClusterProxy framework.ClusterProxy) {
-	if bootstrapClusterProxy != nil {
-		bootstrapClusterProxy.Dispose(context.TODO())
-	}
-
-	if bootstrapClusterProvider != nil {
-		bootstrapClusterProvider.Dispose(context.TODO())
-	}
 }

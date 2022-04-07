@@ -1,3 +1,19 @@
+/*
+Copyright 2022.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package e2e
 
 import (
@@ -8,12 +24,11 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
-	"sigs.k8s.io/cluster-api/test/framework"
-	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
+	capie2e "sigs.k8s.io/cluster-api/test/e2e"
+	"sigs.k8s.io/cluster-api/test/framework"
+	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	capiutil "sigs.k8s.io/cluster-api/util"
 
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
@@ -34,7 +49,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 		Expect(clusterctlConfigPath).To(BeAnExistingFile(), "Invalid argument. clusterctlConfigPath must be an existing file when calling %s spec", specName)
 		Expect(bootstrapClusterProxy).ToNot(BeNil(), "Invalid argument. bootstrapClusterProxy can't be nil when calling %s spec", specName)
 		Expect(os.MkdirAll(artifactFolder, 0750)).To(Succeed(), "Invalid argument. artifactFolder can't be created for %s spec", specName)
-		Expect(e2eConfig.Variables).To(HaveKey(capi_e2e.KubernetesVersion))
+		Expect(e2eConfig.Variables).To(HaveKey(capie2e.KubernetesVersion))
 
 		// Setup a Namespace where to host objects for this spec and create a watcher for the namespace events.
 		namespace, cancelWatches = setupSpecNamespace(ctx, specName, bootstrapClusterProxy, artifactFolder)
@@ -53,7 +68,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 				Flavor:                   "cp-ha",
 				Namespace:                namespace.Name,
 				ClusterName:              fmt.Sprintf("%s-%s", specName, capiutil.RandomString(6)),
-				KubernetesVersion:        e2eConfig.GetVariable(capi_e2e.KubernetesVersion),
+				KubernetesVersion:        e2eConfig.GetVariable(capie2e.KubernetesVersion),
 				ControlPlaneMachineCount: pointer.Int64Ptr(3),
 				WorkerMachineCount:       pointer.Int64Ptr(1),
 			},
@@ -100,7 +115,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 		Logf("Waiting until nodes are ready")
 		framework.WaitForNodesReady(ctx, framework.WaitForNodesReadyInput{
 			Lister:            workloadClient,
-			KubernetesVersion: e2eConfig.GetVariable(capi_e2e.KubernetesVersion),
+			KubernetesVersion: e2eConfig.GetVariable(capie2e.KubernetesVersion),
 			Count:             int(4),
 			WaitForNodesReady: e2eConfig.GetIntervals(specName, "wait-nodes-ready"),
 		})
