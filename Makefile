@@ -1,3 +1,17 @@
+# Copyright 2022.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # If you update this file, please follow
 # https://suva.sh/posts/well-documented-makefiles
 
@@ -79,28 +93,28 @@ help: ## Display this help.
 $(ARTIFACTS):
 	mkdir -p $@
 
-.PHONY: cluster-templates
-cluster-templates: kustomize ## Generate cluster templates
-	cp $(RELEASE_DIR)/cluster-template.yaml $(E2E_TEMPLATE_DIR)/bases/cluster-template.yaml
-	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template.yaml
-	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-cp-ha --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-cp-ha.yaml
-	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-kcp-remediation --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-kcp-remediation.yaml
-	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-kcp-scale-in --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-kcp-scale-in.yaml
-	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/cluster-template-md-remediation --load_restrictor none > $(E2E_TEMPLATE_DIR)/cluster-template-md-remediation.yaml
+.PHONY: e2e-templates
+e2e-templates: kustomize ## Generate e2e cluster templates
+	$(MAKE) release-manifests
+	cp $(RELEASE_DIR)/cluster-template.yaml $(E2E_TEMPLATE_DIR)/kustomization/base/cluster-template.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization/base > $(E2E_TEMPLATE_DIR)/cluster-template.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization/cluster-template-cp-ha > $(E2E_TEMPLATE_DIR)/cluster-template-cp-ha.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization/cluster-template-kcp-remediation > $(E2E_TEMPLATE_DIR)/cluster-template-kcp-remediation.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization/cluster-template-kcp-scale-in > $(E2E_TEMPLATE_DIR)/cluster-template-kcp-scale-in.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization/cluster-template-md-remediation > $(E2E_TEMPLATE_DIR)/cluster-template-md-remediation.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization/cluster-template-node-drain > $(E2E_TEMPLATE_DIR)/cluster-template-node-drain.yaml
+	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization/conformance > $(E2E_TEMPLATE_DIR)/cluster-template-conformance.yaml
 
 test: generate ## Run tests.
 	source ./hack/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v ./api/... ./controllers/... ./pkg/... -coverprofile=cover.out
 
 .PHONY: e2e-image
 e2e-image: docker-pull-prerequisites ## Build the e2e manager image
-	docker build --tag="smartxrocks/cape-manager:e2e" .
+	docker build --tag="docker.io/smartxrocks/cape-manager:e2e" .
 
 .PHONY: e2e
-e2e: e2e-image
+e2e: e2e-image e2e-templates
 e2e: ginkgo kustomize kind ## Run e2e tests
-	$(MAKE) release-manifests
-	$(MAKE) cluster-templates
-
 	time $(GINKGO) -v ./test/e2e -- -e2e.config="$(E2E_CONF_FILE)" -e2e.artifacts-folder="$(ARTIFACTS)"
 
 ## --------------------------------------
@@ -109,23 +123,23 @@ e2e: ginkgo kustomize kind ## Run e2e tests
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
-	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v3@v3.9.1)
+	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.5.2)
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1)
+	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.8.0)
 
 GINKGO := $(shell pwd)/bin/ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
-	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/ginkgo@v1.16.4)
+	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/ginkgo@v1.16.5)
 
 KIND := $(shell pwd)/bin/kind
 kind: ## Download kind locally if necessary.
-	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@v0.11.0)
+	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@v0.11.1)
 
 GOLANGCI_LINT := $(shell pwd)/bin/golangci-lint
 golangci-lint: ## Download golangci-lint locally if necessary.
-	$(call go-get-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.42.1)
+	$(call go-get-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.44.2)
 
 ## --------------------------------------
 ## Linting and fixing linter errors
@@ -252,7 +266,7 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 .PHONY: docker-build
 docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager
-	docker build --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(TAG)
+	docker build --build-arg ARCH=$(ARCH) --build-arg ldflags="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(TAG)
 
 .PHONY: docker-push
 docker-push: ## Push the docker image

@@ -22,21 +22,23 @@ linters:
   - ifshort
   - importas
   - ineffassign
-  - maligned
   - misspell
   - nakedret
   - nilerr
   - noctx
   - nolintlint
   - prealloc
+  - predeclared
   - revive
   - rowserrcheck
   - staticcheck
   - structcheck
   - stylecheck
+  - thelper
   - typecheck
   - unconvert
   - unparam
+  - unused
   - varcheck
   - whitespace
 
@@ -66,9 +68,37 @@ linters-settings:
         alias: apierrors
       - pkg: k8s.io/apimachinery/pkg/util/errors
         alias: kerrors
+      - pkg: k8s.io/apimachinery/pkg/types
+        alias: apitypes
+      - pkg: k8s.io/client-go/kubernetes/scheme
+        alias: cgscheme
       # Controller Runtime
       - pkg: sigs.k8s.io/controller-runtime
         alias: ctrl
+      - pkg: sigs.k8s.io/controller-runtime/pkg/log
+        alias: ctrllog
+      - pkg: sigs.k8s.io/controller-runtime/pkg/manager
+        alias: ctrlmgr
+      - pkg: sigs.k8s.io/controller-runtime/pkg/controller/controllerutil
+        alias: ctrlutil
+      - pkg: sigs.k8s.io/controller-runtime/pkg/log
+        alias: ctrllog
+      # CAPI
+      - pkg: sigs.k8s.io/cluster-api/api/v1beta1
+        alias: clusterv1
+      - pkg: sigs.k8s.io/cluster-api/errors
+        alias: capierrors
+      - pkg: sigs.k8s.io/cluster-api/util
+        alias: capiutil
+      - pkg: sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1
+        alias: bootstrapv1
+      - pkg: sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1
+        alias: controlplanev1
+      - pkg: sigs.k8s.io/cluster-api/test/e2e
+        alias: capie2e
+      # CAPE
+      - pkg: github.com/smartxworks/cluster-api-provider-elf/api/v1beta1
+        alias: infrav1
   staticcheck:
     go: "1.16"
   stylecheck:
@@ -106,7 +136,7 @@ issues:
     - linters:
       - godot
       text: "Comment should end in a period"
-      path: "(.*)/(v1alpha4)/(.*)types.go"
+      path: "(.*)/(v1beta1)/(.*)types.go"
     - linters:
       - errcheck
       text: Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
