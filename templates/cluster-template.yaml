@@ -1,5 +1,5 @@
 ---
-apiVersion: cluster.x-k8s.io/v1alpha4
+apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
   name: '${CLUSTER_NAME}'
@@ -11,15 +11,15 @@ spec:
     pods:
       cidrBlocks: ["100.96.0.0/11"]
   infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
     kind: ElfCluster
     name: '${CLUSTER_NAME}'
   controlPlaneRef:
     kind: KubeadmControlPlane
-    apiVersion: controlplane.cluster.x-k8s.io/v1alpha4
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     name: '${CLUSTER_NAME}-control-plane'
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: ElfCluster
 metadata:
   name: '${CLUSTER_NAME}'
@@ -34,7 +34,7 @@ spec:
     host: '${CONTROL_PLANE_ENDPOINT_IP}'
     port: 6443
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: ElfMachineTemplate
 metadata:
   name: '${CLUSTER_NAME}-control-plane'
@@ -51,7 +51,7 @@ spec:
           - networkIndex: 0
             networkType: ipv4_dhcp
 ---
-apiVersion: controlplane.cluster.x-k8s.io/v1alpha4
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: KubeadmControlPlane
 metadata:
   name: '${CLUSTER_NAME}-control-plane'
@@ -61,7 +61,7 @@ spec:
   version: '${KUBERNETES_VERSION}'
   machineTemplate:
     infrastructureRef:
-      apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
       kind: ElfMachineTemplate
       name: '${CLUSTER_NAME}-control-plane'
   kubeadmConfigSpec:
@@ -104,7 +104,7 @@ spec:
             - name: vip_leaderelection
               value: "true"
             - name: vip_address
-              value: ${CONTROL_PLANE_ENDPOINT_IP}
+              value: '${CONTROL_PLANE_ENDPOINT_IP}'
             - name: vip_interface
               value: eth0
             - name: vip_leaseduration
@@ -113,7 +113,7 @@ spec:
               value: "10"
             - name: vip_retryperiod
               value: "2"
-            image: plndr/kube-vip:0.3.2
+            image: ghcr.io/kube-vip/kube-vip:v0.3.5
             imagePullPolicy: IfNotPresent
             name: kube-vip
             resources: {}
@@ -135,7 +135,7 @@ spec:
       owner: root:root
       path: /etc/kubernetes/manifests/kube-vip.yaml
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha4
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: KubeadmConfigTemplate
 metadata:
   name: '${CLUSTER_NAME}-md-0'
@@ -158,7 +158,7 @@ spec:
         - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
         - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: ElfMachineTemplate
 metadata:
   name: '${CLUSTER_NAME}-worker'
@@ -175,7 +175,7 @@ spec:
           - networkIndex: 0
             networkType: ipv4_dhcp
 ---
-apiVersion: cluster.x-k8s.io/v1alpha4
+apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
 metadata:
   name: '${CLUSTER_NAME}-md-0'
@@ -196,10 +196,10 @@ spec:
       version: '${KUBERNETES_VERSION}'
       bootstrap:
         configRef:
-          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha4
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
           kind: KubeadmConfigTemplate
           name: '${CLUSTER_NAME}-md-0'
       infrastructureRef:
-        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
         kind: ElfMachineTemplate
         name: '${CLUSTER_NAME}-worker'
