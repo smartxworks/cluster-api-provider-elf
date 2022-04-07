@@ -1,0 +1,11 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: ElfMachineTemplate
+metadata:
+  name: '${CLUSTER_NAME}-worker'
+  namespace: '${NAMESPACE}'
+spec:
+  template:
+    spec:
+      diskGiB: 32
+      memoryMiB: 4096
+      numCPUs: 4

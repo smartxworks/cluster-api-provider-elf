@@ -518,8 +518,7 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: calico/cni:v3.13.2
-          imagePullPolicy: IfNotPresent
+          image: quay.io/calico/cni:v3.13.2
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           env:
             - name: KUBERNETES_NODE_NAME
@@ -541,8 +540,7 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: calico/cni:v3.13.2
-          imagePullPolicy: IfNotPresent
+          image: quay.io/calico/cni:v3.13.2
           command: ["/install-cni.sh"]
           env:
             # Name of the CNI config file to create.
@@ -578,8 +576,7 @@ spec:
         # Adds a Flex Volume Driver that creates a per-pod Unix Domain Socket to allow Dikastes
         # to communicate with Felix over the Policy Sync API.
         - name: flexvol-driver
-          image: calico/pod2daemon-flexvol:v3.13.2
-          imagePullPolicy: IfNotPresent
+          image: quay.io/calico/pod2daemon-flexvol:v3.13.2
           volumeMounts:
             - name: flexvol-driver-host
               mountPath: /host/driver
@@ -590,8 +587,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: calico/node:v3.13.2
-          imagePullPolicy: IfNotPresent
+          image: quay.io/calico/node:v3.13.2
           env:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
@@ -628,8 +624,8 @@ spec:
             # The default IPv4 pool to create on startup if none exists. Pod IPs will be
             # chosen from this range. Changing this value after installation will have
             # no effect. This should fall within `--cluster-cidr`.
-            # - name: CALICO_IPV4POOL_CIDR
-            #   value: "192.168.0.0/16"
+            - name: CALICO_IPV4POOL_CIDR
+              value: "192.168.30.0/24"
             # Disable file logging so `kubectl logs` works.
             - name: CALICO_DISABLE_FILE_LOGGING
               value: "true"
@@ -766,8 +762,7 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: calico/kube-controllers:v3.13.2
-          imagePullPolicy: IfNotPresent
+          image: quay.io/calico/kube-controllers:v3.13.2
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
