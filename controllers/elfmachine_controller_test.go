@@ -1,3 +1,19 @@
+/*
+Copyright 2022.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package controllers
 
 import (
@@ -10,23 +26,22 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"github.com/haijianyang/cloudtower-go-sdk/models"
 	"github.com/pkg/errors"
+	"github.com/smartxworks/cloudtower-go-sdk/models"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service/mock_services"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
@@ -56,7 +71,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		elfCluster, cluster, elfMachine, machine, secret = fake.NewClusterAndMachineObjects()
 
-		// mock
+		// mock
 		mockCtrl = gomock.NewController(GinkgoT())
 		mockVMService = mock_services.NewMockVMService(mockCtrl)
 	})
@@ -610,7 +625,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm := fake.NewTowerVM()
 			status := models.VMStatusRUNNING
 			vm.Status = &status
-			vm.EntityAsyncStatus = "UPDATING"
+			vm.EntityAsyncStatus = (*models.EntityAsyncStatus)(util.TowerString("UPDATING"))
 			task := fake.NewTowerTask()
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task.ID
@@ -792,7 +807,7 @@ func newCtrlContexts(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
 	ctrlMgrContext := fake.NewControllerManagerContext(cluster, elfCluster, elfMachine, machine, secret)
 	ctrlContext := &context.ControllerContext{
 		ControllerManagerContext: ctrlMgrContext,
-		Logger:                   log.Log,
+		Logger:                   ctrllog.Log,
 	}
 
 	return ctrlContext
