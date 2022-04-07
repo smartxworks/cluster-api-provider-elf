@@ -1,3 +1,19 @@
+/*
+Copyright 2022.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package e2e
 
 import (
@@ -6,20 +22,19 @@ import (
 	"fmt"
 
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/cluster-api/test/framework"
-
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
-	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha4"
-	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1alpha4"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
+	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
+	"sigs.k8s.io/cluster-api/test/framework"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 type ScaleAndWaitControlPlaneInput struct {
@@ -78,6 +93,7 @@ type UpgradeControlPlaneAndWaitForUpgradeInput struct {
 	WaitForMachinesToBeUpgraded []interface{}
 	WaitForDNSUpgrade           []interface{}
 	WaitForEtcdUpgrade          []interface{}
+	WaitForKubeProxyUpgrade     []interface{}
 }
 
 // UpgradeControlPlaneAndWaitForUpgrade upgrades a KubeadmControlPlane and waits for it to be upgraded.
@@ -119,26 +135,28 @@ func UpgradeControlPlaneAndWaitForUpgrade(ctx context.Context, input UpgradeCont
 	newInfraObj.SetResourceVersion("")
 	Expect(mgmtClient.Create(ctx, newInfraObj)).NotTo(HaveOccurred())
 
+	Logf("Patching the new kubernetes version to KCP")
 	// Patch the new infra object's ref to the KubeadmControlPlane
 	patchHelper, err := patch.NewHelper(input.ControlPlane, mgmtClient)
 	Expect(err).ToNot(HaveOccurred())
 
 	infraRef.Name = newInfraObjName
-	input.ControlPlane.Spec.MachineTemplate.InfrastructureRef = infraRef
+
 	oldVersion := input.ControlPlane.Spec.Version
 	input.ControlPlane.Spec.Version = input.KubernetesUpgradeVersion
-	input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration.Etcd = bootstrapv1.Etcd{
-		Local: &bootstrapv1.LocalEtcd{
-			ImageMeta: bootstrapv1.ImageMeta{
-				ImageTag: input.EtcdImageTag,
-			},
-		},
+	input.ControlPlane.Spec.MachineTemplate.InfrastructureRef.Name = newInfraObjName
+
+	// If the ClusterConfiguration is not specified, create an empty one.
+	if input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration == nil {
+		input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration = new(bootstrapv1.ClusterConfiguration)
 	}
-	input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration.DNS = bootstrapv1.DNS{
-		ImageMeta: bootstrapv1.ImageMeta{
-			ImageTag: input.DNSImageTag,
-		},
+
+	if input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration.Etcd.Local == nil {
+		input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration.Etcd.Local = new(bootstrapv1.LocalEtcd)
 	}
+
+	input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration.Etcd.Local.ImageMeta.ImageTag = input.EtcdImageTag
+	input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration.DNS.ImageMeta.ImageTag = input.DNSImageTag
 
 	Expect(patchHelper.Patch(ctx, input.ControlPlane)).To(Succeed())
 
@@ -166,7 +184,7 @@ func UpgradeControlPlaneAndWaitForUpgrade(ctx context.Context, input UpgradeCont
 	framework.WaitForDNSUpgrade(ctx, framework.WaitForDNSUpgradeInput{
 		Getter:     workloadClient,
 		DNSVersion: input.DNSImageTag,
-	})
+	}, input.WaitForDNSUpgrade...)
 
 	Logf("Waiting for etcd to have the upgraded image tag")
 	lblSelector, err := labels.Parse("component=etcd")

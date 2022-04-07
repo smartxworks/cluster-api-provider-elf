@@ -1,3 +1,19 @@
+/*
+Copyright 2022.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package e2e
 
 import (
@@ -6,19 +22,23 @@ import (
 	"path/filepath"
 
 	. "github.com/onsi/ginkgo"
-	"sigs.k8s.io/cluster-api/test/framework"
-
 	corev1 "k8s.io/api/core/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/test/framework"
 	capiutil "sigs.k8s.io/cluster-api/util"
 )
 
 // Test suite constants for e2e config variables.
 const (
-	ElfTemplateUpgradeTo = "ELF_TEMPLATE_UPGRADE_TO"
-	ElfTemplate          = "ELF_TEMPLATE"
-	ElfServerUsername    = "ELF_SERVER_USERNAME"
-	ElfServerPassword    = "ELF_SERVER_PASSWORD" // nolint:gosec
+	KubernetesVersionUpgradeFrom = "KUBERNETES_VERSION_UPGRADE_FROM"
+	KubernetesVersionUpgradeTo   = "KUBERNETES_VERSION_UPGRADE_TO"
+	EtcdVersionUpgradeTo         = "ETCD_VERSION_UPGRADE_TO"
+	CoreDNSVersionUpgradeTo      = "COREDNS_VERSION_UPGRADE_TO"
+	MachineTemplateUpgradeTo     = "MACHINE_TEMPLATE_UPGRADE_TO"
+	ElfTemplateUpgradeTo         = "ELF_TEMPLATE_UPGRADE_TO"
+	ElfTemplate                  = "ELF_TEMPLATE"
+	ElfServerUsername            = "ELF_SERVER_USERNAME"
+	ElfServerPassword            = "ELF_SERVER_PASSWORD" // nolint:gosec
 )
 
 func Byf(format string, a ...interface{}) {
