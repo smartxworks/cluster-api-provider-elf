@@ -8,9 +8,9 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	models "github.com/haijianyang/cloudtower-go-sdk/models"
-	v1alpha4 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
-	v1alpha40 "sigs.k8s.io/cluster-api/api/v1alpha4"
+	models "github.com/smartxworks/cloudtower-go-sdk/models"
+	v1beta1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	v1beta10 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 // MockVMService is a mock of VMService interface.
@@ -37,7 +37,7 @@ func (m *MockVMService) EXPECT() *MockVMServiceMockRecorder {
 }
 
 // Clone mocks base method.
-func (m *MockVMService) Clone(elfCluster *v1alpha4.ElfCluster, machine *v1alpha40.Machine, elfMachine *v1alpha4.ElfMachine, bootstrapData string) (*models.WithTaskVM, error) {
+func (m *MockVMService) Clone(elfCluster *v1beta1.ElfCluster, machine *v1beta10.Machine, elfMachine *v1beta1.ElfMachine, bootstrapData string) (*models.WithTaskVM, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Clone", elfCluster, machine, elfMachine, bootstrapData)
 	ret0, _ := ret[0].(*models.WithTaskVM)
