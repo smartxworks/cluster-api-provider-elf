@@ -23,14 +23,14 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/haijianyang/cloudtower-go-sdk/models"
 	"github.com/pkg/errors"
+	"github.com/smartxworks/cloudtower-go-sdk/models"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
@@ -41,11 +41,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
+	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
@@ -66,7 +66,7 @@ type ElfMachineReconciler struct {
 
 // AddMachineControllerToManager adds the machine controller to the provided
 // manager.
-func AddMachineControllerToManager(ctx *context.ControllerManagerContext, mgr manager.Manager) error {
+func AddMachineControllerToManager(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
 	var (
 		controlledType     = &infrav1.ElfMachine{}
 		controlledTypeName = reflect.TypeOf(controlledType).Elem().Name()
