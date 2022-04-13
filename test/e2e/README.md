@@ -10,7 +10,7 @@
 
 运行 E2E 测试的机器需要满足以下条件：
 * 可访问的 Tower 服务
-* 可以通过 Tower 访问部署在 Elf 集群上的虚拟机
+* 可以通过 Tower 访问部署在 ELF 集群上的虚拟机
 * 安装有 Ginkgo ([download](https://onsi.github.io/ginkgo/#getting-ginkgo))
 * 安装有 Docker ([download](https://www.docker.com/get-started))
 * 安装有 Kind v0.7.0+ ([download](https://kind.sigs.k8s.io))
@@ -24,7 +24,7 @@
 | `TOWER_SERVER` | Tower 服务地址 | `127.0.0.1`|
 | `TOWER_USERNAME` | Tower 用户名 | `root`|
 | `TOWER_PASSWORD` | Tower 用户密码 | `root`|
-| `ELF_CLUSTER` | Elf 集群 ID | `576ad467-d09e-4235-9dec-b615814ddc7e`|
+| `ELF_CLUSTER` | ELF 集群 ID | `576ad467-d09e-4235-9dec-b615814ddc7e`|
 | `ELF_TEMPLATE` | 用来创建 Kubernetes 节点的虚拟机模板 | `336820d7-5ba5-4707-9d0c-8f3e583b950f`|
 | `ELF_TEMPLATE_UPGRADE_TO` | 用来升级 Kubernetes 节点的虚拟机模板 | `c1347c27-ddd7-4b97-82e3-ca4e124623b4`|
 | `CONTROL_PLANE_ENDPOINT_IP` | Kubernetes 集群的 IP 地址 | `127.0.0.1`|

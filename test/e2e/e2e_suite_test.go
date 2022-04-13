@@ -104,7 +104,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	e2eConfig, err = helpers.LoadE2EConfig(configPath)
 	Expect(err).NotTo(HaveOccurred())
 
-	By("Initializing the Elf session to ensure credentials are working", initElfSession)
+	By("Initializing the ELF session to ensure credentials are working", initElfSession)
 
 	Byf("Creating a clusterctl local repository into %q", artifactFolder)
 	clusterctlConfigPath, err = helpers.CreateClusterctlLocalRepository(e2eConfig, filepath.Join(artifactFolder, "repository"), true)

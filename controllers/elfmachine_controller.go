@@ -511,7 +511,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		return vm, nil
 	}
 
-	// When Elf VM created, set UUID to VMRef
+	// When ELF VM created, set UUID to VMRef
 	if !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
 		ctx.ElfMachine.SetVM(*vm.LocalID)
 	}
