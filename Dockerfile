@@ -17,7 +17,7 @@ FROM golang:1.17.6 as builder
 WORKDIR /workspace
 
 # Run this with docker build --build_arg $(go env GOPROXY) to override the goproxy
-ARG goproxy=https://proxy.golang.org
+ARG goproxy=https://goproxy.cn,direct
 ENV GOPROXY=$goproxy
 
 # Copy the Go Modules manifests
