@@ -64,7 +64,7 @@ BUILD_DIR := .build
 OVERRIDES_DIR := $(HOME)/.cluster-api/overrides/infrastructure-elf/$(VERSION)
 
 # Architecture variables
-TAG ?= dev
+IMAGE_TAG ?= dev
 ARCH ?= amd64
 ALL_ARCH = amd64 arm arm64 ppc64le s390x
 
@@ -202,16 +202,16 @@ release: clean-release
 
 .PHONY: release-manifests
 release-manifests:
-	$(MAKE) manifests MANIFEST_DIR=$(RELEASE_DIR) PULL_POLICY=IfNotPresent IMAGE=$(CONTROLLER_IMG):$(TAG)
+	$(MAKE) manifests MANIFEST_DIR=$(RELEASE_DIR) PULL_POLICY=IfNotPresent IMAGE=$(CONTROLLER_IMG):$(IMAGE_TAG)
 	cp metadata.yaml $(RELEASE_DIR)/metadata.yaml
 
 .PHONY: release-overrides
 release-overrides:
-	$(MAKE) manifests MANIFEST_DIR=$(OVERRIDES_DIR) PULL_POLICY=IfNotPresent IMAGE=$(CONTROLLER_IMG):$(TAG)
+	$(MAKE) manifests MANIFEST_DIR=$(OVERRIDES_DIR) PULL_POLICY=IfNotPresent IMAGE=$(CONTROLLER_IMG):$(IMAGE_TAG)
 
 .PHONY: dev-manifests
 dev-manifests:
-	$(MAKE) manifests MANIFEST_DIR=$(OVERRIDES_DIR) PULL_POLICY=Always IMAGE=$(CONTROLLER_IMG):$(TAG)
+	$(MAKE) manifests MANIFEST_DIR=$(OVERRIDES_DIR) PULL_POLICY=Always IMAGE=$(CONTROLLER_IMG):$(IMAGE_TAG)
 	cp metadata.yaml $(OVERRIDES_DIR)/metadata.yaml
 
 .PHONY: manifests
@@ -253,7 +253,7 @@ uninstall: generate kustomize ## Uninstall CRDs from the K8s cluster specified i
 
 .PHONY: deploy
 deploy: generate kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	sed -i'' -e 's@image: .*@image: '"$(CONTROLLER_IMG):$(TAG)"'@' config/default/manager_image_patch.yaml
+	sed -i'' -e 's@image: .*@image: '"$(CONTROLLER_IMG):$(IMAGE_TAG)"'@' config/default/manager_image_patch.yaml
 	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
 .PHONY: undeploy
@@ -266,11 +266,11 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 .PHONY: docker-build
 docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager
-	docker build --build-arg ARCH=$(ARCH) --build-arg ldflags="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(TAG)
+	docker build --build-arg ARCH=$(ARCH) --build-arg ldflags="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(IMAGE_TAG)
 
 .PHONY: docker-push
 docker-push: ## Push the docker image
-	docker push $(CONTROLLER_IMG)-$(ARCH):$(TAG)
+	docker push $(CONTROLLER_IMG)-$(ARCH):$(IMAGE_TAG)
 
 .PHONY: docker-pull-prerequisites
 docker-pull-prerequisites:
@@ -297,6 +297,6 @@ docker-push-%:
 .PHONY: docker-push-manifest
 docker-push-manifest: ## Push the fat manifest docker image.
 	## Minimum docker version 18.06.0 is required for creating and pushing manifest images.
-	docker manifest create --amend $(CONTROLLER_IMG):$(TAG) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(CONTROLLER_IMG)\-&:$(TAG)~g")
-	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${CONTROLLER_IMG}:${TAG} ${CONTROLLER_IMG}-$${arch}:${TAG}; done
-	docker manifest push --purge ${CONTROLLER_IMG}:${TAG}
+	docker manifest create --amend $(CONTROLLER_IMG):$(IMAGE_TAG) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(CONTROLLER_IMG)\-&:$(IMAGE_TAG)~g")
+	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${CONTROLLER_IMG}:${IMAGE_TAG} ${CONTROLLER_IMG}-$${arch}:${IMAGE_TAG}; done
+	docker manifest push --purge ${CONTROLLER_IMG}:${IMAGE_TAG}

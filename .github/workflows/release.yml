@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Set environment variables
         run: |
-          echo "TAG=${GITHUB_REF:10}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${GITHUB_REF:10}" >> $GITHUB_ENV
 
           if [ "${{ secrets.REGISTRY }}" != "" ]; then
             echo "REGISTRY=${{ secrets.REGISTRY }}" >> $GITHUB_ENV
