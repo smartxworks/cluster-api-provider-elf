@@ -20,7 +20,7 @@ spec:
         - --enable-leader-election
         - --logtostderr
         - --v=4
-        image: docker.io/smartxrocks/cape-manager:latest
+        image: docker.io/smartxworks/cape-manager:latest
         imagePullPolicy: IfNotPresent
         name: manager
         ports:

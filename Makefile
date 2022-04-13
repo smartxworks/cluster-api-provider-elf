@@ -76,7 +76,7 @@ IMAGE_NAME ?= cape-manager
 PULL_POLICY ?= Always
 
 # Release docker variables
-REGISTRY ?= smartxrocks
+REGISTRY ?= smartxworks
 CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 
 ## --------------------------------------
@@ -110,7 +110,7 @@ test: generate ## Run tests.
 
 .PHONY: e2e-image
 e2e-image: docker-pull-prerequisites ## Build the e2e manager image
-	docker build --tag="docker.io/smartxrocks/cape-manager:e2e" .
+	docker build --tag="docker.io/smartxworks/cape-manager:e2e" .
 
 .PHONY: e2e
 e2e: e2e-image e2e-templates

@@ -7,5 +7,5 @@ spec:
   template:
     spec:
       containers:
-      - image: smartxrocks/cape-manager:latest
+      - image: smartxworks/cape-manager:latest
         name: manager

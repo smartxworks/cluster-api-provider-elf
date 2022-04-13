@@ -14,7 +14,7 @@
 
 安装Cluster API Provider ELF (CAPE):
 ```
-export CONTROLLER_IMG=smartelf/cape-manager-amd64 TAG=dev
+export CONTROLLER_IMG=smartxworks/cape-manager-amd64 TAG=dev
 make deploy
 ```
 
