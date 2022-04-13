@@ -31,7 +31,6 @@ spec:
       joinConfiguration:
         nodeRegistration:
           kubeletExtraArgs:
-            cloud-provider: external
           name: '{{ ds.meta_data.hostname }}'
       preKubeadmCommands:
       - hostname "{{ ds.meta_data.hostname }}"
@@ -101,11 +100,9 @@ spec:
     clusterConfiguration:
       apiServer:
         extraArgs:
-          cloud-provider: external
       clusterName: ${CLUSTER_NAME}
       controllerManager:
         extraArgs:
-          cloud-provider: external
       imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
     files:
     - content: |
@@ -158,7 +155,6 @@ spec:
     initConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
-          cloud-provider: external
         name: '{{ ds.meta_data.hostname }}'
     preKubeadmCommands:
     - hostname "{{ ds.meta_data.hostname }}"

@@ -70,14 +70,11 @@ spec:
       imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
       apiServer:
         extraArgs:
-          cloud-provider: external
       controllerManager:
         extraArgs:
-          cloud-provider: external
     initConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
-          cloud-provider: external
         name: '{{ ds.meta_data.hostname }}'
     preKubeadmCommands:
       - hostname "{{ ds.meta_data.hostname }}"
@@ -149,7 +146,6 @@ spec:
       joinConfiguration:
         nodeRegistration:
           kubeletExtraArgs:
-            cloud-provider: external
           name: '{{ ds.meta_data.hostname }}'
       preKubeadmCommands:
         - hostname "{{ ds.meta_data.hostname }}"
