@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	// MachineFinalizer allows ReconcileElfMachine to clean up Elf
+	// MachineFinalizer allows ReconcileElfMachine to clean up ELF
 	// resources associated with ElfMachine before removing it from the
 	// API Server.
 	MachineFinalizer = "elfmachine.infrastructure.cluster.x-k8s.io"

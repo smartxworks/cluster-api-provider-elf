@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	// ClusterFinalizer allows ReconcileElfCluster to clean up Elf
+	// ClusterFinalizer allows ReconcileElfCluster to clean up ELF
 	// resources associated with ElfCluster before removing it from the
 	// API server.
 	ClusterFinalizer = "elfcluster.infrastructure.cluster.x-k8s.io"
@@ -30,7 +30,7 @@ const (
 
 // ElfClusterSpec defines the desired state of ElfCluster.
 type ElfClusterSpec struct {
-	// Cluster is a unique identifier for a Elf cluster.
+	// Cluster is a unique identifier for a ELF cluster.
 	Cluster string `json:"cluster,omitempty"`
 
 	// Tower is the config of tower.
