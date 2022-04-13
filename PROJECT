@@ -11,8 +11,8 @@ resources:
   domain: cluster.x-k8s.io
   group: infrastructure
   kind: ElfCluster
-  path: github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4
-  version: v1alpha4
+  path: github.com/smartxworks/cluster-api-provider-elf/api/v1beta1
+  version: v1beta1
 - api:
     crdVersion: v1
     namespaced: true
@@ -20,14 +20,15 @@ resources:
   domain: cluster.x-k8s.io
   group: infrastructure
   kind: ElfMachine
-  path: github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4
-  version: v1alpha4
+  path: github.com/smartxworks/cluster-api-provider-elf/api/v1beta1
+  version: v1beta1
 - api:
     crdVersion: v1
     namespaced: true
+  controller: true
   domain: cluster.x-k8s.io
   group: infrastructure
   kind: ElfMachineTemplate
-  path: github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4
-  version: v1alpha4
+  path: github.com/smartxworks/cluster-api-provider-elf/api/v1beta1
+  version: v1beta1
 version: "3"

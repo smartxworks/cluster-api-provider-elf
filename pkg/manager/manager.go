@@ -1,15 +1,31 @@
+/*
+Copyright 2022.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package manager
 
 import (
 	goctx "context"
 
 	"github.com/pkg/errors"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
-	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1alpha4"
+	cgscheme "k8s.io/client-go/kubernetes/scheme"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	infrav1a3 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 )
 
@@ -23,27 +39,17 @@ type Manager interface {
 
 // New returns a new CAPE controller manager.
 func New(opts Options) (Manager, error) {
-
 	// Ensure the default options are set.
 	opts.defaults()
 
-	_ = clientgoscheme.AddToScheme(opts.Scheme)
+	_ = cgscheme.AddToScheme(opts.Scheme)
 	_ = clusterv1.AddToScheme(opts.Scheme)
-	_ = infrav1a3.AddToScheme(opts.Scheme)
+	_ = infrav1.AddToScheme(opts.Scheme)
 	_ = bootstrapv1.AddToScheme(opts.Scheme)
 	// +kubebuilder:scaffold:scheme
 
 	// Build the controller manager.
-	mgr, err := ctrl.NewManager(opts.KubeConfig, ctrl.Options{
-		Scheme:                  opts.Scheme,
-		MetricsBindAddress:      opts.MetricsBindAddr,
-		LeaderElection:          opts.LeaderElectionEnabled,
-		LeaderElectionID:        opts.LeaderElectionID,
-		LeaderElectionNamespace: opts.LeaderElectionNamespace,
-		SyncPeriod:              &opts.SyncPeriod,
-		Namespace:               opts.WatchNamespace,
-		HealthProbeBindAddress:  opts.HealthAddr,
-	})
+	mgr, err := ctrl.NewManager(opts.KubeConfig, opts.Options)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to create manager")
 	}
@@ -51,7 +57,8 @@ func New(opts Options) (Manager, error) {
 	// Build the controller manager context.
 	controllerManagerContext := &context.ControllerManagerContext{
 		Context:                 goctx.Background(),
-		WatchNamespace:          opts.WatchNamespace,
+		WatchNamespace:          opts.Namespace,
+		Namespace:               opts.PodNamespace,
 		Name:                    opts.PodName,
 		LeaderElectionID:        opts.LeaderElectionID,
 		LeaderElectionNamespace: opts.LeaderElectionNamespace,

@@ -25,8 +25,8 @@ import (
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
-	clusterutilv1 "sigs.k8s.io/cluster-api/util"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -34,14 +34,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
+	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
-	infrautilv1 "github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
 var (
@@ -58,7 +58,7 @@ var (
 
 // AddClusterControllerToManager adds the cluster controller to the provided
 // manager.
-func AddClusterControllerToManager(ctx *context.ControllerManagerContext, mgr manager.Manager) error {
+func AddClusterControllerToManager(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
 	var (
 		controllerNameShort = fmt.Sprintf("%s-controller", strings.ToLower(clusterControlledTypeName))
 	)
@@ -78,13 +78,13 @@ func AddClusterControllerToManager(ctx *context.ControllerManagerContext, mgr ma
 		// Watch the CAPI resource that owns this infrastructure resource.
 		Watches(
 			&source.Kind{Type: &clusterv1.Cluster{}},
-			handler.EnqueueRequestsFromMapFunc(clusterutilv1.ClusterToInfrastructureMapFunc(clusterControlledTypeGVK)),
+			handler.EnqueueRequestsFromMapFunc(capiutil.ClusterToInfrastructureMapFunc(clusterControlledTypeGVK)),
 		).
 		WithOptions(controller.Options{MaxConcurrentReconciles: ctx.MaxConcurrentReconciles}).
 		Complete(reconciler)
 }
 
-// ElfClusterReconciler reconciles a ElfCluster object
+// ElfClusterReconciler reconciles a ElfCluster object.
 type ElfClusterReconciler struct {
 	*context.ControllerContext
 }
@@ -104,7 +104,7 @@ func (r *ElfClusterReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 	}
 
 	// Fetch the CAPI Cluster.
-	cluster, err := clusterutilv1.GetOwnerCluster(r, r.Client, elfCluster.ObjectMeta)
+	cluster, err := capiutil.GetOwnerCluster(r, r.Client, elfCluster.ObjectMeta)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -169,7 +169,7 @@ func (r *ElfClusterReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (reconcile.Result, error) {
 	ctx.Logger.Info("Reconciling ElfCluster delete")
 
-	elfMachines, err := infrautilv1.GetElfMachinesInCluster(ctx, ctx.Client, ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
+	elfMachines, err := util.GetElfMachinesInCluster(ctx, ctx.Client, ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
 	if err != nil {
 		return reconcile.Result{}, errors.Wrapf(err,
 			"Unable to list ElfMachines part of ElfCluster %s/%s", ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
@@ -219,16 +219,16 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx *context.ClusterContext) (rec
 func (r *ElfClusterReconciler) reconcileControlPlaneEndpoint(ctx *context.ClusterContext) error {
 	// If the cluster already has ControlPlaneEndpoint set then there is nothing to do .
 	if !ctx.ElfCluster.Spec.ControlPlaneEndpoint.IsZero() {
-		ctx.Logger.V(6).Info("ControlPlaneEndpoint already exist of ElfCluster")
+		ctx.Logger.Info("The ControlPlaneEndpoint of ElfCluster has been set already")
 
 		return nil
 	}
 
-	return infrautilv1.ErrNoMachineIPAddr
+	return util.ErrNoMachineIPAddr
 }
 
 func (r *ElfClusterReconciler) isAPIServerOnline(ctx *context.ClusterContext) bool {
-	if kubeClient, err := infrautilv1.NewKubeClient(ctx, ctx.Client, ctx.Cluster); err == nil {
+	if kubeClient, err := util.NewKubeClient(ctx, ctx.Client, ctx.Cluster); err == nil {
 		if _, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{}); err == nil {
 			// The target cluster is online. To make sure the correct control
 			// plane endpoint information is logged, it is necessary to fetch

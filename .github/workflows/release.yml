@@ -1,0 +1,47 @@
+name: release
+
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+jobs:
+  release:
+    name: Create draft release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set environment variables
+        run: |
+          echo "IMAGE_TAG=${GITHUB_REF:10}" >> $GITHUB_ENV
+
+          if [ "${{ secrets.REGISTRY }}" != "" ]; then
+            echo "REGISTRY=${{ secrets.REGISTRY }}" >> $GITHUB_ENV
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17
+
+      - name: Login docker
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Generate release
+        run: make release
+
+      - name: Generate draft release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG }}
+          name: Release ${{ env.TAG }}
+          files: out/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,10 +1,9 @@
-
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
+    controller-gen.kubebuilder.io/version: v0.8.0
   creationTimestamp: null
   name: elfclusters.infrastructure.cluster.x-k8s.io
 spec:
@@ -16,10 +15,10 @@ spec:
     singular: elfcluster
   scope: Namespaced
   versions:
-  - name: v1alpha4
+  - name: v1beta1
     schema:
       openAPIV3Schema:
-        description: ElfCluster is the Schema for the elfclusters API
+        description: ElfCluster is the Schema for the elfclusters API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -34,8 +33,11 @@ spec:
           metadata:
             type: object
           spec:
-            description: ElfClusterSpec defines the desired state of ElfCluster
+            description: ElfClusterSpec defines the desired state of ElfCluster.
             properties:
+              cluster:
+                description: Cluster is a unique identifier for a Elf cluster.
+                type: string
               controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to
                   communicate with the control plane.
@@ -51,18 +53,23 @@ spec:
                 - host
                 - port
                 type: object
-              password:
-                description: Password is the password used to log into the Elf server.
-                type: string
-              server:
-                description: Server is address of the elf VIP
-                type: string
-              username:
-                description: Username is the name used to log into the Elf server.
-                type: string
+              tower:
+                description: Tower is the config of tower.
+                properties:
+                  password:
+                    description: Password is the password used to access the tower
+                      server.
+                    type: string
+                  server:
+                    description: Server is address of the tower server.
+                    type: string
+                  username:
+                    description: Username is the name used to log into the tower server.
+                    type: string
+                type: object
             type: object
           status:
-            description: ElfClusterStatus defines the observed state of ElfCluster
+            description: ElfClusterStatus defines the observed state of ElfCluster.
             properties:
               conditions:
                 description: Conditions defines current service state of the ElfCluster.
@@ -104,6 +111,7 @@ spec:
                         important.
                       type: string
                   required:
+                  - lastTransitionTime
                   - status
                   - type
                   type: object

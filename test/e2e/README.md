@@ -1,40 +1,41 @@
 # Testing
 
-This document helps developers understand how to test CAPE.
+本文主要介绍如何进行 CAPE 测试。
 
 ## E2E
 
-This section illustrates how to do end-to-end (e2e) testing with CAPE.
+本小节介绍 CAPE 的端到端测试（E2E）。
 
 ### Requirements
 
-In order to run the e2e tests the following requirements must be met:
-
-* Administrative access to a ELF server
-* The testing must occur on a host that can access the VMs deployed to ELF via the network
-* Ginkgo ([download](https://onsi.github.io/ginkgo/#getting-ginkgo))
-* Docker ([download](https://www.docker.com/get-started))
-* Kind v0.7.0+ ([download](https://kind.sigs.k8s.io))
+运行 E2E 测试的机器需要满足以下条件：
+* 可访问的 Tower 服务
+* 可以通过 Tower 访问部署在 Elf 集群上的虚拟机
+* 安装有 Ginkgo ([download](https://onsi.github.io/ginkgo/#getting-ginkgo))
+* 安装有 Docker ([download](https://www.docker.com/get-started))
+* 安装有 Kind v0.7.0+ ([download](https://kind.sigs.k8s.io))
 
 ### Environment variables
 
-The first step to running the e2e tests is setting up the required environment variables:
+运行 E2E 测试前需要先设置相关的环境变量：
 
 | Environment variable | Description | Example |
 | -------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `ELF_TEMPLATE` | The VM template to use for workload cluster | `336820d7-5ba5-4707-9d0c-8f3e583b950f`|
-| `ELF_TEMPLATE_UPGRADE_TO` | The VM template to use for upgrading workload cluster | `c1347c27-ddd7-4b97-82e3-ca4e124623b4`|
-| `CONTROL_PLANE_ENDPOINT_IP` | The IP that kube-vip is going to use as a control plane endpoint | `127.0.0.1`|
-| `ELF_SERVER` | The IP address or DNS of a ELF server | `127.0.0.1`|
-| `ELF_SERVER_USERNAME` | The username used to access the ELF server | `root`|
-| `ELF_SERVER_PASSWORD` | The password used to access the ELF server | `root`|
+| `TOWER_SERVER` | Tower 服务地址 | `127.0.0.1`|
+| `TOWER_USERNAME` | Tower 用户名 | `root`|
+| `TOWER_PASSWORD` | Tower 用户密码 | `root`|
+| `ELF_CLUSTER` | Elf 集群 ID | `576ad467-d09e-4235-9dec-b615814ddc7e`|
+| `ELF_TEMPLATE` | 用来创建 Kubernetes 节点的虚拟机模板 | `336820d7-5ba5-4707-9d0c-8f3e583b950f`|
+| `ELF_TEMPLATE_UPGRADE_TO` | 用来升级 Kubernetes 节点的虚拟机模板 | `c1347c27-ddd7-4b97-82e3-ca4e124623b4`|
+| `CONTROL_PLANE_ENDPOINT_IP` | Kubernetes 集群的 IP 地址 | `127.0.0.1`|
+| `ELF_VLAN` | 虚拟网络 ID | `576ad467-d09e-4235-9dec-b615814ddc7e_c8a1e42d-e0f3-4d50-a190-53209a98f157`|
 
-### Running the e2e tests
+### Running the E2E tests
 
-Run the following command to execute the CAPE e2e tests:
+执行以下命令运行 E2E 测试：
 
 ```shell
 make e2e
 ```
 
-The above command should build the CAPE manager image locally and use that image with the e2e test suite.
+以上命令会构建 CAPE 本地镜像并使用该镜像进行 E2E 测试。

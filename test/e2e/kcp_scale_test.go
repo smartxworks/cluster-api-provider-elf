@@ -1,3 +1,19 @@
+/*
+Copyright 2022.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package e2e
 
 import (
@@ -8,12 +24,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
-	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/cluster-api/util"
+	capie2e "sigs.k8s.io/cluster-api/test/e2e"
+	"sigs.k8s.io/cluster-api/test/framework"
+	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
+	capiutil "sigs.k8s.io/cluster-api/util"
 )
 
 var _ = Describe("CAPE kcp scale e2e test", func() {
@@ -31,7 +47,7 @@ var _ = Describe("CAPE kcp scale e2e test", func() {
 		Expect(clusterctlConfigPath).To(BeAnExistingFile(), "Invalid argument. clusterctlConfigPath must be an existing file when calling %s spec", specName)
 		Expect(bootstrapClusterProxy).ToNot(BeNil(), "Invalid argument. bootstrapClusterProxy can't be nil when calling %s spec", specName)
 		Expect(os.MkdirAll(artifactFolder, 0750)).To(Succeed(), "Invalid argument. artifactFolder can't be created for %s spec", specName)
-		Expect(e2eConfig.Variables).To(HaveKey(capi_e2e.KubernetesVersion))
+		Expect(e2eConfig.Variables).To(HaveKey(capie2e.KubernetesVersion))
 
 		// Setup a Namespace where to host objects for this spec and create a watcher for the namespace events.
 		namespace, cancelWatches = setupSpecNamespace(ctx, specName, bootstrapClusterProxy, artifactFolder)
@@ -49,8 +65,8 @@ var _ = Describe("CAPE kcp scale e2e test", func() {
 				InfrastructureProvider:   clusterctl.DefaultInfrastructureProvider,
 				Flavor:                   clusterctl.DefaultFlavor,
 				Namespace:                namespace.Name,
-				ClusterName:              fmt.Sprintf("%s-%s", specName, util.RandomString(6)),
-				KubernetesVersion:        e2eConfig.GetVariable(capi_e2e.KubernetesVersion),
+				ClusterName:              fmt.Sprintf("%s-%s", specName, capiutil.RandomString(6)),
+				KubernetesVersion:        e2eConfig.GetVariable(capie2e.KubernetesVersion),
 				ControlPlaneMachineCount: pointer.Int64Ptr(1),
 				WorkerMachineCount:       pointer.Int64Ptr(1),
 			},
@@ -62,7 +78,7 @@ var _ = Describe("CAPE kcp scale e2e test", func() {
 		Expect(clusterResources.ControlPlane.Spec.Replicas).To(Equal(pointer.Int32Ptr(1)))
 
 		By("Scaling the KubeadmControlPlane out to 3")
-		ScaleAndWaitControlPlane(ctx, ScaleAndWaitControlPlaneInput{
+		framework.ScaleAndWaitControlPlane(ctx, framework.ScaleAndWaitControlPlaneInput{
 			ClusterProxy:        bootstrapClusterProxy,
 			Cluster:             clusterResources.Cluster,
 			ControlPlane:        clusterResources.ControlPlane,
@@ -71,7 +87,7 @@ var _ = Describe("CAPE kcp scale e2e test", func() {
 		})
 
 		By("Scaling the KubeadmControlPlane out to 1")
-		ScaleAndWaitControlPlane(ctx, ScaleAndWaitControlPlaneInput{
+		framework.ScaleAndWaitControlPlane(ctx, framework.ScaleAndWaitControlPlaneInput{
 			ClusterProxy:        bootstrapClusterProxy,
 			Cluster:             clusterResources.Cluster,
 			ControlPlane:        clusterResources.ControlPlane,

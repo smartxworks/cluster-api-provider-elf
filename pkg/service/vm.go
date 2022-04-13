@@ -1,263 +1,362 @@
+/*
+Copyright 2022.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package service
 
 import (
 	"strings"
-	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.smartx.com/smartx/elf-sdk-go/client"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
+	clientcluster "github.com/smartxworks/cloudtower-go-sdk/client/cluster"
+	clienttask "github.com/smartxworks/cloudtower-go-sdk/client/task"
+	clientvlan "github.com/smartxworks/cloudtower-go-sdk/client/vlan"
+	clientvm "github.com/smartxworks/cloudtower-go-sdk/client/vm"
+	clientvmtemplate "github.com/smartxworks/cloudtower-go-sdk/client/vm_template"
+	"github.com/smartxworks/cloudtower-go-sdk/models"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1alpha4"
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/session"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
 type VMService interface {
-	Clone(machine *clusterv1.Machine, elfMachine *infrav1.ElfMachine, bootstrapData string) (*infrav1.VMJob, error)
-	Delete(uuid string) (*infrav1.VMJob, error)
-	PowerOff(uuid string) (*infrav1.VMJob, error)
-	PowerOn(uuid string) (*infrav1.VMJob, error)
-	Get(uuid string) (*infrav1.VirtualMachine, error)
-	GetVMTemplate(templateUUID string) (*client.VmTemplate, error)
-	GetJob(jobId string) (*infrav1.VMJob, error)
-	WaitJob(jobId string) (*infrav1.VMJob, error)
+	Clone(elfCluster *infrav1.ElfCluster,
+		machine *clusterv1.Machine,
+		elfMachine *infrav1.ElfMachine,
+		bootstrapData string) (*models.WithTaskVM, error)
+	Delete(uuid string) (*models.Task, error)
+	PowerOff(uuid string) (*models.Task, error)
+	PowerOn(uuid string) (*models.Task, error)
+	Get(id string) (*models.VM, error)
+	GetByName(name string) (*models.VM, error)
+	GetVMTemplate(templateUUID string) (*models.VMTemplate, error)
+	GetTask(id string) (*models.Task, error)
+	GetCluster(id string) (*models.Cluster, error)
+	GetVlan(id string) (*models.Vlan, error)
 }
 
-func NewVMService(auth infrav1.ElfAuth, logger logr.Logger) (VMService, error) {
-	authSession, err := session.NewElfSession(auth)
+func NewVMService(auth infrav1.Tower, logger logr.Logger) (VMService, error) {
+	authSession, err := session.NewTowerSession(auth)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ElfVMService{authSession, logger}, nil
+	return &TowerVMService{authSession, logger}, nil
 }
 
-type ElfVMService struct {
-	Session *session.Session `json:"session"`
-	Logger  logr.Logger      `json:"logger"`
+type TowerVMService struct {
+	Session *session.TowerSession `json:"session"`
+	Logger  logr.Logger           `json:"logger"`
 }
 
-// Create VM using VM template.
-func (svr *ElfVMService) Clone(
+// Clone kicks off a clone operation on Elf to create a new virtual machine using VM template.
+func (svr *TowerVMService) Clone(
+	elfCluster *infrav1.ElfCluster,
 	machine *clusterv1.Machine,
 	elfMachine *infrav1.ElfMachine,
-	bootstrapData string) (*infrav1.VMJob, error) {
+	bootstrapData string) (*models.WithTaskVM, error) {
+	cluster, err := svr.GetCluster(elfCluster.Spec.Cluster)
+	if err != nil {
+		return nil, err
+	}
 
 	template, err := svr.GetVMTemplate(elfMachine.Spec.Template)
 	if err != nil {
 		return nil, err
 	}
 
-	networkSpec := elfMachine.Spec.Network.Devices[0]
-	network := []*client.Network{
-		{
-			NicIndex:  networkSpec.NetworkIndex,
-			Type:      networkSpec.NetworkType,
-			IPAddress: networkSpec.IPAddrs,
-			Netmask:   networkSpec.Netmask,
+	vlan, err := svr.GetVlan(elfMachine.Spec.Network.Vlan)
+	if err != nil {
+		return nil, err
+	}
+
+	numCPUs := elfMachine.Spec.NumCPUs
+	if numCPUs <= 0 {
+		numCPUs = config.VMNumCPUs
+	}
+	numCoresPerSocket := elfMachine.Spec.NumCoresPerSocket
+	if numCoresPerSocket <= 0 {
+		numCoresPerSocket = numCPUs
+	}
+	numCPUSockets := numCPUs / numCoresPerSocket
+
+	memoryMiB := elfMachine.Spec.MemoryMiB
+	if memoryMiB <= 0 {
+		memoryMiB = config.VMMemoryMiB
+	}
+
+	diskGiB := elfMachine.Spec.DiskGiB
+	if diskGiB <= 0 {
+		diskGiB = config.VMDiskGiB
+	}
+
+	storagePolicy := models.VMVolumeElfStoragePolicyTypeREPLICA3THICKPROVISION
+	bus := models.BusVIRTIO
+	mountDisks := []*models.MountNewCreateDisksParams{{
+		// Index: util.TowerInt32(0),
+		Boot: util.TowerInt32(0),
+		Bus:  &bus,
+		VMVolume: &models.MountNewCreateDisksParamsVMVolume{
+			ElfStoragePolicy: &storagePolicy,
+			Name:             util.TowerString(config.VMDiskName),
+			Size:             util.TowerDisk(diskGiB),
 		},
-	}
-	networkInfo := &client.NetworkInfo{
-		Nameservers: []string{"114.114.114.114"},
-		Gateway:     networkSpec.Gateway,
-		Networks:    network,
-	}
+	}}
 
-	cloudInit := &client.CloudInit{
-		Hostname:            elfMachine.Name,
-		DefaultUserPassword: "elfk8s",
-		UserData:            bootstrapData,
-		NetworkInfo:         networkInfo,
-	}
+	networks := []*models.VMCreateVMFromTemplateParamsCloudInitNetworksItems0{}
+	for i := 0; i < len(elfMachine.Spec.Network.Devices); i++ {
+		device := elfMachine.Spec.Network.Devices[i]
 
-	vmBody := client.VmTemplateBatchCreateVmBody{
-		VmName:               machine.Name,
-		Description:          "ELF k8s node.",
-		Memory:               int64(template.Memory),
-		Vcpu:                 template.Vcpu,
-		Ha:                   template.Ha,
-		NestedVirtualization: template.NestedVirtualization,
-		CpuModel:             template.CpuModel,
-		Cpu:                  template.Cpu,
-		Nics:                 template.Nics,
-		// Disks:                template.Disks,
-		CloudInit:    cloudInit,
-		AutoSchedule: true,
-	}
-
-	job, err := svr.Session.VmTemplateCreateVms(template.Uuid, &client.VmTemplateCreateVmsBody{VMs: []*client.VmTemplateBatchCreateVmBody{&vmBody}})
-	if err != nil {
-		return nil, errors.Wrapf(err, "error clone for machine")
-	}
-
-	return ToVMJob(job), nil
-}
-
-// Delete VM.
-func (svr *ElfVMService) Delete(uuid string) (*infrav1.VMJob, error) {
-	job, err := svr.Session.VmDelete(uuid, true)
-	if err != nil {
-		return nil, err
-	}
-
-	return ToVMJob(job), nil
-}
-
-// Power Off VM.
-func (svr *ElfVMService) PowerOff(uuid string) (*infrav1.VMJob, error) {
-	svr.Logger.Info("Power off VM", "VM", uuid)
-
-	vmStopBody := client.VmStopBody{
-		Force: true,
-	}
-	job, err := svr.Session.VmStop(uuid, &vmStopBody)
-	if err != nil {
-		return nil, err
-	}
-
-	return ToVMJob(job), nil
-}
-
-// Power On VM.
-func (svr *ElfVMService) PowerOn(uuid string) (*infrav1.VMJob, error) {
-	svr.Logger.Info("Power on VM", "VM", uuid)
-
-	vmStartBody := client.VmStartBody{
-		AutoSchedule: true,
-	}
-	job, err := svr.Session.VmStart(uuid, &vmStartBody)
-	if err != nil {
-		return nil, err
-	}
-
-	return ToVMJob(job), nil
-}
-
-// Get the VM.
-func (svr *ElfVMService) Get(uuid string) (*infrav1.VirtualMachine, error) {
-	if uuid == "" {
-		return nil, nil
-	} else {
-		elfVM, err := svr.Session.VmGet(uuid)
-		if err != nil {
-			return nil, err
+		networkType := models.CloudInitNetworkTypeEnumIPV4DHCP
+		if strings.ToUpper(device.NetworkType) == string(models.CloudInitNetworkTypeEnumIPV4) {
+			networkType = models.CloudInitNetworkTypeEnumIPV4
 		}
 
-		return ToVirtualMachine(elfVM), nil
+		ipAddress := ""
+		if len(device.IPAddrs) > 0 {
+			ipAddress = device.IPAddrs[0]
+		}
+
+		networks = append(networks, &models.VMCreateVMFromTemplateParamsCloudInitNetworksItems0{
+			NicIndex:  util.TowerInt32(device.NetworkIndex),
+			Type:      &networkType,
+			IPAddress: util.TowerString(ipAddress),
+			Netmask:   util.TowerString(device.Netmask),
+		})
 	}
+
+	vmCreateVMFromTemplateParams := &models.VMCreateVMFromTemplateParams{
+		ClusterID:   cluster.ID,
+		Name:        util.TowerString(machine.Name),
+		Description: util.TowerString(config.VMDescription),
+		Vcpu:        util.TowerCPU(numCPUs),
+		CPUCores:    util.TowerCPU(numCoresPerSocket),
+		CPUSockets:  util.TowerCPU(numCPUSockets),
+		Memory:      util.TowerMemory(memoryMiB),
+		Firmware:    models.NewVMFirmware(models.VMFirmwareBIOS),
+		Status:      models.NewVMStatus(models.VMStatusRUNNING),
+		Ha:          util.TowerBool(elfMachine.Spec.HA),
+		TemplateID:  template.ID,
+		VMNics: []*models.VMNicParams{{
+			Model:         models.NewVMNicModel(models.VMNicModelVIRTIO),
+			Enabled:       util.TowerBool(true),
+			Mirror:        util.TowerBool(false),
+			ConnectVlanID: vlan.ID,
+		}},
+		DiskOperate: &models.VMCreateVMFromTemplateParamsDiskOperate{
+			NewDisks: &models.VMDiskParams{
+				MountNewCreateDisks: mountDisks,
+			},
+		},
+		CloudInit: &models.VMCreateVMFromTemplateParamsCloudInit{
+			Hostname:            util.TowerString(elfMachine.Name),
+			DefaultUserPassword: util.TowerString(config.VMPassword),
+			UserData:            util.TowerString(bootstrapData),
+			Networks:            networks,
+		},
+	}
+	if elfMachine.Spec.AutoSchedule {
+		vmCreateVMFromTemplateParams.HostID = util.TowerString("AUTO_SCHEDULE")
+	}
+
+	createVMFromTemplateParams := clientvm.NewCreateVMFromTemplateParams()
+	createVMFromTemplateParams.RequestBody = []*models.VMCreateVMFromTemplateParams{vmCreateVMFromTemplateParams}
+	createVMFromTemplateResp, err := svr.Session.VM.CreateVMFromTemplate(createVMFromTemplateParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return createVMFromTemplateResp.Payload[0], nil
 }
 
-// Get the VM template.
-func (svr *ElfVMService) GetVMTemplate(templateUUID string) (*client.VmTemplate, error) {
-	svr.Logger.Info("Get VM template", "UUID", templateUUID)
+// Delete destroys a virtual machine.
+func (svr *TowerVMService) Delete(uuid string) (*models.Task, error) {
+	deleteVMParams := clientvm.NewDeleteVMParams()
+	deleteVMParams.RequestBody = &models.VMOperateParams{
+		Where: &models.VMWhereInput{LocalID: util.TowerString(uuid)},
+	}
 
+	deleteVMResp, err := svr.Session.VM.DeleteVM(deleteVMParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.Task{ID: deleteVMResp.Payload[0].TaskID}, nil
+}
+
+// PowerOff powers off a virtual machine.
+func (svr *TowerVMService) PowerOff(uuid string) (*models.Task, error) {
+	shutDownVMParams := clientvm.NewShutDownVMParams()
+	shutDownVMParams.RequestBody = &models.VMOperateParams{
+		Where: &models.VMWhereInput{LocalID: util.TowerString(uuid)},
+	}
+
+	shutDownVMResp, err := svr.Session.VM.ShutDownVM(shutDownVMParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.Task{ID: shutDownVMResp.Payload[0].TaskID}, nil
+}
+
+// PowerOn powers on a virtual machine.
+func (svr *TowerVMService) PowerOn(uuid string) (*models.Task, error) {
+	startVMParams := clientvm.NewStartVMParams()
+	startVMParams.RequestBody = &models.VMStartParams{
+		Where: &models.VMWhereInput{LocalID: util.TowerString(uuid)},
+	}
+
+	startVMResp, err := svr.Session.VM.StartVM(startVMParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.Task{ID: startVMResp.Payload[0].TaskID}, nil
+}
+
+// Get searches for a virtual machine.
+func (svr *TowerVMService) Get(id string) (*models.VM, error) {
+	getVmsParams := clientvm.NewGetVmsParams()
+	getVmsParams.RequestBody = &models.GetVmsRequestBody{
+		Where: &models.VMWhereInput{
+			OR: []*models.VMWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+		},
+	}
+
+	getVmsResp, err := svr.Session.VM.GetVms(getVmsParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(getVmsResp.Payload) == 0 {
+		return nil, errors.New("VM_NOT_FOUND")
+	}
+
+	return getVmsResp.Payload[0], nil
+}
+
+// GetByName searches for a virtual machine by name.
+func (svr *TowerVMService) GetByName(name string) (*models.VM, error) {
+	getVmsParams := clientvm.NewGetVmsParams()
+	getVmsParams.RequestBody = &models.GetVmsRequestBody{
+		Where: &models.VMWhereInput{
+			Name: util.TowerString(name),
+		},
+	}
+
+	getVmsResp, err := svr.Session.VM.GetVms(getVmsParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(getVmsResp.Payload) == 0 {
+		return nil, errors.New("VM_NOT_FOUND")
+	}
+
+	return getVmsResp.Payload[0], nil
+}
+
+// GetCluster searches for a cluster.
+func (svr *TowerVMService) GetCluster(id string) (*models.Cluster, error) {
+	getClustersParams := clientcluster.NewGetClustersParams()
+	getClustersParams.RequestBody = &models.GetClustersRequestBody{
+		Where: &models.ClusterWhereInput{
+			OR: []*models.ClusterWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+		},
+	}
+
+	getClustersResp, err := svr.Session.Cluster.GetClusters(getClustersParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(getClustersResp.Payload) == 0 {
+		return nil, errors.New("CLUSTER_NOT_FOUND")
+	}
+
+	return getClustersResp.Payload[0], nil
+}
+
+// GetVlan searches for a vlan.
+func (svr *TowerVMService) GetVlan(id string) (*models.Vlan, error) {
+	getVlansParams := clientvlan.NewGetVlansParams()
+	getVlansParams.RequestBody = &models.GetVlansRequestBody{
+		Where: &models.VlanWhereInput{
+			LocalID: util.TowerString(id),
+		},
+	}
+
+	getVlansResp, err := svr.Session.Vlan.GetVlans(getVlansParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(getVlansResp.Payload) == 0 {
+		return nil, errors.New("VLAN_NOT_FOUND")
+	}
+
+	return getVlansResp.Payload[0], nil
+}
+
+// GetVMTemplate searches for a virtual machine template.
+func (svr *TowerVMService) GetVMTemplate(templateUUID string) (*models.VMTemplate, error) {
 	if _, err := uuid.Parse(templateUUID); err != nil {
 		return nil, err
 	}
 
-	template, err := svr.Session.VmTemplateGet(templateUUID)
+	getVMTemplatesParams := clientvmtemplate.NewGetVMTemplatesParams()
+	getVMTemplatesParams.RequestBody = &models.GetVMTemplatesRequestBody{
+		Where: &models.VMTemplateWhereInput{
+			LocalID: util.TowerString(templateUUID),
+		},
+	}
+	getVMTemplatesResp, err := svr.Session.VMTemplate.GetVMTemplates(getVMTemplatesParams)
 	if err != nil {
 		return nil, err
 	}
 
-	if template != nil {
-		return template, nil
+	vmTemplates := getVMTemplatesResp.Payload
+	if len(vmTemplates) == 0 {
+		return nil, errors.New("VM_TEMPLATE_NOT_FOUND")
 	}
 
-	return nil, nil
+	return vmTemplates[0], nil
 }
 
-// Get the job by id.
-func (svr *ElfVMService) GetJob(jobId string) (*infrav1.VMJob, error) {
-	if jobId == "" {
-		return nil, nil
+// GetTask searches for a task.
+func (svr *TowerVMService) GetTask(id string) (*models.Task, error) {
+	getTasksParams := clienttask.NewGetTasksParams()
+	getTasksParams.RequestBody = &models.GetTasksRequestBody{
+		Where: &models.TaskWhereInput{
+			ID: util.TowerString(id),
+		},
 	}
 
-	job, err := svr.Session.JobGet(jobId)
+	getTasksResp, err := svr.Session.Task.GetTasks(getTasksParams)
 	if err != nil {
 		return nil, err
 	}
-	if job == nil {
-		return nil, nil
+
+	if len(getTasksResp.Payload) == 0 {
+		return nil, errors.New("TASK_NOT_FOUND")
 	}
 
-	VMJob := ToVMJob(job)
-
-	svr.Logger.Info("Get VM job", "jobId", VMJob.Id, "state", job.State)
-
-	return VMJob, nil
-}
-
-// Wait job done.
-func (svr *ElfVMService) WaitJob(jobId string) (*infrav1.VMJob, error) {
-	for {
-		svr.Logger.Info("Waiting for VM job done...")
-		job, err := svr.Session.JobGet(jobId)
-		if err != nil {
-			return nil, err
-		}
-
-		VMJob := ToVMJob(job)
-
-		if VMJob.IsFinished() {
-			return VMJob, nil
-		}
-
-		time.Sleep(3 * time.Second)
-	}
-}
-
-func ToVMJob(job *client.Job) *infrav1.VMJob {
-	VMJob := &infrav1.VMJob{
-		Id:          job.JobId,
-		Description: job.Description,
-		State:       job.State,
-		Resources:   job.Resources,
-	}
-
-	return VMJob
-}
-
-func ToVirtualMachine(elfVM *client.Vm) *infrav1.VirtualMachine {
-	vm := &infrav1.VirtualMachine{
-		Name:    elfVM.VmName,
-		UUID:    elfVM.Uuid,
-		State:   infrav1.VirtualMachineState(elfVM.Status),
-		Network: getNetworkStatus(elfVM),
-	}
-
-	return vm
-}
-
-func getNetworkStatus(elfVM *client.Vm) []infrav1.NetworkStatus {
-	var network []infrav1.NetworkStatus
-
-	if elfVM.GuestInfo != nil {
-		for index, nic := range elfVM.GuestInfo.NICs {
-			for _, ip := range nic.IPAddresses {
-				if ip.IPAddressType != "ipv4" {
-					continue
-				}
-
-				if ip.IPAddress == "127.0.0.1" || strings.HasPrefix(ip.IPAddress, "169.254.") || strings.HasPrefix(ip.IPAddress, "172.17.0") {
-					continue
-				}
-
-				if ip.IPAddressType == "ipv4" {
-					network = append(network, infrav1.NetworkStatus{
-						NetworkIndex: index,
-						IPAddrs:      ip.IPAddress,
-					})
-				}
-			}
-		}
-	}
-
-	if len(network) > 0 {
-		return network
-	}
-
-	return nil
+	return getTasksResp.Payload[0], nil
 }
