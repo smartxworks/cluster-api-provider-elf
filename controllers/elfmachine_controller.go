@@ -217,7 +217,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 	vm, err := r.VMService.Get(ctx.ElfMachine.Status.VMRef)
 	if err != nil {
 		if service.IsVMNotFound(err) {
-			ctx.Logger.Info("VM be deleted")
+			ctx.Logger.Info("VM already deleted")
 
 			ctx.ElfMachine.SetVM("")
 		}

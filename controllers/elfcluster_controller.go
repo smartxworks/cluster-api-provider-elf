@@ -219,7 +219,7 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx *context.ClusterContext) (rec
 func (r *ElfClusterReconciler) reconcileControlPlaneEndpoint(ctx *context.ClusterContext) error {
 	// If the cluster already has ControlPlaneEndpoint set then there is nothing to do .
 	if !ctx.ElfCluster.Spec.ControlPlaneEndpoint.IsZero() {
-		ctx.Logger.Info("ControlPlaneEndpoint already exist of ElfCluster")
+		ctx.Logger.Info("The ControlPlaneEndpoint of ElfCluster has been set already")
 
 		return nil
 	}

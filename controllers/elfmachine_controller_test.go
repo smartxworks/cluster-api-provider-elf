@@ -615,7 +615,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
-			Expect(buf.String()).To(ContainSubstring("VM be deleted"))
+			Expect(buf.String()).To(ContainSubstring("VM already deleted"))
 			elfCluster = &infrav1.ElfCluster{}
 			err = reconciler.Client.Get(reconciler, elfMachineKey, elfCluster)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
