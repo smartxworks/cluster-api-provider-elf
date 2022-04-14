@@ -1,8 +1,16 @@
 name: build
 
 on:
-  - push
-  - pull_request
+  push:
+    branches:
+      - main
+      - release-*
+    tags:
+      - v*
+  pull_request:
+    branches:
+      - main
+      - release-*
 
 jobs:
   build:
