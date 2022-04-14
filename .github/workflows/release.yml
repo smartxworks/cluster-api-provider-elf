@@ -10,6 +10,7 @@ jobs:
   release:
     name: Create draft release
     runs-on: ubuntu-latest
+    environment: default
     steps:
       - name: Set environment variables
         run: |
