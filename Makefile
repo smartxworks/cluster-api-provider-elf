@@ -66,7 +66,7 @@ OVERRIDES_DIR := $(HOME)/.cluster-api/overrides/infrastructure-elf/$(VERSION)
 # Architecture variables
 IMAGE_TAG ?= dev
 ARCH ?= amd64
-ALL_ARCH = amd64 arm arm64 ppc64le s390x
+ALL_ARCH = amd64 arm64
 
 # Set build time variables including version details
 LDFLAGS := $(shell hack/version.sh)

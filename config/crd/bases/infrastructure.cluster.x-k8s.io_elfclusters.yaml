@@ -36,7 +36,7 @@ spec:
             description: ElfClusterSpec defines the desired state of ElfCluster.
             properties:
               cluster:
-                description: Cluster is a unique identifier for a Elf cluster.
+                description: Cluster is a unique identifier for a ELF cluster.
                 type: string
               controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to
