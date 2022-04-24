@@ -32,6 +32,7 @@ var (
 	elfTemplateUpgradeTo = os.Getenv("ELF_TEMPLATE_UPGRADE_TO")
 	towerUsername        = os.Getenv("TOWER_USERNAME")
 	towerPassword        = os.Getenv("TOWER_PASSWORD")
+	towerAuthMode        = os.Getenv("TOWER_AUTH_MODE")
 
 	towerServer string
 	vmService   service.VMService
@@ -46,7 +47,8 @@ func initElfSession() {
 	vmService, err = service.NewVMService(infrav1.Tower{
 		Server:   towerServer,
 		Username: towerUsername,
-		Password: towerPassword}, ctrllog.Log)
+		Password: towerPassword,
+		AuthMode: towerAuthMode}, ctrllog.Log)
 	Expect(err).ShouldNot(HaveOccurred())
 
 	template, err := vmService.GetVMTemplate(elfTemplate)

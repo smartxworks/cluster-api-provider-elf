@@ -56,6 +56,12 @@ spec:
               tower:
                 description: Tower is the config of tower.
                 properties:
+                  authMode:
+                    description: AuthMode is the authentication mode of tower server.
+                    enum:
+                    - LOCAL
+                    - LDAP
+                    type: string
                   password:
                     description: Password is the password used to access the tower
                       server.

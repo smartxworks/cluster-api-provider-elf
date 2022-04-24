@@ -29,6 +29,10 @@ type Tower struct {
 
 	// Password is the password used to access the tower server.
 	Password string `json:"password,omitempty"`
+
+	// AuthMode is the authentication mode of tower server.
+	// +kubebuilder:validation:Enum=LOCAL;LDAP
+	AuthMode string `json:"authMode,omitempty"`
 }
 
 // ElfMachineTemplateResource describes the data needed to create a ElfMachine from a template.
