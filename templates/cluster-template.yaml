@@ -30,7 +30,7 @@ spec:
     server: '${TOWER_SERVER}'
     username: '${TOWER_USERNAME}'
     password: '${TOWER_PASSWORD}'
-    authMode: '${TOWER_AUTH_MODE=LOCAL}'
+    authMode: '${TOWER_AUTH_MODE:=LOCAL}'
   controlPlaneEndpoint:
     host: '${CONTROL_PLANE_ENDPOINT_IP}'
     port: 6443
