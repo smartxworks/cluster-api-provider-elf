@@ -49,6 +49,8 @@ export WORKER_MACHINE_COUNT=1
 export TOWER_SERVER=<YOUR_TOWER_SERVER_FQDN>
 export TOWER_USERNAME=root
 export TOWER_PASSWORD=tower
+# 认证模式，默认LOCAL（可选）
+export TOWER_AUTH_MODE=LOCAL
 
 # 以下指定的ELF资源对象的ID对应其API返回的local_id
 # ELF集群ID

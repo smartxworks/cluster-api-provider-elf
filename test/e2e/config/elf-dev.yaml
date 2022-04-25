@@ -121,6 +121,7 @@ variables:
   # TOWER_SERVER: "127.0.0.1"
   # TOWER_USERNAME: "root"
   # TOWER_PASSWORD: "root"
+  # TOWER_AUTH_MODE: "LOCAL"
 
 intervals:
   default/wait-controllers: ["8m", "10s"]

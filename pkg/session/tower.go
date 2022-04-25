@@ -39,7 +39,7 @@ func NewTowerSession(tower infrav1.Tower) (*TowerSession, error) {
 	loginParams.RequestBody = &models.LoginInput{
 		Username: &tower.Username,
 		Password: &tower.Password,
-		Source:   models.NewUserSource(models.UserSourceLOCAL),
+		Source:   models.NewUserSource(models.UserSource(tower.AuthMode)),
 	}
 
 	loginResp, err := client.User.Login(loginParams, func(*runtime.ClientOperation) {})

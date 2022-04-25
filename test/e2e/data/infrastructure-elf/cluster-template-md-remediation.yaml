@@ -201,6 +201,7 @@ spec:
     password: ${TOWER_PASSWORD}
     server: ${TOWER_SERVER}
     username: ${TOWER_USERNAME}
+    authMode: ${TOWER_AUTH_MODE:=LOCAL}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: ElfMachineTemplate
