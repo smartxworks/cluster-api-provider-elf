@@ -62,7 +62,7 @@ spec:
                       description: NetworkDeviceSpec defines the network configuration
                         for a virtual machine's network device.
                       properties:
-                        gateway:
+                        gateway4:
                           description: Gateway4 is the IPv4 gateway used by this device.
                             Required when DHCP4 is false.
                           type: string
@@ -79,6 +79,10 @@ spec:
                           type: integer
                         networkType:
                           type: string
+                        vlan:
+                          description: Vlan is the virtual LAN used by the virtual
+                            machine.
+                          type: string
                       required:
                       - networkIndex
                       - networkType
@@ -87,9 +91,6 @@ spec:
                   preferredAPIServerCidr:
                     description: PreferredAPIServeCIDR is the preferred CIDR for the
                       Kubernetes API server endpoint on this machine
-                    type: string
-                  vlan:
-                    description: Vlan is the virtual LAN used by the virtual machine.
                     type: string
                 required:
                 - devices

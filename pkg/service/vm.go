@@ -82,11 +82,6 @@ func (svr *TowerVMService) Clone(
 		return nil, err
 	}
 
-	vlan, err := svr.GetVlan(elfMachine.Spec.Network.Vlan)
-	if err != nil {
-		return nil, err
-	}
-
 	numCPUs := elfMachine.Spec.NumCPUs
 	if numCPUs <= 0 {
 		numCPUs = config.VMNumCPUs
@@ -120,10 +115,25 @@ func (svr *TowerVMService) Clone(
 		},
 	}}
 
+	nics := []*models.VMNicParams{}
 	networks := []*models.VMCreateVMFromTemplateParamsCloudInitNetworksItems0{}
 	for i := 0; i < len(elfMachine.Spec.Network.Devices); i++ {
 		device := elfMachine.Spec.Network.Devices[i]
 
+		// nics
+		vlan, err := svr.GetVlan(device.Vlan)
+		if err != nil {
+			return nil, err
+		}
+
+		nics = append(nics, &models.VMNicParams{
+			Model:         models.NewVMNicModel(models.VMNicModelVIRTIO),
+			Enabled:       util.TowerBool(true),
+			Mirror:        util.TowerBool(false),
+			ConnectVlanID: vlan.ID,
+		})
+
+		// networks
 		networkType := models.CloudInitNetworkTypeEnumIPV4DHCP
 		if strings.ToUpper(device.NetworkType) == string(models.CloudInitNetworkTypeEnumIPV4) {
 			networkType = models.CloudInitNetworkTypeEnumIPV4
@@ -154,12 +164,7 @@ func (svr *TowerVMService) Clone(
 		Status:      models.NewVMStatus(models.VMStatusRUNNING),
 		Ha:          util.TowerBool(elfMachine.Spec.HA),
 		TemplateID:  template.ID,
-		VMNics: []*models.VMNicParams{{
-			Model:         models.NewVMNicModel(models.VMNicModelVIRTIO),
-			Enabled:       util.TowerBool(true),
-			Mirror:        util.TowerBool(false),
-			ConnectVlanID: vlan.ID,
-		}},
+		VMNics:      nics,
 		DiskOperate: &models.VMCreateVMFromTemplateParamsDiskOperate{
 			NewDisks: &models.VMDiskParams{
 				MountNewCreateDisks: mountDisks,

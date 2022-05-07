@@ -88,9 +88,6 @@ type NetworkSpec struct {
 	// PreferredAPIServeCIDR is the preferred CIDR for the Kubernetes API
 	// server endpoint on this machine
 	PreferredAPIServerCIDR string `json:"preferredAPIServerCidr,omitempty"`
-
-	// Vlan is the virtual LAN used by the virtual machine.
-	Vlan string `json:"vlan,omitempty"`
 }
 
 // NetworkDeviceSpec defines the network configuration for a virtual machine's
@@ -99,6 +96,10 @@ type NetworkDeviceSpec struct {
 	NetworkIndex int `json:"networkIndex"`
 
 	NetworkType string `json:"networkType"`
+
+	// Vlan is the virtual LAN used by the virtual machine.
+	Vlan string `json:"vlan,omitempty"`
+
 	// IPAddrs is a list of one or more IPv4 and/or IPv6 addresses to assign
 	// to this device.
 	// Required when DHCP4 and DHCP6 are both false.
@@ -108,7 +109,7 @@ type NetworkDeviceSpec struct {
 
 	// Gateway4 is the IPv4 gateway used by this device.
 	// Required when DHCP4 is false.
-	Gateway string `json:"gateway,omitempty"`
+	Gateway4 string `json:"gateway4,omitempty"`
 }
 
 //+kubebuilder:object:generate=false
