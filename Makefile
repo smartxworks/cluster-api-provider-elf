@@ -76,7 +76,7 @@ IMAGE_NAME ?= cape-manager
 PULL_POLICY ?= Always
 
 # Release docker variables
-REGISTRY ?= smartxworks
+REGISTRY ?= docker.io/smartxworks
 CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 
 ## --------------------------------------
