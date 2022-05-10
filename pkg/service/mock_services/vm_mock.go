@@ -111,6 +111,21 @@ func (mr *MockVMServiceMockRecorder) GetCluster(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCluster", reflect.TypeOf((*MockVMService)(nil).GetCluster), id)
 }
 
+// GetHost mocks base method.
+func (m *MockVMService) GetHost(id string) (*models.Host, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHost", id)
+	ret0, _ := ret[0].(*models.Host)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHost indicates an expected call of GetHost.
+func (mr *MockVMServiceMockRecorder) GetHost(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHost", reflect.TypeOf((*MockVMService)(nil).GetHost), id)
+}
+
 // GetTask mocks base method.
 func (m *MockVMService) GetTask(id string) (*models.Task, error) {
 	m.ctrl.T.Helper()

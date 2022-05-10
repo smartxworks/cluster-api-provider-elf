@@ -35,8 +35,10 @@ spec:
           spec:
             description: ElfMachineSpec defines the desired state of ElfMachine.
             properties:
-              autoSchedule:
-                type: boolean
+              cloneMode:
+                description: CloneMode is the type of clone operation used to clone
+                  a VM from a template.
+                type: string
               diskGiB:
                 format: int32
                 type: integer
@@ -48,6 +50,10 @@ spec:
                 type: string
               ha:
                 type: boolean
+              host:
+                description: Host is a unique identifier for a ELF host. Required
+                  when cloneMode is fullClone. Defaults to AUTO_SCHEDULE.
+                type: string
               memoryMiB:
                 format: int64
                 type: integer

@@ -195,7 +195,7 @@ metadata:
 spec:
   template:
     spec:
-      autoSchedule: true
+      cloneMode: fastClone
       ha: true
       network:
         devices:
@@ -212,7 +212,7 @@ metadata:
 spec:
   template:
     spec:
-      autoSchedule: true
+      cloneMode: fastClone
       ha: true
       network:
         devices:
