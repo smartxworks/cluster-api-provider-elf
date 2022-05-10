@@ -115,8 +115,8 @@ func (svr *TowerVMService) Clone(
 		},
 	}}
 
-	nics := []*models.VMNicParams{}
-	networks := []*models.VMCreateVMFromTemplateParamsCloudInitNetworksItems0{}
+	nics := make([]*models.VMNicParams, 0, len(elfMachine.Spec.Network.Devices))
+	networks := make([]*models.VMCreateVMFromTemplateParamsCloudInitNetworksItems0, 0, len(elfMachine.Spec.Network.Devices))
 	for i := 0; i < len(elfMachine.Spec.Network.Devices); i++ {
 		device := elfMachine.Spec.Network.Devices[i]
 
@@ -131,6 +131,7 @@ func (svr *TowerVMService) Clone(
 			Enabled:       util.TowerBool(true),
 			Mirror:        util.TowerBool(false),
 			ConnectVlanID: vlan.ID,
+			MacAddress:    util.TowerString(device.MACAddr),
 		})
 
 		// networks
@@ -144,11 +145,30 @@ func (svr *TowerVMService) Clone(
 			ipAddress = device.IPAddrs[0]
 		}
 
+		routes := make([]*models.VMCreateVMFromTemplateParamsCloudInitNetworksItems0RoutesItems0, 0, len(device.Routes))
+		for _, route := range device.Routes {
+			netmask := route.Netmask
+			if netmask == "" {
+				netmask = "0.0.0.0"
+			}
+			network := route.Network
+			if network == "" {
+				network = "0.0.0.0"
+			}
+
+			routes = append(routes, &models.VMCreateVMFromTemplateParamsCloudInitNetworksItems0RoutesItems0{
+				Gateway: util.TowerString(route.Gateway),
+				Netmask: util.TowerString(netmask),
+				Network: util.TowerString(network),
+			})
+		}
+
 		networks = append(networks, &models.VMCreateVMFromTemplateParamsCloudInitNetworksItems0{
 			NicIndex:  util.TowerInt32(device.NetworkIndex),
 			Type:      &networkType,
 			IPAddress: util.TowerString(ipAddress),
 			Netmask:   util.TowerString(device.Netmask),
+			Routes:    routes,
 		})
 	}
 

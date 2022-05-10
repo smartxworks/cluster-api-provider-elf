@@ -103,13 +103,36 @@ type NetworkDeviceSpec struct {
 	// IPAddrs is a list of one or more IPv4 and/or IPv6 addresses to assign
 	// to this device.
 	// Required when DHCP4 and DHCP6 are both false.
+	// +optional
 	IPAddrs []string `json:"ipAddrs,omitempty"`
 
+	// Netmask is the subnet mask used by this device.
+	// Required when DHCP4 is false.
+	// +optional
 	Netmask string `json:"netmask,omitempty"`
 
-	// Gateway4 is the IPv4 gateway used by this device.
+	// MACAddr is the MAC address used by this device.
+	// It is generally a good idea to omit this field and allow a MAC address
+	// to be generated.
+	// +optional
+	MACAddr string `json:"macAddr,omitempty"`
+
 	// Required when DHCP4 is false.
-	Gateway4 string `json:"gateway4,omitempty"`
+	// +optional
+	Routes []NetworkDeviceRouteSpec `json:"routes,omitempty"`
+}
+
+// NetworkDeviceRouteSpec defines the network configuration for a virtual machine's
+// network device route.
+type NetworkDeviceRouteSpec struct {
+	// Gateway is the IPv4 gateway used by this route.
+	Gateway string `json:"gateway,omitempty"`
+
+	// Netmask is the subnet mask used by this route.
+	Netmask string `json:"netmask,omitempty"`
+
+	// Network is the route network address.
+	Network string `json:"network,omitempty"`
 }
 
 //+kubebuilder:object:generate=false
