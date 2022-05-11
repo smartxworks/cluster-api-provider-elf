@@ -71,10 +71,6 @@ spec:
                               description: NetworkDeviceSpec defines the network configuration
                                 for a virtual machine's network device.
                               properties:
-                                gateway:
-                                  description: Gateway4 is the IPv4 gateway used by
-                                    this device. Required when DHCP4 is false.
-                                  type: string
                                 ipAddrs:
                                   description: IPAddrs is a list of one or more IPv4
                                     and/or IPv6 addresses to assign to this device.
@@ -82,11 +78,43 @@ spec:
                                   items:
                                     type: string
                                   type: array
+                                macAddr:
+                                  description: MACAddr is the MAC address used by
+                                    this device. It is generally a good idea to omit
+                                    this field and allow a MAC address to be generated.
+                                  type: string
                                 netmask:
+                                  description: Netmask is the subnet mask used by
+                                    this device. Required when DHCP4 is false.
                                   type: string
                                 networkIndex:
                                   type: integer
                                 networkType:
+                                  type: string
+                                routes:
+                                  description: Required when DHCP4 is false.
+                                  items:
+                                    description: NetworkDeviceRouteSpec defines the
+                                      network configuration for a virtual machine's
+                                      network device route.
+                                    properties:
+                                      gateway:
+                                        description: Gateway is the IPv4 gateway used
+                                          by this route.
+                                        type: string
+                                      netmask:
+                                        description: Netmask is the subnet mask used
+                                          by this route.
+                                        type: string
+                                      network:
+                                        description: Network is the route network
+                                          address.
+                                        type: string
+                                    type: object
+                                  type: array
+                                vlan:
+                                  description: Vlan is the virtual LAN used by the
+                                    virtual machine.
                                   type: string
                               required:
                               - networkIndex
@@ -96,10 +124,6 @@ spec:
                           preferredAPIServerCidr:
                             description: PreferredAPIServeCIDR is the preferred CIDR
                               for the Kubernetes API server endpoint on this machine
-                            type: string
-                          vlan:
-                            description: Vlan is the virtual LAN used by the virtual
-                              machine.
                             type: string
                         required:
                         - devices

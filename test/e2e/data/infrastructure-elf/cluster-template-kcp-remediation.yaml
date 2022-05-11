@@ -139,7 +139,7 @@ spec:
             - name: vip_address
               value: '${CONTROL_PLANE_ENDPOINT_IP}'
             - name: vip_interface
-              value: eth0
+              value: ${VIP_NETWORK_INTERFACE:="eth0"}
             - name: vip_leaseduration
               value: "15"
             - name: vip_renewdeadline
@@ -216,7 +216,7 @@ spec:
         devices:
         - networkIndex: 0
           networkType: ipv4_dhcp
-        vlan: ${ELF_VLAN}
+          vlan: ${ELF_VLAN}
       template: ${ELF_TEMPLATE}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
@@ -233,5 +233,5 @@ spec:
         devices:
         - networkIndex: 0
           networkType: ipv4_dhcp
-        vlan: ${ELF_VLAN}
+          vlan: ${ELF_VLAN}
       template: ${ELF_TEMPLATE}

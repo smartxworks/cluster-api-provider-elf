@@ -88,9 +88,6 @@ type NetworkSpec struct {
 	// PreferredAPIServeCIDR is the preferred CIDR for the Kubernetes API
 	// server endpoint on this machine
 	PreferredAPIServerCIDR string `json:"preferredAPIServerCidr,omitempty"`
-
-	// Vlan is the virtual LAN used by the virtual machine.
-	Vlan string `json:"vlan,omitempty"`
 }
 
 // NetworkDeviceSpec defines the network configuration for a virtual machine's
@@ -99,16 +96,43 @@ type NetworkDeviceSpec struct {
 	NetworkIndex int `json:"networkIndex"`
 
 	NetworkType string `json:"networkType"`
+
+	// Vlan is the virtual LAN used by the virtual machine.
+	Vlan string `json:"vlan,omitempty"`
+
 	// IPAddrs is a list of one or more IPv4 and/or IPv6 addresses to assign
 	// to this device.
 	// Required when DHCP4 and DHCP6 are both false.
+	// +optional
 	IPAddrs []string `json:"ipAddrs,omitempty"`
 
+	// Netmask is the subnet mask used by this device.
+	// Required when DHCP4 is false.
+	// +optional
 	Netmask string `json:"netmask,omitempty"`
 
-	// Gateway4 is the IPv4 gateway used by this device.
+	// MACAddr is the MAC address used by this device.
+	// It is generally a good idea to omit this field and allow a MAC address
+	// to be generated.
+	// +optional
+	MACAddr string `json:"macAddr,omitempty"`
+
 	// Required when DHCP4 is false.
+	// +optional
+	Routes []NetworkDeviceRouteSpec `json:"routes,omitempty"`
+}
+
+// NetworkDeviceRouteSpec defines the network configuration for a virtual machine's
+// network device route.
+type NetworkDeviceRouteSpec struct {
+	// Gateway is the IPv4 gateway used by this route.
 	Gateway string `json:"gateway,omitempty"`
+
+	// Netmask is the subnet mask used by this route.
+	Netmask string `json:"netmask,omitempty"`
+
+	// Network is the route network address.
+	Network string `json:"network,omitempty"`
 }
 
 //+kubebuilder:object:generate=false
