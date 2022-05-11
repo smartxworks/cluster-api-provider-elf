@@ -61,7 +61,7 @@ spec:
                         type: boolean
                       host:
                         description: Host is a unique identifier for a ELF host. Required
-                          when cloneMode is fullClone. Defaults to AUTO_SCHEDULE.
+                          when cloneMode is FullClone. Defaults to AUTO_SCHEDULE.
                         type: string
                       memoryMiB:
                         format: int64

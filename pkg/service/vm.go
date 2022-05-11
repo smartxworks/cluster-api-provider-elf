@@ -150,7 +150,7 @@ func (svr *TowerVMService) Clone(
 	}
 
 	hostID := "AUTO_SCHEDULE"
-	if hostID != "" {
+	if elfMachine.Spec.Host != "" {
 		host, err := svr.GetHost(elfMachine.Spec.Host)
 		if err != nil {
 			return nil, err

@@ -71,7 +71,7 @@ type ElfMachineSpec struct {
 	CloneMode CloneMode `json:"cloneMode,omitempty"`
 
 	// Host is a unique identifier for a ELF host.
-	// Required when cloneMode is fullClone.
+	// Required when cloneMode is FullClone.
 	// Defaults to AUTO_SCHEDULE.
 	// +optional
 	Host string `json:"host,omitempty"`

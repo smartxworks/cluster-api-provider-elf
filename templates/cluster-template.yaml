@@ -45,7 +45,7 @@ spec:
     spec:
       template: '${ELF_TEMPLATE}'
       ha: true
-      cloneMode: fastClone
+      cloneMode: FastClone
       network:
         vlan: '${ELF_VLAN}'
         devices:
@@ -165,7 +165,7 @@ spec:
     spec:
       template: '${ELF_TEMPLATE}'
       ha: true
-      cloneMode: fastClone
+      cloneMode: FastClone
       network:
         vlan: '${ELF_VLAN}'
         devices:

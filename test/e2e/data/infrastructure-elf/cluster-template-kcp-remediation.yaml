@@ -210,7 +210,7 @@ metadata:
 spec:
   template:
     spec:
-      cloneMode: fastClone
+      cloneMode: FastClone
       ha: true
       network:
         devices:
@@ -227,7 +227,7 @@ metadata:
 spec:
   template:
     spec:
-      cloneMode: fastClone
+      cloneMode: FastClone
       ha: true
       network:
         devices:
