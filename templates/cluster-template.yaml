@@ -45,7 +45,7 @@ spec:
     spec:
       template: '${ELF_TEMPLATE}'
       ha: true
-      autoSchedule: true
+      cloneMode: FastClone
       network:
         devices:
           - networkIndex: 0
@@ -165,7 +165,7 @@ spec:
     spec:
       template: '${ELF_TEMPLATE}'
       ha: true
-      autoSchedule: true
+      cloneMode: FastClone
       network:
         devices:
           - networkIndex: 0

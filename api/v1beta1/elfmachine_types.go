@@ -65,10 +65,16 @@ type ElfMachineSpec struct {
 	DiskGiB int32 `json:"diskGiB,omitempty"`
 
 	// +optional
-	AutoSchedule bool `json:"autoSchedule,omitempty"`
+	HA bool `json:"ha,omitempty"`
 
 	// +optional
-	HA bool `json:"ha,omitempty"`
+	CloneMode CloneMode `json:"cloneMode,omitempty"`
+
+	// Host is a unique identifier for a ELF host.
+	// Required when cloneMode is FullClone.
+	// Defaults to AUTO_SCHEDULE.
+	// +optional
+	Host string `json:"host,omitempty"`
 }
 
 // ElfMachineStatus defines the observed state of ElfMachine.

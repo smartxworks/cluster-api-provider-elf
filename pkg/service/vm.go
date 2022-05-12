@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	clientcluster "github.com/smartxworks/cloudtower-go-sdk/client/cluster"
+	clienthost "github.com/smartxworks/cloudtower-go-sdk/client/host"
 	clienttask "github.com/smartxworks/cloudtower-go-sdk/client/task"
 	clientvlan "github.com/smartxworks/cloudtower-go-sdk/client/vlan"
 	clientvm "github.com/smartxworks/cloudtower-go-sdk/client/vm"
@@ -49,6 +50,7 @@ type VMService interface {
 	GetVMTemplate(templateUUID string) (*models.VMTemplate, error)
 	GetTask(id string) (*models.Task, error)
 	GetCluster(id string) (*models.Cluster, error)
+	GetHost(id string) (*models.Host, error)
 	GetVlan(id string) (*models.Vlan, error)
 }
 
@@ -172,8 +174,24 @@ func (svr *TowerVMService) Clone(
 		})
 	}
 
+	isFullCopy := false
+	if elfMachine.Spec.CloneMode == infrav1.FullClone {
+		isFullCopy = true
+	}
+
+	hostID := "AUTO_SCHEDULE"
+	if elfMachine.Spec.Host != "" {
+		host, err := svr.GetHost(elfMachine.Spec.Host)
+		if err != nil {
+			return nil, err
+		}
+
+		hostID = *host.ID
+	}
+
 	vmCreateVMFromTemplateParams := &models.VMCreateVMFromTemplateParams{
 		ClusterID:   cluster.ID,
+		HostID:      util.TowerString(hostID),
 		Name:        util.TowerString(machine.Name),
 		Description: util.TowerString(config.VMDescription),
 		Vcpu:        util.TowerCPU(numCPUs),
@@ -183,6 +201,7 @@ func (svr *TowerVMService) Clone(
 		Firmware:    models.NewVMFirmware(models.VMFirmwareBIOS),
 		Status:      models.NewVMStatus(models.VMStatusRUNNING),
 		Ha:          util.TowerBool(elfMachine.Spec.HA),
+		IsFullCopy:  util.TowerBool(isFullCopy),
 		TemplateID:  template.ID,
 		VMNics:      nics,
 		DiskOperate: &models.VMCreateVMFromTemplateParamsDiskOperate{
@@ -196,9 +215,6 @@ func (svr *TowerVMService) Clone(
 			UserData:            util.TowerString(bootstrapData),
 			Networks:            networks,
 		},
-	}
-	if elfMachine.Spec.AutoSchedule {
-		vmCreateVMFromTemplateParams.HostID = util.TowerString("AUTO_SCHEDULE")
 	}
 
 	createVMFromTemplateParams := clientvm.NewCreateVMFromTemplateParams()
@@ -317,6 +333,26 @@ func (svr *TowerVMService) GetCluster(id string) (*models.Cluster, error) {
 	}
 
 	return getClustersResp.Payload[0], nil
+}
+
+func (svr *TowerVMService) GetHost(id string) (*models.Host, error) {
+	getHostsParams := clienthost.NewGetHostsParams()
+	getHostsParams.RequestBody = &models.GetHostsRequestBody{
+		Where: &models.HostWhereInput{
+			OR: []*models.HostWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+		},
+	}
+
+	getHostsResp, err := svr.Session.Host.GetHosts(getHostsParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(getHostsResp.Payload) == 0 {
+		return nil, errors.New("HOST_NOT_FOUND")
+	}
+
+	return getHostsResp.Payload[0], nil
 }
 
 // GetVlan searches for a vlan.

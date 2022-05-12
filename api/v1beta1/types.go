@@ -20,6 +20,21 @@ import (
 	"fmt"
 )
 
+// CloneMode is the type of clone operation used to clone a VM from a template.
+type CloneMode string
+
+const (
+	// FullClone indicates a VM will have no relationship to the source of the
+	// clone operation once the operation is complete. This is the safest clone
+	// mode, but it is not the fastest.
+	FullClone CloneMode = "FullClone"
+
+	// FastClone means resulting VMs will be dependent upon the snapshot of
+	// the source VM/template from which the VM was cloned. This is the fastest
+	// clone mode.
+	FastClone CloneMode = "FastClone"
+)
+
 type Tower struct {
 	// Server is address of the tower server.
 	Server string `json:"server,omitempty"`
