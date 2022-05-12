@@ -45,7 +45,10 @@ spec:
     spec:
       template: '${ELF_TEMPLATE}'
       ha: true
-      cloneMode: FastClone
+      cloneMode: ${ELF_VM_CLONE_MODE:-FastClone}
+      numCPUS: ${CONTROL_PLANE_MACHINE_NUM_CPUS:-2}
+      memoryMiB: ${CONTROL_PLANE_MACHINE_MEMORY_MB:-4096}
+      diskGiB: ${CONTROL_PLANE_MACHINE_DISK_GB:-40}
       network:
         devices:
           - networkIndex: 0
@@ -165,7 +168,10 @@ spec:
     spec:
       template: '${ELF_TEMPLATE}'
       ha: true
-      cloneMode: FastClone
+      cloneMode: ${ELF_VM_CLONE_MODE:-FastClone}
+      numCPUS: ${WORKER_MACHINE_NUM_CPUS:-2}
+      memoryMiB: ${WORKER_MACHINE_MEMORY_MB:-4096}
+      diskGiB: ${WORKER_MACHINE_DISK_GB:-40}
       network:
         devices:
           - networkIndex: 0
