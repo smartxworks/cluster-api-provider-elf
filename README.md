@@ -36,14 +36,27 @@ export NAMESPACE=default
 # 集群的名称
 export CLUSTER_NAME=cape-cluster
 
-# 集群的版本
+# 集群的K8s版本
 export KUBERNETES_VERSION=v1.20.6
 
-# 集群 Master 节点数
+# 集群ControlPlane节点数
 export CONTROL_PLANE_MACHINE_COUNT=1
 
-# 集群 Worker 节点数
+# 集群ControlPlane节点配置
+export CONTROL_PLANE_MACHINE_NUM_CPUS=2
+export CONTROL_PLANE_MACHINE_MEMORY_MB=4096
+export CONTROL_PLANE_MACHINE_DISK_GB=40
+
+# 集群Worker节点数
 export WORKER_MACHINE_COUNT=1
+
+# 集群Worker节点配置
+export WORKER_MACHINE_NUM_CPUS=2
+export WORKER_MACHINE_MEMORY_MB=4096
+export WORKER_MACHINE_DISK_GB=40
+
+# 集群节点的克隆模式: FastClone, FullClone.
+export ELF_VM_CLONE_MODE=FastClone
 
 # TOWER
 export TOWER_SERVER=<YOUR_TOWER_SERVER_FQDN>
