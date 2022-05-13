@@ -24,7 +24,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/smartxworks/cloudtower-go-sdk/models"
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

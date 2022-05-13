@@ -11,7 +11,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.1
 	github.com/pkg/errors v0.9.1
-	github.com/smartxworks/cloudtower-go-sdk v1.9.0
+	github.com/smartxworks/cloudtower-go-sdk/v2 v2.0.0-rc1
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3
 	k8s.io/api v0.23.0
 	k8s.io/apiextensions-apiserver v0.23.0

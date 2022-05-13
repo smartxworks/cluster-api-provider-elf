@@ -8,7 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	models "github.com/smartxworks/cloudtower-go-sdk/models"
+	models "github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	v1beta1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	v1beta10 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
