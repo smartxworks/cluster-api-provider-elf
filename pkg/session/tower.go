@@ -20,9 +20,9 @@ import (
 	"github.com/go-openapi/runtime"
 	openapiclient "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
-	towerclient "github.com/smartxworks/cloudtower-go-sdk/client"
-	clientuser "github.com/smartxworks/cloudtower-go-sdk/client/user"
-	"github.com/smartxworks/cloudtower-go-sdk/models"
+	towerclient "github.com/smartxworks/cloudtower-go-sdk/v2/client"
+	clientuser "github.com/smartxworks/cloudtower-go-sdk/v2/client/user"
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )

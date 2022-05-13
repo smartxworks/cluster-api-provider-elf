@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/smartxworks/cloudtower-go-sdk/models"
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )

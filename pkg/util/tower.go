@@ -40,14 +40,14 @@ func TowerCPU(cpu int32) *int32 {
 	return &cpu
 }
 
-func TowerMemory(memoryMiB int64) *float64 {
-	memory := float64(memoryMiB) * 1024 * 1024
+func TowerMemory(memoryMiB int64) *int64 {
+	memory := memoryMiB * 1024 * 1024
 
 	return &memory
 }
 
-func TowerDisk(diskGiB int32) *float64 {
-	disk := float64(diskGiB)
+func TowerDisk(diskGiB int32) *int64 {
+	disk := int64(diskGiB)
 	disk = disk * 1024 * 1024 * 1024
 
 	return &disk

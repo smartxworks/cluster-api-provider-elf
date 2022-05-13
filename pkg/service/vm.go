@@ -22,13 +22,13 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	clientcluster "github.com/smartxworks/cloudtower-go-sdk/client/cluster"
-	clienthost "github.com/smartxworks/cloudtower-go-sdk/client/host"
-	clienttask "github.com/smartxworks/cloudtower-go-sdk/client/task"
-	clientvlan "github.com/smartxworks/cloudtower-go-sdk/client/vlan"
-	clientvm "github.com/smartxworks/cloudtower-go-sdk/client/vm"
-	clientvmtemplate "github.com/smartxworks/cloudtower-go-sdk/client/vm_template"
-	"github.com/smartxworks/cloudtower-go-sdk/models"
+	clientcluster "github.com/smartxworks/cloudtower-go-sdk/v2/client/cluster"
+	clienthost "github.com/smartxworks/cloudtower-go-sdk/v2/client/host"
+	clienttask "github.com/smartxworks/cloudtower-go-sdk/v2/client/task"
+	clientvlan "github.com/smartxworks/cloudtower-go-sdk/v2/client/vlan"
+	clientvm "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm"
+	clientvmtemplate "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_template"
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
@@ -118,7 +118,7 @@ func (svr *TowerVMService) Clone(
 	}}
 
 	nics := make([]*models.VMNicParams, 0, len(elfMachine.Spec.Network.Devices))
-	networks := make([]*models.VMCreateVMFromTemplateParamsCloudInitNetworksItems0, 0, len(elfMachine.Spec.Network.Devices))
+	networks := make([]*models.CloudInitNetWork, 0, len(elfMachine.Spec.Network.Devices))
 	for i := 0; i < len(elfMachine.Spec.Network.Devices); i++ {
 		device := elfMachine.Spec.Network.Devices[i]
 
@@ -147,7 +147,7 @@ func (svr *TowerVMService) Clone(
 			ipAddress = device.IPAddrs[0]
 		}
 
-		routes := make([]*models.VMCreateVMFromTemplateParamsCloudInitNetworksItems0RoutesItems0, 0, len(device.Routes))
+		routes := make([]*models.CloudInitNetWorkRoute, 0, len(device.Routes))
 		for _, route := range device.Routes {
 			netmask := route.Netmask
 			if netmask == "" {
@@ -158,14 +158,14 @@ func (svr *TowerVMService) Clone(
 				network = "0.0.0.0"
 			}
 
-			routes = append(routes, &models.VMCreateVMFromTemplateParamsCloudInitNetworksItems0RoutesItems0{
+			routes = append(routes, &models.CloudInitNetWorkRoute{
 				Gateway: util.TowerString(route.Gateway),
 				Netmask: util.TowerString(netmask),
 				Network: util.TowerString(network),
 			})
 		}
 
-		networks = append(networks, &models.VMCreateVMFromTemplateParamsCloudInitNetworksItems0{
+		networks = append(networks, &models.CloudInitNetWork{
 			NicIndex:  util.TowerInt32(device.NetworkIndex),
 			Type:      &networkType,
 			IPAddress: util.TowerString(ipAddress),
