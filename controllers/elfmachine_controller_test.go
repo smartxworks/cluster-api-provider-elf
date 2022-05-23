@@ -43,6 +43,7 @@ import (
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service/mock_services"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
@@ -278,7 +279,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("VM_DUPLICATE"))
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New(service.VMDuplicate))
 			mockVMService.EXPECT().GetByName(machine.Name).Return(vm, nil)
 			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
 
@@ -326,13 +327,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(nil, errors.New("VM_NOT_FOUND"))
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(nil, errors.New(service.VMNotFound))
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
-			Expect(err.Error()).To(ContainSubstring("VM_NOT_FOUND"))
+			Expect(err.Error()).To(ContainSubstring(service.VMNotFound))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(*elfMachine.Status.FailureReason).To(Equal(capierrors.UpdateMachineError))
@@ -351,7 +352,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(nil, errors.New("VM_NOT_FOUND"))
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(nil, errors.New(service.VMNotFound))
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
@@ -603,7 +604,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			vmNotFoundError := errors.New("VM_NOT_FOUND")
+			vmNotFoundError := errors.New(service.VMNotFound)
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(nil, vmNotFoundError)
 
 			buf := new(bytes.Buffer)

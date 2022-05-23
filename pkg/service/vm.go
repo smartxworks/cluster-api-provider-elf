@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	clientcluster "github.com/smartxworks/cloudtower-go-sdk/v2/client/cluster"
 	clienthost "github.com/smartxworks/cloudtower-go-sdk/v2/client/host"
@@ -228,10 +227,12 @@ func (svr *TowerVMService) Clone(
 }
 
 // Delete destroys a virtual machine.
-func (svr *TowerVMService) Delete(uuid string) (*models.Task, error) {
+func (svr *TowerVMService) Delete(id string) (*models.Task, error) {
 	deleteVMParams := clientvm.NewDeleteVMParams()
 	deleteVMParams.RequestBody = &models.VMOperateParams{
-		Where: &models.VMWhereInput{LocalID: util.TowerString(uuid)},
+		Where: &models.VMWhereInput{
+			OR: []*models.VMWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+		},
 	}
 
 	deleteVMResp, err := svr.Session.VM.DeleteVM(deleteVMParams)
@@ -239,14 +240,20 @@ func (svr *TowerVMService) Delete(uuid string) (*models.Task, error) {
 		return nil, err
 	}
 
+	if len(deleteVMResp.Payload) == 0 {
+		return nil, errors.New(VMNotFound)
+	}
+
 	return &models.Task{ID: deleteVMResp.Payload[0].TaskID}, nil
 }
 
 // PowerOff powers off a virtual machine.
-func (svr *TowerVMService) PowerOff(uuid string) (*models.Task, error) {
+func (svr *TowerVMService) PowerOff(id string) (*models.Task, error) {
 	shutDownVMParams := clientvm.NewShutDownVMParams()
 	shutDownVMParams.RequestBody = &models.VMOperateParams{
-		Where: &models.VMWhereInput{LocalID: util.TowerString(uuid)},
+		Where: &models.VMWhereInput{
+			OR: []*models.VMWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+		},
 	}
 
 	shutDownVMResp, err := svr.Session.VM.ShutDownVM(shutDownVMParams)
@@ -254,19 +261,29 @@ func (svr *TowerVMService) PowerOff(uuid string) (*models.Task, error) {
 		return nil, err
 	}
 
+	if len(shutDownVMResp.Payload) == 0 {
+		return nil, errors.New(VMNotFound)
+	}
+
 	return &models.Task{ID: shutDownVMResp.Payload[0].TaskID}, nil
 }
 
 // PowerOn powers on a virtual machine.
-func (svr *TowerVMService) PowerOn(uuid string) (*models.Task, error) {
+func (svr *TowerVMService) PowerOn(id string) (*models.Task, error) {
 	startVMParams := clientvm.NewStartVMParams()
 	startVMParams.RequestBody = &models.VMStartParams{
-		Where: &models.VMWhereInput{LocalID: util.TowerString(uuid)},
+		Where: &models.VMWhereInput{
+			OR: []*models.VMWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+		},
 	}
 
 	startVMResp, err := svr.Session.VM.StartVM(startVMParams)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(startVMResp.Payload) == 0 {
+		return nil, errors.New(VMNotFound)
 	}
 
 	return &models.Task{ID: startVMResp.Payload[0].TaskID}, nil
@@ -287,7 +304,7 @@ func (svr *TowerVMService) Get(id string) (*models.VM, error) {
 	}
 
 	if len(getVmsResp.Payload) == 0 {
-		return nil, errors.New("VM_NOT_FOUND")
+		return nil, errors.New(VMNotFound)
 	}
 
 	return getVmsResp.Payload[0], nil
@@ -308,7 +325,7 @@ func (svr *TowerVMService) GetByName(name string) (*models.VM, error) {
 	}
 
 	if len(getVmsResp.Payload) == 0 {
-		return nil, errors.New("VM_NOT_FOUND")
+		return nil, errors.New(VMNotFound)
 	}
 
 	return getVmsResp.Payload[0], nil
@@ -329,7 +346,7 @@ func (svr *TowerVMService) GetCluster(id string) (*models.Cluster, error) {
 	}
 
 	if len(getClustersResp.Payload) == 0 {
-		return nil, errors.New("CLUSTER_NOT_FOUND")
+		return nil, errors.New(ClusterNotFound)
 	}
 
 	return getClustersResp.Payload[0], nil
@@ -349,7 +366,7 @@ func (svr *TowerVMService) GetHost(id string) (*models.Host, error) {
 	}
 
 	if len(getHostsResp.Payload) == 0 {
-		return nil, errors.New("HOST_NOT_FOUND")
+		return nil, errors.New(HostNotFound)
 	}
 
 	return getHostsResp.Payload[0], nil
@@ -360,7 +377,7 @@ func (svr *TowerVMService) GetVlan(id string) (*models.Vlan, error) {
 	getVlansParams := clientvlan.NewGetVlansParams()
 	getVlansParams.RequestBody = &models.GetVlansRequestBody{
 		Where: &models.VlanWhereInput{
-			LocalID: util.TowerString(id),
+			OR: []*models.VlanWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
 		},
 	}
 
@@ -370,22 +387,18 @@ func (svr *TowerVMService) GetVlan(id string) (*models.Vlan, error) {
 	}
 
 	if len(getVlansResp.Payload) == 0 {
-		return nil, errors.New("VLAN_NOT_FOUND")
+		return nil, errors.New(VlanNotFound)
 	}
 
 	return getVlansResp.Payload[0], nil
 }
 
 // GetVMTemplate searches for a virtual machine template.
-func (svr *TowerVMService) GetVMTemplate(templateUUID string) (*models.VMTemplate, error) {
-	if _, err := uuid.Parse(templateUUID); err != nil {
-		return nil, err
-	}
-
+func (svr *TowerVMService) GetVMTemplate(id string) (*models.VMTemplate, error) {
 	getVMTemplatesParams := clientvmtemplate.NewGetVMTemplatesParams()
 	getVMTemplatesParams.RequestBody = &models.GetVMTemplatesRequestBody{
 		Where: &models.VMTemplateWhereInput{
-			LocalID: util.TowerString(templateUUID),
+			OR: []*models.VMTemplateWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
 		},
 	}
 	getVMTemplatesResp, err := svr.Session.VMTemplate.GetVMTemplates(getVMTemplatesParams)
@@ -395,7 +408,7 @@ func (svr *TowerVMService) GetVMTemplate(templateUUID string) (*models.VMTemplat
 
 	vmTemplates := getVMTemplatesResp.Payload
 	if len(vmTemplates) == 0 {
-		return nil, errors.New("VM_TEMPLATE_NOT_FOUND")
+		return nil, errors.New(VMTemplateNotFound)
 	}
 
 	return vmTemplates[0], nil
@@ -416,7 +429,7 @@ func (svr *TowerVMService) GetTask(id string) (*models.Task, error) {
 	}
 
 	if len(getTasksResp.Payload) == 0 {
-		return nil, errors.New("TASK_NOT_FOUND")
+		return nil, errors.New(TaskNotFound)
 	}
 
 	return getTasksResp.Payload[0], nil
