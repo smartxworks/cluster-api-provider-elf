@@ -40,7 +40,7 @@ type NetworkType string
 
 // Network types.
 const (
-	NetworkTypeNone     NetworkType = ""
+	NetworkTypeNone     NetworkType = "NONE"
 	NetworkTypeIPV4     NetworkType = "IPV4"
 	NetworkTypeIPV4DHCP NetworkType = "IPV4_DHCP"
 )
@@ -141,6 +141,10 @@ type NetworkDeviceSpec struct {
 	// Required when DHCP4 is false.
 	// +optional
 	Routes []NetworkDeviceRouteSpec `json:"routes,omitempty"`
+}
+
+func (d *NetworkDeviceSpec) HasNetworkType() bool {
+	return !(d.NetworkType == "" || d.NetworkType == NetworkTypeNone)
 }
 
 // NetworkDeviceRouteSpec defines the network configuration for a virtual machine's

@@ -134,7 +134,7 @@ func (svr *TowerVMService) Clone(
 			MacAddress:    util.TowerString(device.MACAddr),
 		})
 
-		if device.NetworkType == infrav1.NetworkTypeNone {
+		if !device.HasNetworkType() {
 			continue
 		}
 

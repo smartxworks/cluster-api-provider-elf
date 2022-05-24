@@ -51,9 +51,8 @@ spec:
       diskGiB: ${CONTROL_PLANE_MACHINE_DISK_GB:-40}
       network:
         devices:
-          - networkIndex: 0
-            networkType: ipv4_dhcp
-            vlan: '${ELF_VLAN}'
+        - networkType: IPV4_DHCP
+          vlan: '${ELF_VLAN}'
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: KubeadmControlPlane
@@ -174,9 +173,8 @@ spec:
       diskGiB: ${WORKER_MACHINE_DISK_GB:-40}
       network:
         devices:
-          - networkIndex: 0
-            networkType: ipv4_dhcp
-            vlan: '${ELF_VLAN}'
+        - networkType: IPV4_DHCP
+          vlan: '${ELF_VLAN}'
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
