@@ -195,8 +195,7 @@ func TestGetNetworkStatus(t *testing.T) {
 			name: "valid IP",
 			ips:  "116.116.116.116",
 			networkStatus: []infrav1.NetworkStatus{{
-				NetworkIndex: 0,
-				IPAddrs:      []string{"116.116.116.116"},
+				IPAddrs: []string{"116.116.116.116"},
 			}},
 		},
 	}

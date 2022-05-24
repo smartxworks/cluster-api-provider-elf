@@ -17,8 +17,6 @@ limitations under the License.
 package service
 
 import (
-	"strings"
-
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -136,9 +134,13 @@ func (svr *TowerVMService) Clone(
 			MacAddress:    util.TowerString(device.MACAddr),
 		})
 
+		if device.NetworkType == infrav1.NetworkTypeNone {
+			continue
+		}
+
 		// networks
 		networkType := models.CloudInitNetworkTypeEnumIPV4DHCP
-		if strings.ToUpper(device.NetworkType) == string(models.CloudInitNetworkTypeEnumIPV4) {
+		if string(device.NetworkType) == string(models.CloudInitNetworkTypeEnumIPV4) {
 			networkType = models.CloudInitNetworkTypeEnumIPV4
 		}
 
@@ -166,7 +168,7 @@ func (svr *TowerVMService) Clone(
 		}
 
 		networks = append(networks, &models.CloudInitNetWork{
-			NicIndex:  util.TowerInt32(device.NetworkIndex),
+			NicIndex:  util.TowerInt32(i),
 			Type:      &networkType,
 			IPAddress: util.TowerString(ipAddress),
 			Netmask:   util.TowerString(device.Netmask),

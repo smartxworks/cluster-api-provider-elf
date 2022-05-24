@@ -116,14 +116,13 @@ func GetNetworkStatus(ipsStr string) []infrav1.NetworkStatus {
 	}
 
 	ips := strings.Split(ipsStr, ",")
-	for index, ip := range ips {
+	for _, ip := range ips {
 		if ip == "127.0.0.1" || strings.HasPrefix(ip, "169.254.") || strings.HasPrefix(ip, "172.17.0") {
 			continue
 		}
 
 		networks = append(networks, infrav1.NetworkStatus{
-			NetworkIndex: index,
-			IPAddrs:      []string{ip},
+			IPAddrs: []string{ip},
 		})
 	}
 
