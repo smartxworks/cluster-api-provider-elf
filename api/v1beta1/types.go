@@ -35,6 +35,16 @@ const (
 	FastClone CloneMode = "FastClone"
 )
 
+// NetworkType is the VM network type.
+type NetworkType string
+
+// Network types.
+const (
+	NetworkTypeNone     NetworkType = "NONE"
+	NetworkTypeIPV4     NetworkType = "IPV4"
+	NetworkTypeIPV4DHCP NetworkType = "IPV4_DHCP"
+)
+
 type Tower struct {
 	// Server is address of the tower server.
 	Server string `json:"server,omitempty"`
@@ -91,8 +101,6 @@ type NetworkStatus struct {
 	// NetworkName is the name of the network.
 	// +optional
 	NetworkName string `json:"networkName,omitempty"`
-
-	NetworkIndex int `json:"networkIndex"`
 }
 
 // NetworkSpec defines the virtual machine's network configuration.
@@ -108,9 +116,7 @@ type NetworkSpec struct {
 // NetworkDeviceSpec defines the network configuration for a virtual machine's
 // network device.
 type NetworkDeviceSpec struct {
-	NetworkIndex int `json:"networkIndex"`
-
-	NetworkType string `json:"networkType"`
+	NetworkType NetworkType `json:"networkType"`
 
 	// Vlan is the virtual LAN used by the virtual machine.
 	Vlan string `json:"vlan,omitempty"`
@@ -135,6 +141,10 @@ type NetworkDeviceSpec struct {
 	// Required when DHCP4 is false.
 	// +optional
 	Routes []NetworkDeviceRouteSpec `json:"routes,omitempty"`
+}
+
+func (d *NetworkDeviceSpec) HasNetworkType() bool {
+	return !(d.NetworkType == "" || d.NetworkType == NetworkTypeNone)
 }
 
 // NetworkDeviceRouteSpec defines the network configuration for a virtual machine's

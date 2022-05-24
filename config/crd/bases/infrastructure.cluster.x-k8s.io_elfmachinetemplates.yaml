@@ -93,9 +93,8 @@ spec:
                                   description: Netmask is the subnet mask used by
                                     this device. Required when DHCP4 is false.
                                   type: string
-                                networkIndex:
-                                  type: integer
                                 networkType:
+                                  description: NetworkType is the VM network type.
                                   type: string
                                 routes:
                                   description: Required when DHCP4 is false.
@@ -123,7 +122,6 @@ spec:
                                     virtual machine.
                                   type: string
                               required:
-                              - networkIndex
                               - networkType
                               type: object
                             type: array

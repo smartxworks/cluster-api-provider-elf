@@ -291,7 +291,9 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 	ctx.Logger.Info("Reconciling ElfMachine delete")
 
 	if !ctx.ElfMachine.HasVM() || !ctx.ElfMachine.WithVM() {
-		ctx.Logger.Info("VM has been deleted")
+		ctx.Logger.Info("VM already deleted")
+
+		ctrlutil.RemoveFinalizer(ctx.ElfMachine, infrav1.MachineFinalizer)
 
 		return reconcile.Result{}, nil
 	}

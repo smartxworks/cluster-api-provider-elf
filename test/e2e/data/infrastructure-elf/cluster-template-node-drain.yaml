@@ -201,8 +201,7 @@ spec:
       ha: true
       network:
         devices:
-        - networkIndex: 0
-          networkType: ipv4_dhcp
+        - networkType: IPV4_DHCP
           vlan: ${ELF_VLAN}
       template: ${ELF_TEMPLATE}
 ---
@@ -218,7 +217,6 @@ spec:
       ha: true
       network:
         devices:
-        - networkIndex: 0
-          networkType: ipv4_dhcp
+        - networkType: IPV4_DHCP
           vlan: ${ELF_VLAN}
       template: ${ELF_TEMPLATE}

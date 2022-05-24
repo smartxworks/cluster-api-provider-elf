@@ -554,7 +554,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 			_, _ = reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
-			Expect(elfMachine.Status.Network[0].NetworkIndex).To(Equal(0))
 			Expect(elfMachine.Status.Network[0].IPAddrs[0]).To(Equal(ip))
 			Expect(elfMachine.Status.Addresses[0].Type).To(Equal(clusterv1.MachineInternalIP))
 			Expect(elfMachine.Status.Addresses[0].Address).To(Equal(ip))
@@ -572,7 +571,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
 		})
 
-		It("should not error and not requeue the request without VM", func() {
+		It("should delete ElfMachine without VM", func() {
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
 
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
@@ -585,12 +584,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result).To(BeZero())
-			Expect(err).Should(BeNil())
-			Expect(elfMachine.HasVM()).To(BeFalse())
-			Expect(elfMachine.HasTask()).To(BeFalse())
-			Expect(buf.String()).To(ContainSubstring("VM has been deleted"))
-			elfMachine = &infrav1.ElfMachine{}
-			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(err).To(HaveOccurred())
+			Expect(buf.String()).To(ContainSubstring("VM already deleted"))
+			elfCluster = &infrav1.ElfCluster{}
+			err = reconciler.Client.Get(reconciler, elfMachineKey, elfCluster)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
 		It("should remove vmRef when VM not found", func() {

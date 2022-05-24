@@ -84,9 +84,8 @@ spec:
                           description: Netmask is the subnet mask used by this device.
                             Required when DHCP4 is false.
                           type: string
-                        networkIndex:
-                          type: integer
                         networkType:
+                          description: NetworkType is the VM network type.
                           type: string
                         routes:
                           description: Required when DHCP4 is false.
@@ -113,7 +112,6 @@ spec:
                             machine.
                           type: string
                       required:
-                      - networkIndex
                       - networkType
                       type: object
                     type: array
@@ -262,14 +260,11 @@ spec:
                     macAddr:
                       description: MACAddr is the MAC address of the network device.
                       type: string
-                    networkIndex:
-                      type: integer
                     networkName:
                       description: NetworkName is the name of the network.
                       type: string
                   required:
                   - macAddr
-                  - networkIndex
                   type: object
                 type: array
               ready:
