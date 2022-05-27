@@ -75,9 +75,14 @@ spec:
         extraArgs:
       controllerManager:
         extraArgs:
+          bind-address: 0.0.0.0
+      scheduler:
+        extraArgs:
+          bind-address: 0.0.0.0
     initConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
+          pod-infra-container-image: registry.cn-hangzhou.aliyuncs.com/google_containers/pause:3.6
         name: '{{ ds.meta_data.hostname }}'
     preKubeadmCommands:
       - hostname "{{ ds.meta_data.hostname }}"
@@ -85,6 +90,7 @@ spec:
       - echo "127.0.0.1   localhost" >>/etc/hosts
       - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
       - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
+      - '[ -f "/run/kubeadm/kubeadm.yaml" ] && printf "\n---\napiVersion: kubeproxy.config.k8s.io/v1alpha1\nkind: KubeProxyConfiguration\nmetricsBindAddress: 0.0.0.0:10249\n" >> /run/kubeadm/kubeadm.yaml'
     useExperimentalRetryJoin: true
     files:
     - content: |
@@ -144,11 +150,18 @@ spec:
   template:
     spec:
       clusterConfiguration:
+        controllerManager:
+          extraArgs:
+            bind-address: 0.0.0.0
+        scheduler:
+          extraArgs:
+            bind-address: 0.0.0.0
         clusterName: '${CLUSTER_NAME}'
         imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
       joinConfiguration:
         nodeRegistration:
           kubeletExtraArgs:
+            pod-infra-container-image: registry.cn-hangzhou.aliyuncs.com/google_containers/pause:3.6
           name: '{{ ds.meta_data.hostname }}'
       preKubeadmCommands:
         - hostname "{{ ds.meta_data.hostname }}"
