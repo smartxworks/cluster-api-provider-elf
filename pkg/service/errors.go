@@ -27,6 +27,8 @@ const (
 	VMDuplicate        = "VM_DUPLICATE"
 	TaskNotFound       = "TASK_NOT_FOUND"
 	VlanNotFound       = "VLAN_NOT_FOUND"
+	LabelCreateFailed  = "LABEL_CREATE_FAILED"
+	LabelAddFailed     = "LABEL_ADD_FAILED"
 )
 
 func IsVMNotFound(err error) bool {

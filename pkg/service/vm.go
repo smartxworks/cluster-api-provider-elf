@@ -23,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 	clientcluster "github.com/smartxworks/cloudtower-go-sdk/v2/client/cluster"
 	clienthost "github.com/smartxworks/cloudtower-go-sdk/v2/client/host"
+	clientlabel "github.com/smartxworks/cloudtower-go-sdk/v2/client/label"
 	clienttask "github.com/smartxworks/cloudtower-go-sdk/v2/client/task"
 	clientvlan "github.com/smartxworks/cloudtower-go-sdk/v2/client/vlan"
 	clientvm "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm"
@@ -51,6 +52,8 @@ type VMService interface {
 	GetCluster(id string) (*models.Cluster, error)
 	GetHost(id string) (*models.Host, error)
 	GetVlan(id string) (*models.Vlan, error)
+	UpsertLabel(key, value string) (*models.Label, error)
+	AddLabelsToVM(vmID string, labels []string) (*models.Task, error)
 }
 
 func NewVMService(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error) {
@@ -437,4 +440,59 @@ func (svr *TowerVMService) GetTask(id string) (*models.Task, error) {
 	}
 
 	return getTasksResp.Payload[0], nil
+}
+
+// UpsertLabel upserts a label.
+func (svr *TowerVMService) UpsertLabel(key, value string) (*models.Label, error) {
+	getLabelParams := clientlabel.NewGetLabelsParams()
+	getLabelParams.RequestBody = &models.GetLabelsRequestBody{
+		Where: &models.LabelWhereInput{
+			Key:   util.TowerString(key),
+			Value: util.TowerString(value),
+		},
+	}
+	getLabelResp, err := svr.Session.Label.GetLabels(getLabelParams)
+	if err != nil {
+		return nil, err
+	}
+	if len(getLabelResp.Payload) > 0 {
+		return getLabelResp.Payload[0], nil
+	}
+
+	createLabelParams := clientlabel.NewCreateLabelParams()
+	createLabelParams.RequestBody = []*models.LabelCreationParams{
+		{Key: &key, Value: &value},
+	}
+	createLabelResp, err := svr.Session.Label.CreateLabel(createLabelParams)
+	if err != nil {
+		return nil, err
+	}
+	if len(createLabelResp.Payload) == 0 {
+		return nil, errors.New(LabelCreateFailed)
+	}
+
+	return createLabelResp.Payload[0].Data, nil
+}
+
+// AddLabelsToVM adds a label to a VM.
+func (svr *TowerVMService) AddLabelsToVM(vmID string, labelIds []string) (*models.Task, error) {
+	addLabelsParams := clientlabel.NewAddLabelsToResourcesParams()
+	addLabelsParams.RequestBody = &models.AddLabelsToResourcesParams{
+		Where: &models.LabelWhereInput{
+			IDIn: labelIds,
+		},
+		Data: &models.AddLabelsToResourcesParamsData{
+			Vms: &models.VMWhereInput{
+				ID: util.TowerString(vmID),
+			},
+		},
+	}
+	addLabelsResp, err := svr.Session.Label.AddLabelsToResources(addLabelsParams)
+	if err != nil {
+		return nil, err
+	}
+	if len(addLabelsResp.Payload) == 0 {
+		return nil, errors.New(LabelAddFailed)
+	}
+	return &models.Task{ID: addLabelsResp.Payload[0].TaskID}, nil
 }

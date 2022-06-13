@@ -370,6 +370,12 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 
 		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
 	}
+	// Reconcile the ElfMachine's Labels using the cluster info
+	if len(vm.Labels) == 0 {
+		if ok, err := r.reconcileLabels(ctx, vm); !ok {
+			return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile labels")
+		}
+	}
 
 	// Reconcile the ElfMachine's providerID using the VM's UUID.
 	if ok, err := r.reconcileProviderID(ctx, vm); !ok {
@@ -662,4 +668,26 @@ func (r *ElfMachineReconciler) getBootstrapData(ctx *context.MachineContext) (st
 	}
 
 	return string(value), nil
+}
+
+func (r *ElfMachineReconciler) reconcileLabels(ctx *context.MachineContext, vm *models.VM) (bool, error) {
+	namespaceLabel, err := ctx.VMService.UpsertLabel("namespace", ctx.ElfMachine.Namespace)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to upsert namespace label")
+	}
+	clusterNameLabel, err := ctx.VMService.UpsertLabel("cluster-name", ctx.ElfCluster.Name)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to upsert cluster name label")
+	}
+	creatorLabel, err := ctx.VMService.UpsertLabel("created-by", "sks")
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to upsert created by label")
+	}
+	labelIds := []string{*namespaceLabel.ID, *clusterNameLabel.ID, *creatorLabel.ID}
+	r.Logger.Info("Upsert Labels", "labelIds", labelIds)
+	_, err = ctx.VMService.AddLabelsToVM(*vm.ID, labelIds)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
