@@ -18,6 +18,7 @@ package session
 
 import (
 	goctx "context"
+	"fmt"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -41,7 +42,7 @@ type TowerSession struct {
 func GetOrCreate(ctx goctx.Context, tower infrav1.Tower) (*TowerSession, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName("session").WithValues("server", tower.Server, "username", tower.Username, "source", tower.AuthMode)
 
-	sessionKey := tower.Server + tower.Username + tower.AuthMode
+	sessionKey := getSessionKey(tower)
 	if cachedSession, ok := sessionCache.Load(sessionKey); ok {
 		session := cachedSession.(*TowerSession)
 		logger.V(3).Info("found active cached tower client session")
@@ -69,4 +70,8 @@ func GetOrCreate(ctx goctx.Context, tower infrav1.Tower) (*TowerSession, error) 
 	logger.V(3).Info("cached tower client session")
 
 	return session, nil
+}
+
+func getSessionKey(tower infrav1.Tower) string {
+	return fmt.Sprintf("%s-%s-%s", tower.Server, tower.Username, tower.AuthMode)
 }

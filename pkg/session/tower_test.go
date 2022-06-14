@@ -15,7 +15,7 @@ func TestGetOrCreate(t *testing.T) {
 	t.Run("should get cached session", func(t *testing.T) {
 		tower := infrav1.Tower{Server: "127.0.0.1", Username: "tower", Password: "tower"}
 
-		sessionKey := tower.Server + tower.Username + tower.AuthMode
+		sessionKey := getSessionKey(tower)
 		cachedSession := &TowerSession{}
 		sessionCache.Store(sessionKey, cachedSession)
 
