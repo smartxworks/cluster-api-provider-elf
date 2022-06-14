@@ -17,39 +17,56 @@ limitations under the License.
 package session
 
 import (
-	"github.com/go-openapi/runtime"
-	openapiclient "github.com/go-openapi/runtime/client"
-	"github.com/go-openapi/strfmt"
+	goctx "context"
+	"sync"
+
+	"github.com/pkg/errors"
 	towerclient "github.com/smartxworks/cloudtower-go-sdk/v2/client"
-	clientuser "github.com/smartxworks/cloudtower-go-sdk/v2/client/user"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
+
+// global Session map against sessionKeys
+// in map[sessionKey]Session.
+var sessionCache sync.Map
 
 type TowerSession struct {
 	*towerclient.Cloudtower
 }
 
-func NewTowerSession(tower infrav1.Tower) (*TowerSession, error) {
-	transport := openapiclient.New(tower.Server, "/v2/api", []string{"http"})
-	client := towerclient.New(transport, strfmt.Default)
+// GetOrCreate gets a cached session or creates a new one if one does not
+// already exist.
+func GetOrCreate(ctx goctx.Context, tower infrav1.Tower) (*TowerSession, error) {
+	logger := ctrl.LoggerFrom(ctx).WithName("session").WithValues("server", tower.Server, "username", tower.Username, "source", tower.AuthMode)
 
-	loginParams := clientuser.NewLoginParams()
-	loginParams.RequestBody = &models.LoginInput{
-		Username: &tower.Username,
-		Password: &tower.Password,
-		Source:   models.NewUserSource(models.UserSource(tower.AuthMode)),
+	sessionKey := tower.Server + tower.Username + tower.AuthMode
+	if cachedSession, ok := sessionCache.Load(sessionKey); ok {
+		session := cachedSession.(*TowerSession)
+		logger.V(3).Info("found active cached tower client session")
+
+		return session, nil
 	}
 
-	loginResp, err := client.User.Login(loginParams, func(*runtime.ClientOperation) {})
+	client, err := towerclient.NewWithUserConfig(towerclient.ClientConfig{
+		Host:     tower.Server,
+		BasePath: "/v2/api",
+		Schemes:  []string{"http"},
+	}, towerclient.UserConfig{
+		Name:     tower.Username,
+		Password: tower.Password,
+		Source:   models.UserSource(tower.AuthMode),
+	})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create tower client")
 	}
 
-	token := openapiclient.BearerToken(*loginResp.Payload.Data.Token)
-	transport.DefaultAuthentication = token
-	client = towerclient.New(transport, strfmt.Default)
+	session := &TowerSession{client}
 
-	return &TowerSession{client}, nil
+	// Cache the session.
+	sessionCache.Store(sessionKey, session)
+	logger.V(3).Info("cached tower client session")
+
+	return session, nil
 }

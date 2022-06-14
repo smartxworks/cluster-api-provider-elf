@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	corev1 "k8s.io/api/core/v1"
@@ -61,7 +62,7 @@ import (
 // ElfMachineReconciler reconciles a ElfMachine object.
 type ElfMachineReconciler struct {
 	*context.ControllerContext
-	VMService service.VMService
+	NewVMService func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (service.VMService, error)
 }
 
 // AddMachineControllerToManager adds the machine controller to the provided
@@ -82,7 +83,10 @@ func AddMachineControllerToManager(ctx *context.ControllerManagerContext, mgr ct
 		Logger:                   ctx.Logger.WithName(controllerNameShort),
 	}
 
-	reconciler := &ElfMachineReconciler{ControllerContext: controllerContext}
+	reconciler := &ElfMachineReconciler{
+		ControllerContext: controllerContext,
+		NewVMService:      service.NewVMService,
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		// Watch the controlled, infrastructure resource.
@@ -161,9 +165,19 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 			elfMachine.Name)
 	}
 
-	// Create the machine context for this request.
 	logger := r.Logger.WithValues("namespace", elfMachine.Namespace,
 		"elfCluster", elfCluster.Name, "elfMachine", elfMachine.Name)
+
+	// Create the vm service.
+	vmService, err := r.NewVMService(r.Context, elfCluster.GetTower(), logger)
+	if err != nil {
+		conditions.MarkFalse(&elfMachine, infrav1.TowerAvailableCondition, infrav1.TowerUnreachableReason, clusterv1.ConditionSeverityError, err.Error())
+
+		return reconcile.Result{}, err
+	}
+	conditions.MarkTrue(&elfMachine, infrav1.TowerAvailableCondition)
+
+	// Create the machine context for this request.
 	machineContext := &context.MachineContext{
 		ControllerContext: r.ControllerContext,
 		Cluster:           cluster,
@@ -172,16 +186,8 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 		ElfMachine:        &elfMachine,
 		Logger:            logger,
 		PatchHelper:       patchHelper,
+		VMService:         vmService,
 	}
-
-	if r.VMService == nil {
-		if r.VMService, err = service.NewVMService(elfCluster.GetTower(), logger); err != nil {
-			conditions.MarkFalse(machineContext.ElfMachine, infrav1.TowerAvailableCondition, infrav1.TowerUnreachableReason, clusterv1.ConditionSeverityError, err.Error())
-
-			return reconcile.Result{}, err
-		}
-	}
-	conditions.MarkTrue(machineContext.ElfMachine, infrav1.TowerAvailableCondition)
 
 	// Always issue a patch when exiting this function so changes to the
 	// resource are patched back to the API server.
@@ -214,7 +220,7 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 }
 
 func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) error {
-	vm, err := r.VMService.Get(ctx.ElfMachine.Status.VMRef)
+	vm, err := ctx.VMService.Get(ctx.ElfMachine.Status.VMRef)
 	if err != nil {
 		if service.IsVMNotFound(err) {
 			ctx.Logger.Info("VM already deleted")
@@ -229,7 +235,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 	if vm.EntityAsyncStatus == nil {
 		var task *models.Task
 		if ctx.ElfMachine.HasTask() {
-			task, _ = r.VMService.GetTask(ctx.ElfMachine.Status.TaskRef)
+			task, _ = ctx.VMService.GetTask(ctx.ElfMachine.Status.TaskRef)
 
 			ctx.ElfMachine.SetTask("")
 		}
@@ -257,7 +263,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 
 	// Power off the VM
 	if *vm.Status == models.VMStatusRUNNING {
-		task, err := r.VMService.PowerOff(ctx.ElfMachine.Status.VMRef)
+		task, err := ctx.VMService.PowerOff(ctx.ElfMachine.Status.VMRef)
 		if err != nil {
 			return err
 		}
@@ -274,7 +280,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 		"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
 
 	// Delete the VM
-	task, err := r.VMService.Delete(ctx.ElfMachine.Status.VMRef)
+	task, err := ctx.VMService.Delete(ctx.ElfMachine.Status.VMRef)
 	if err != nil {
 		return err
 	} else {
@@ -431,10 +437,10 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 
 		ctx.Logger.Info("Create VM for ElfMachine")
 
-		withTaskVM, err := r.VMService.Clone(ctx.ElfCluster, ctx.Machine, ctx.ElfMachine, bootstrapData)
+		withTaskVM, err := ctx.VMService.Clone(ctx.ElfCluster, ctx.Machine, ctx.ElfMachine, bootstrapData)
 		if err != nil {
 			if service.IsVMDuplicate(err) {
-				vm, err := r.VMService.GetByName(ctx.Machine.Name)
+				vm, err := ctx.VMService.GetByName(ctx.Machine.Name)
 				if err != nil {
 					return nil, err
 				}
@@ -454,7 +460,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		}
 	}
 
-	vm, err := r.VMService.Get(ctx.ElfMachine.Status.VMRef)
+	vm, err := ctx.VMService.Get(ctx.ElfMachine.Status.VMRef)
 	if err != nil {
 		if !service.IsVMNotFound(err) {
 			return nil, err
@@ -471,7 +477,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		// Create VM failed
 
 		errorMessage := err.Error()
-		task, _ := r.VMService.GetTask(ctx.ElfMachine.Status.TaskRef)
+		task, _ := ctx.VMService.GetTask(ctx.ElfMachine.Status.TaskRef)
 		if task != nil && *task.Status == models.TaskStatusFAILED && task.ErrorMessage != nil {
 			errorMessage = *task.ErrorMessage
 		}
@@ -489,7 +495,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	if vm.EntityAsyncStatus == nil {
 		var task *models.Task
 		if ctx.ElfMachine.HasTask() {
-			task, _ = r.VMService.GetTask(ctx.ElfMachine.Status.TaskRef)
+			task, _ = ctx.VMService.GetTask(ctx.ElfMachine.Status.TaskRef)
 
 			ctx.ElfMachine.SetTask("")
 		}
@@ -520,7 +526,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 
 	// The newly created VM may need to powered off
 	if *vm.Status == models.VMStatusSTOPPED {
-		task, err := r.VMService.PowerOn(ctx.ElfMachine.Status.VMRef)
+		task, err := ctx.VMService.PowerOn(ctx.ElfMachine.Status.VMRef)
 		if err != nil {
 			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOnFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 

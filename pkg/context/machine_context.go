@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
 // MachineContext is a Go context used with a ElfMachine.
@@ -35,6 +36,7 @@ type MachineContext struct {
 	ElfMachine  *infrav1.ElfMachine
 	Logger      logr.Logger
 	PatchHelper *patch.Helper
+	VMService   service.VMService
 }
 
 // String returns ElfMachineGroupVersionKindElfMachineNamespace/ElfMachineName.
