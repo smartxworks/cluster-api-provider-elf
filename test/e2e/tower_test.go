@@ -17,6 +17,7 @@ limitations under the License.
 package e2e
 
 import (
+	goctx "context"
 	"flag"
 	"os"
 
@@ -42,9 +43,9 @@ func init() {
 	flag.StringVar(&towerServer, "e2e.towerServer", os.Getenv("TOWER_SERVER"), "the tower server used for e2e tests")
 }
 
-func initElfSession() {
+func initTowerSession() {
 	var err error
-	vmService, err = service.NewVMService(infrav1.Tower{
+	vmService, err = service.NewVMService(goctx.Background(), infrav1.Tower{
 		Server:   towerServer,
 		Username: towerUsername,
 		Password: towerPassword,

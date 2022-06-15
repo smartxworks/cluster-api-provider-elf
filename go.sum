@@ -882,8 +882,8 @@ github.com/sirupsen/logrus v1.6.0/go.mod h1:7uNnSEd1DgxDLC74fIahvMZmmYsHGZGEOFrf
 github.com/sirupsen/logrus v1.7.0/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
 github.com/sirupsen/logrus v1.8.1 h1:dJKuHgqk1NNQlqoA6BTlM1Wf9DOH3NBjQyu0h9+AZZE=
 github.com/sirupsen/logrus v1.8.1/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
-github.com/smartxworks/cloudtower-go-sdk/v2 v2.0.0-rc1 h1:LJf5rfzBPfsXKh0u8QRTB5JnpPCg0GF4KRBWhb/Rmic=
-github.com/smartxworks/cloudtower-go-sdk/v2 v2.0.0-rc1/go.mod h1:BDfvWLTppdFHlw+Ix/eUsPAxUseh6tBUpGxtObEYMRA=
+github.com/smartxworks/cloudtower-go-sdk/v2 v2.0.1-0.20220614053620-27c71da72e4f h1:9Ou9C0BkPyJ9qbUxshZuJc8B8J18rbfWRlzvUNBmyTo=
+github.com/smartxworks/cloudtower-go-sdk/v2 v2.0.1-0.20220614053620-27c71da72e4f/go.mod h1:BDfvWLTppdFHlw+Ix/eUsPAxUseh6tBUpGxtObEYMRA=
 github.com/smartystreets/assertions v0.0.0-20180927180507-b2de0cb4f26d/go.mod h1:OnSkiWE9lh6wB0YB77sQom3nweQdgAjqCqsofrRNTgc=
 github.com/smartystreets/assertions v1.2.0/go.mod h1:tcbTF8ujkAEcZ8TElKY+i30BzYlVhC/LOxJk7iOWnoo=
 github.com/smartystreets/goconvey v0.0.0-20190330032615-68dc04aab96a/go.mod h1:syvi0/a8iFYH4r/RixwvyeAJjdLS9QV7WQ/tjFTllLA=

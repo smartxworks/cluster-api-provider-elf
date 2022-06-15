@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -51,13 +52,14 @@ import (
 
 var _ = Describe("ElfMachineReconciler", func() {
 	var (
-		elfCluster    *infrav1.ElfCluster
-		cluster       *clusterv1.Cluster
-		elfMachine    *infrav1.ElfMachine
-		machine       *clusterv1.Machine
-		secret        *corev1.Secret
-		mockCtrl      *gomock.Controller
-		mockVMService *mock_services.MockVMService
+		elfCluster       *infrav1.ElfCluster
+		cluster          *clusterv1.Cluster
+		elfMachine       *infrav1.ElfMachine
+		machine          *clusterv1.Machine
+		secret           *corev1.Secret
+		mockCtrl         *gomock.Controller
+		mockVMService    *mock_services.MockVMService
+		mockNewVMService func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (service.VMService, error)
 	)
 
 	BeforeEach(func() {
@@ -75,6 +77,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 		// mock
 		mockCtrl = gomock.NewController(GinkgoT())
 		mockVMService = mock_services.NewMockVMService(mockCtrl)
+		// nolint:unparam
+		mockNewVMService = func(_ goctx.Context, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+			return mockVMService, nil
+		}
 	})
 
 	AfterEach(func() {
@@ -126,7 +132,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: capiutil.ObjectKey(elfMachine)})
 			Expect(result).To(BeZero())
@@ -139,7 +145,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, _ = reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -158,7 +164,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -180,7 +186,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -201,7 +207,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -223,7 +229,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -258,7 +264,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -286,7 +292,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -306,7 +312,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("some error"))
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -329,7 +335,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(nil, errors.New(service.VMNotFound))
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -355,7 +361,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(nil, errors.New(service.VMNotFound))
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task, nil)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -390,7 +396,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -423,7 +429,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task1, nil)
 			mockVMService.EXPECT().PowerOn(*vm.LocalID).Return(nil, errors.New("some error"))
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -459,7 +465,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -491,7 +497,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, _ = reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -523,7 +529,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -549,7 +555,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, _ = reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -580,7 +586,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -608,7 +614,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -638,7 +644,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -668,7 +674,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, _ = reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -699,7 +705,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, _ = reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -726,7 +732,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -756,7 +762,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
@@ -786,7 +792,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
 
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, VMService: mockVMService}
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})

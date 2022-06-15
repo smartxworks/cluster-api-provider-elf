@@ -17,6 +17,8 @@ limitations under the License.
 package service
 
 import (
+	goctx "context"
+
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	clientcluster "github.com/smartxworks/cloudtower-go-sdk/v2/client/cluster"
@@ -51,8 +53,8 @@ type VMService interface {
 	GetVlan(id string) (*models.Vlan, error)
 }
 
-func NewVMService(auth infrav1.Tower, logger logr.Logger) (VMService, error) {
-	authSession, err := session.NewTowerSession(auth)
+func NewVMService(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error) {
+	authSession, err := session.GetOrCreate(ctx, auth)
 	if err != nil {
 		return nil, err
 	}
