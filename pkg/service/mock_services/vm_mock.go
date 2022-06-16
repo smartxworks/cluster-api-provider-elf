@@ -200,3 +200,33 @@ func (mr *MockVMServiceMockRecorder) PowerOn(uuid interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PowerOn", reflect.TypeOf((*MockVMService)(nil).PowerOn), uuid)
 }
+
+// UpsertLabel mocks base method.
+func (m *MockVMService) UpsertLabel(key, value string) (*models.Label, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertLabel", key, value)
+	ret0, _ := ret[0].(*models.Label)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpsertLabel indicates an expected call of UpsertLabel.
+func (mr *MockVMServiceMockRecorder) UpsertLabel(key, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertLabel", reflect.TypeOf((*MockVMService)(nil).UpsertLabel), key, value)
+}
+
+// AddLabelsToVM mocks base method.
+func (m *MockVMService) AddLabelsToVM(vmID string, labels []string) (*models.Task, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddLabelsToVM", vmID, labels)
+	ret0, _ := ret[0].(*models.Task)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddLabelsToVM indicates an expected call of AddLabelToVM.
+func (mr *MockVMServiceMockRecorder) AddLabelsToVM(vmID, labels interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddLabelsToVM", reflect.TypeOf((*MockVMService)(nil).AddLabelsToVM), vmID, labels)
+}

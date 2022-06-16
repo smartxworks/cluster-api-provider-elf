@@ -54,3 +54,15 @@ func NewWithTaskVM(vm *models.VM, task *models.Task) *models.WithTaskVM {
 		TaskID: task.ID,
 	}
 }
+
+func NewTowerLabel() *models.Label {
+	id := uuid.New().String()
+	key := uuid.New().String()
+	value := uuid.New().String()
+
+	return &models.Label{
+		ID:    &id,
+		Key:   &key,
+		Value: &value,
+	}
+}
