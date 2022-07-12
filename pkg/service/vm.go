@@ -216,10 +216,9 @@ func (svr *TowerVMService) Clone(
 			},
 		},
 		CloudInit: &models.VMCreateVMFromTemplateParamsCloudInit{
-			Hostname:            util.TowerString(elfMachine.Name),
-			DefaultUserPassword: util.TowerString(config.VMPassword),
-			UserData:            util.TowerString(bootstrapData),
-			Networks:            networks,
+			Hostname: util.TowerString(elfMachine.Name),
+			UserData: util.TowerString(bootstrapData),
+			Networks: networks,
 		},
 	}
 
