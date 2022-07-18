@@ -370,7 +370,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(""))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailure}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
 		})
 
 		It("should power on the VM after it is created", func() {
@@ -660,6 +660,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).To(BeZero())
 			Expect(buf.String()).To(ContainSubstring("Waiting for VM task done"))
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
 		})
 
 		It("should handle task - failed", func() {
@@ -677,7 +680,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task, nil)
-			mockVMService.EXPECT().PowerOff(elfMachine.Status.VMRef).Return(nil, errors.New("some error"))
+			mockVMService.EXPECT().ShutDown(elfMachine.Status.VMRef).Return(task, errors.New("some error"))
 
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
@@ -691,6 +694,44 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, clusterv1.DeletionFailedReason}})
+			Expect(conditions.GetMessage(elfMachine, infrav1.VMProvisionedCondition)).To(Equal("some error"))
+		})
+
+		It("should power off when VM is powered on and shut down failed", func() {
+			vm := fake.NewTowerVM()
+			vm.EntityAsyncStatus = nil
+			task := fake.NewTowerTask()
+			status := models.TaskStatusFAILED
+			task.Status = &status
+			task.ErrorMessage = pointer.String("JOB_VM_SHUTDOWN_TIMEOUT")
+			elfMachine.Status.VMRef = *vm.LocalID
+			elfMachine.Status.TaskRef = *task.ID
+
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task, nil)
+			mockVMService.EXPECT().PowerOff(elfMachine.Status.VMRef).Return(task, nil)
+
+			buf := new(bytes.Buffer)
+			klog.SetOutput(buf)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).To(BeZero())
+			Expect(buf.String()).To(ContainSubstring("VM task failed"))
+			Expect(buf.String()).To(ContainSubstring("Waiting for VM shut down"))
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
+			Expect(conditions.GetMessage(elfMachine, infrav1.VMProvisionedCondition)).To(Equal("JOB_VM_SHUTDOWN_TIMEOUT"))
 		})
 
 		It("should handle task - done", func() {
@@ -708,7 +749,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task, nil)
-			mockVMService.EXPECT().PowerOff(elfMachine.Status.VMRef).Return(nil, errors.New("some error"))
+			mockVMService.EXPECT().ShutDown(elfMachine.Status.VMRef).Return(nil, errors.New("some error"))
 
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
@@ -722,9 +763,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, clusterv1.DeletionFailedReason}})
 		})
 
-		It("should power off when VM is powered on", func() {
+		It("should shut down when VM is powered on", func() {
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
 			task := fake.NewTowerTask()
@@ -735,7 +777,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
-			mockVMService.EXPECT().PowerOff(elfMachine.Status.VMRef).Return(task, nil)
+			mockVMService.EXPECT().ShutDown(elfMachine.Status.VMRef).Return(task, nil)
 
 			buf := new(bytes.Buffer)
 			klog.SetOutput(buf)
@@ -746,11 +788,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).To(BeZero())
-			Expect(buf.String()).To(ContainSubstring("Waiting for VM power off"))
+			Expect(buf.String()).To(ContainSubstring("Waiting for VM shut down"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
 		})
 
 		It("should handle delete error", func() {
@@ -811,6 +854,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
 		})
 	})
 })

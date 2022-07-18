@@ -38,3 +38,7 @@ func IsVMNotFound(err error) bool {
 func IsVMDuplicate(err error) bool {
 	return strings.Contains(err.Error(), VMDuplicate)
 }
+
+func IsShutDownTimeout(message string) bool {
+	return strings.Contains(message, "JOB_VM_SHUTDOWN_TIMEOUT")
+}

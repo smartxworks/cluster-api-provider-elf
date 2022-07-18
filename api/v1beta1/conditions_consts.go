@@ -48,9 +48,9 @@ const (
 	// are automatically re-tried by the controller.
 	CloningFailedReason = "CloningFailed"
 
-	// TaskFailure (Severity=Warning) documents a ElfMachine task failure; the reconcile look will automatically
+	// TaskFailureReason (Severity=Warning) documents a ElfMachine task failure; the reconcile look will automatically
 	// retry the operation, but a user intervention might be required to fix the problem.
-	TaskFailure = "TaskFailure"
+	TaskFailureReason = "TaskFailure"
 
 	// WaitingForNetworkAddressesReason (Severity=Info) documents a ElfMachine waiting for the the machine network
 	// settings to be reported after machine being powered on.
