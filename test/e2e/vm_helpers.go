@@ -25,16 +25,16 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
-// PowerOffVMInput is the input for PowerOffVM.
-type PowerOffVMInput struct {
+// ShutDownVMInput is the input for ShutDownVM.
+type ShutDownVMInput struct {
 	UUID               string
 	VMService          service.VMService
 	WaitVMJobIntervals []interface{}
 }
 
-// PowerOffVM power off a VM.
-func PowerOffVM(ctx context.Context, input PowerOffVMInput) {
-	task, err := input.VMService.PowerOff(input.UUID)
+// ShutDownVM shut down a VM.
+func ShutDownVM(ctx context.Context, input ShutDownVMInput) {
+	task, err := input.VMService.ShutDown(input.UUID)
 	Expect(err).ShouldNot(HaveOccurred())
 
 	Eventually(func() (bool, error) {
@@ -46,7 +46,7 @@ func PowerOffVM(ctx context.Context, input PowerOffVMInput) {
 		if *task.Status == models.TaskStatusSUCCESSED {
 			return true, nil
 		} else if *task.Status == models.TaskStatusFAILED {
-			task, err = input.VMService.PowerOff(input.UUID)
+			task, err = input.VMService.ShutDown(input.UUID)
 
 			return false, err
 		}

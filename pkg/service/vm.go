@@ -45,6 +45,7 @@ type VMService interface {
 	Delete(uuid string) (*models.Task, error)
 	PowerOff(uuid string) (*models.Task, error)
 	PowerOn(uuid string) (*models.Task, error)
+	ShutDown(uuid string) (*models.Task, error)
 	Get(id string) (*models.VM, error)
 	GetByName(name string) (*models.VM, error)
 	GetVMTemplate(templateUUID string) (*models.VMTemplate, error)
@@ -256,23 +257,23 @@ func (svr *TowerVMService) Delete(id string) (*models.Task, error) {
 
 // PowerOff powers off a virtual machine.
 func (svr *TowerVMService) PowerOff(id string) (*models.Task, error) {
-	shutDownVMParams := clientvm.NewShutDownVMParams()
-	shutDownVMParams.RequestBody = &models.VMOperateParams{
+	poweroffVMParams := clientvm.NewPoweroffVMParams()
+	poweroffVMParams.RequestBody = &models.VMOperateParams{
 		Where: &models.VMWhereInput{
 			OR: []*models.VMWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
 		},
 	}
 
-	shutDownVMResp, err := svr.Session.VM.ShutDownVM(shutDownVMParams)
+	poweroffVMResp, err := svr.Session.VM.PoweroffVM(poweroffVMParams)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(shutDownVMResp.Payload) == 0 {
+	if len(poweroffVMResp.Payload) == 0 {
 		return nil, errors.New(VMNotFound)
 	}
 
-	return &models.Task{ID: shutDownVMResp.Payload[0].TaskID}, nil
+	return &models.Task{ID: poweroffVMResp.Payload[0].TaskID}, nil
 }
 
 // PowerOn powers on a virtual machine.
@@ -294,6 +295,27 @@ func (svr *TowerVMService) PowerOn(id string) (*models.Task, error) {
 	}
 
 	return &models.Task{ID: startVMResp.Payload[0].TaskID}, nil
+}
+
+// ShutDown shut down a virtual machine.
+func (svr *TowerVMService) ShutDown(id string) (*models.Task, error) {
+	shutDownVMParams := clientvm.NewShutDownVMParams()
+	shutDownVMParams.RequestBody = &models.VMOperateParams{
+		Where: &models.VMWhereInput{
+			OR: []*models.VMWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+		},
+	}
+
+	shutDownVMResp, err := svr.Session.VM.ShutDownVM(shutDownVMParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(shutDownVMResp.Payload) == 0 {
+		return nil, errors.New(VMNotFound)
+	}
+
+	return &models.Task{ID: shutDownVMResp.Payload[0].TaskID}, nil
 }
 
 // Get searches for a virtual machine.

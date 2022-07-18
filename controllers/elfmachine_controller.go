@@ -246,6 +246,8 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 				errorMessage = *task.ErrorMessage
 			}
 
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, errorMessage)
+
 			ctx.Logger.Error(errors.New("VM task failed"),
 				"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef, "message", errorMessage)
 		} else if task != nil {
@@ -259,18 +261,24 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 		return nil
 	}
 
-	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.DeletingReason, clusterv1.ConditionSeverityInfo, "")
-
-	// Power off the VM
+	// Shut down the VM
 	if *vm.Status == models.VMStatusRUNNING {
-		task, err := ctx.VMService.PowerOff(ctx.ElfMachine.Status.VMRef)
+		var task *models.Task
+		var err error
+		// If shut down timeout, the VM may not be shut down unexpectedly, just power off the VM.
+		if service.IsShutDownTimeout(conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)) {
+			task, err = ctx.VMService.PowerOff(ctx.ElfMachine.Status.VMRef)
+		} else {
+			task, err = ctx.VMService.ShutDown(ctx.ElfMachine.Status.VMRef)
+		}
+
 		if err != nil {
 			return err
 		}
 
 		ctx.ElfMachine.SetTask(*task.ID)
 
-		ctx.Logger.Info("Waiting for VM power off",
+		ctx.Logger.Info("Waiting for VM shut down",
 			"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
 
 		return nil
@@ -295,6 +303,8 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 
 func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (reconcile.Result, error) {
 	ctx.Logger.Info("Reconciling ElfMachine delete")
+
+	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.DeletingReason, clusterv1.ConditionSeverityInfo, "")
 
 	if !ctx.ElfMachine.HasVM() || !ctx.ElfMachine.WithVM() {
 		ctx.Logger.Info("VM already deleted")
@@ -490,7 +500,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 
 		ctx.Logger.Error(errors.New("VM task failed"), "vmRef", ctx.ElfMachine.Status.VMRef, "message", errorMessage)
 
-		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailure, clusterv1.ConditionSeverityInfo, errorMessage)
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, errorMessage)
 
 		ctx.ElfMachine.SetVM("")
 

@@ -86,8 +86,8 @@ var _ = Describe("CAPE HA e2e test", func() {
 		})
 		Expect(len(machines)).Should(Equal(3))
 
-		Logf("Powering off VM")
-		PowerOffVM(ctx, PowerOffVMInput{
+		Logf("Shut down VM")
+		ShutDownVM(ctx, ShutDownVMInput{
 			UUID:               util.ConvertProviderIDToUUID(machines[0].Spec.ProviderID),
 			VMService:          vmService,
 			WaitVMJobIntervals: e2eConfig.GetIntervals(specName, "wait-vm-job"),
