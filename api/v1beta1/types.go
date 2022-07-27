@@ -108,6 +108,12 @@ type NetworkSpec struct {
 	// Devices is the list of network devices used by the virtual machine.
 	Devices []NetworkDeviceSpec `json:"devices"`
 
+	// Nameservers is a list of IPv4 and/or IPv6 addresses used as DNS
+	// nameservers.
+	// Please note that Linux allows only three nameservers (https://linux.die.net/man/5/resolv.conf).
+	// +optional
+	Nameservers []string `json:"nameservers,omitempty"`
+
 	// PreferredAPIServeCIDR is the preferred CIDR for the Kubernetes API
 	// server endpoint on this machine
 	PreferredAPIServerCIDR string `json:"preferredAPIServerCidr,omitempty"`

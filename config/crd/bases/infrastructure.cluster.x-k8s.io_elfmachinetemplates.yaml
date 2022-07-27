@@ -125,6 +125,13 @@ spec:
                               - networkType
                               type: object
                             type: array
+                          nameservers:
+                            description: Nameservers is a list of IPv4 and/or IPv6
+                              addresses used as DNS nameservers. Please note that
+                              Linux allows only three nameservers (https://linux.die.net/man/5/resolv.conf).
+                            items:
+                              type: string
+                            type: array
                           preferredAPIServerCidr:
                             description: PreferredAPIServeCIDR is the preferred CIDR
                               for the Kubernetes API server endpoint on this machine
