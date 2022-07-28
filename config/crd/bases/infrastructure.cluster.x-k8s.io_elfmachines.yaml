@@ -15,7 +15,24 @@ spec:
     singular: elfmachine
   scope: Namespaced
   versions:
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - description: ElfMachine ready status
+      jsonPath: .status.ready
+      name: Ready
+      type: string
+    - description: ElfMachine instance ID
+      jsonPath: .spec.providerID
+      name: ProviderID
+      type: string
+    - description: IP address of the first network device of the virtual machine
+      jsonPath: .status.addresses[0].address
+      name: IP
+      type: string
+    - description: Machine object which owns with this ElfMachine
+      jsonPath: .metadata.ownerReferences[?(@.kind=="Machine")].name
+      name: Machine
+      type: string
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: ElfMachine is the Schema for the elfmachines API.
