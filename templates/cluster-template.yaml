@@ -50,6 +50,7 @@ spec:
       memoryMiB: ${CONTROL_PLANE_MACHINE_MEMORY_MB:-4096}
       diskGiB: ${CONTROL_PLANE_MACHINE_DISK_GB:-40}
       network:
+        nameservers: []
         devices:
         - networkType: IPV4_DHCP
           vlan: '${ELF_VLAN}'
@@ -172,6 +173,7 @@ spec:
       memoryMiB: ${WORKER_MACHINE_MEMORY_MB:-4096}
       diskGiB: ${WORKER_MACHINE_DISK_GB:-40}
       network:
+        nameservers: []
         devices:
         - networkType: IPV4_DHCP
           vlan: '${ELF_VLAN}'
