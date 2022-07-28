@@ -15,7 +15,21 @@ spec:
     singular: elfcluster
   scope: Namespaced
   versions:
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - description: Cluster infrastructure is ready
+      jsonPath: .status.ready
+      name: Ready
+      type: string
+    - description: Tower is the address of the Tower endpoint
+      jsonPath: .spec.tower.server
+      name: Tower
+      type: string
+    - description: API Endpoint
+      jsonPath: .spec.controlPlaneEndpoint
+      name: ControlPlaneEndpoint
+      priority: 1
+      type: string
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: ElfCluster is the Schema for the elfclusters API.

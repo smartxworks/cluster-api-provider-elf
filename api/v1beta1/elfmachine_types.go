@@ -144,6 +144,10 @@ type ElfMachineStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="ElfMachine ready status"
+//+kubebuilder:printcolumn:name="ProviderID",type="string",JSONPath=".spec.providerID",description="ElfMachine instance ID"
+//+kubebuilder:printcolumn:name="IP",type="string",JSONPath=".status.addresses[0].address",description="IP address of the first network device of the virtual machine"
+//+kubebuilder:printcolumn:name="Machine",type="string",JSONPath=".metadata.ownerReferences[?(@.kind==\"Machine\")].name",description="Machine object which owns with this ElfMachine"
 
 // ElfMachine is the Schema for the elfmachines API.
 type ElfMachine struct {
