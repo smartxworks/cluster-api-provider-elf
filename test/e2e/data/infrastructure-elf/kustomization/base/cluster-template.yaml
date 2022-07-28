@@ -47,7 +47,7 @@ spec:
       ha: true
       cloneMode: FastClone
       network:
-        nameservers:
+        nameservers: []
         devices:
         - networkType: IPV4_DHCP
           vlan: '${ELF_VLAN}'
@@ -167,7 +167,7 @@ spec:
       ha: true
       cloneMode: FastClone
       network:
-        nameservers:
+        nameservers: []
         devices:
         - networkType: IPV4_DHCP
           vlan: '${ELF_VLAN}'
