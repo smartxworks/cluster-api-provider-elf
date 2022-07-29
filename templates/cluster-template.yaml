@@ -98,23 +98,27 @@ spec:
         spec:
           containers:
           - args:
-            - start
+            - manager
             env:
+            - name: cp_enable
+              value: "true"
+            - name: vip_interface
+              value: ${VIP_NETWORK_INTERFACE:="eth0"}
+            - name: address
+              value: ${CONTROL_PLANE_ENDPOINT_IP}
+            - name: port
+              value: "6443"
             - name: vip_arp
               value: "true"
             - name: vip_leaderelection
               value: "true"
-            - name: vip_address
-              value: '${CONTROL_PLANE_ENDPOINT_IP}'
-            - name: vip_interface
-              value: ${VIP_NETWORK_INTERFACE:="eth0"}
             - name: vip_leaseduration
               value: "15"
             - name: vip_renewdeadline
               value: "10"
             - name: vip_retryperiod
               value: "2"
-            image: ghcr.io/kube-vip/kube-vip:v0.3.5
+            image: ghcr.io/kube-vip/kube-vip:v0.4.2
             imagePullPolicy: IfNotPresent
             name: kube-vip
             resources: {}
@@ -122,10 +126,14 @@ spec:
               capabilities:
                 add:
                 - NET_ADMIN
-                - SYS_TIME
+                - NET_RAW
             volumeMounts:
             - mountPath: /etc/kubernetes/admin.conf
               name: kubeconfig
+          hostAliases:
+          - hostnames:
+            - kubernetes
+            ip: 127.0.0.1
           hostNetwork: true
           volumes:
           - hostPath:
