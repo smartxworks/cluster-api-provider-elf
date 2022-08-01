@@ -34,7 +34,7 @@ import (
 
 var _ = Describe("CAPE kcp scale e2e test", func() {
 	var (
-		specName         = "kcp-scale"
+		specName         = "cape-kcp-scale"
 		namespace        *corev1.Namespace
 		cancelWatches    context.CancelFunc
 		clusterResources *clusterctl.ApplyClusterTemplateAndWaitResult
