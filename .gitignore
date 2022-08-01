@@ -1,8 +1,8 @@
 # Test
 bin
-
-# Test results
 _artifacts
+test/e2e/data/infrastructure-elf/kustomization/base/cluster-template.yaml
+test/e2e/data/infrastructure-elf/cluster-template*.yaml
 
 # Editor
 .vscode
