@@ -7,5 +7,5 @@ spec:
   template:
     spec:
       containers:
-      - image: smartxworks/cape-manager:latest
+      - image: docker.io/smartxworks/cape-manager:latest
         name: manager

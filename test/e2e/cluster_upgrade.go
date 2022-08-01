@@ -52,7 +52,7 @@ type ClusterUpgradeSpecInput struct {
 // Those variables should have corresponding patches which set the etcd and CoreDNS tags in KCP.
 func ClusterUpgradeSpec(ctx context.Context, inputGetter func() ClusterUpgradeSpecInput) {
 	var (
-		specName         = "k8s-upgrade"
+		specName         = "cape-k8s-upgrade"
 		input            ClusterUpgradeSpecInput
 		namespace        *corev1.Namespace
 		cancelWatches    context.CancelFunc

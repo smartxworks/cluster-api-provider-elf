@@ -109,8 +109,8 @@ test: generate ## Run tests.
 	source ./hack/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v ./api/... ./controllers/... ./pkg/... -coverprofile=cover.out
 
 .PHONY: e2e-image
-e2e-image: docker-pull-prerequisites ## Build the e2e manager image
-	docker build --tag="docker.io/smartxworks/cape-manager:e2e" .
+e2e-image: docker-pull-prerequisites ## Build the e2e manager image. Docker ignores docker.io causing CAPI to fail to load local e2e image.
+	docker build --tag="k8s.gcr.io/smartxworks/cape-manager:e2e" .
 
 .PHONY: e2e
 e2e: e2e-image e2e-templates
