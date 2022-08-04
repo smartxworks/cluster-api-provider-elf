@@ -6,6 +6,5 @@ metadata:
 spec:
   template:
     spec:
-      diskGiB: 32
       memoryMiB: 4096
       numCPUs: 4

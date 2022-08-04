@@ -102,23 +102,20 @@ func (svr *TowerVMService) Clone(
 		memoryMiB = config.VMMemoryMiB
 	}
 
-	diskGiB := elfMachine.Spec.DiskGiB
-	if diskGiB <= 0 {
-		diskGiB = config.VMDiskGiB
+	var mountDisks []*models.MountNewCreateDisksParams
+	if elfMachine.Spec.DiskGiB > 0 {
+		storagePolicy := models.VMVolumeElfStoragePolicyTypeREPLICA3THICKPROVISION
+		bus := models.BusVIRTIO
+		mountDisks = append(mountDisks, &models.MountNewCreateDisksParams{
+			Boot: util.TowerInt32(0),
+			Bus:  &bus,
+			VMVolume: &models.MountNewCreateDisksParamsVMVolume{
+				ElfStoragePolicy: &storagePolicy,
+				Name:             util.TowerString(config.VMDiskName),
+				Size:             util.TowerDisk(elfMachine.Spec.DiskGiB),
+			},
+		})
 	}
-
-	storagePolicy := models.VMVolumeElfStoragePolicyTypeREPLICA3THICKPROVISION
-	bus := models.BusVIRTIO
-	mountDisks := []*models.MountNewCreateDisksParams{{
-		// Index: util.TowerInt32(0),
-		Boot: util.TowerInt32(0),
-		Bus:  &bus,
-		VMVolume: &models.MountNewCreateDisksParamsVMVolume{
-			ElfStoragePolicy: &storagePolicy,
-			Name:             util.TowerString(config.VMDiskName),
-			Size:             util.TowerDisk(diskGiB),
-		},
-	}}
 
 	nics := make([]*models.VMNicParams, 0, len(elfMachine.Spec.Network.Devices))
 	networks := make([]*models.CloudInitNetWork, 0, len(elfMachine.Spec.Network.Devices))
