@@ -26,9 +26,6 @@ const (
 	// VMMemoryMiB is the default memory in a VM.
 	VMMemoryMiB = 2048
 
-	// VMDiskGiB is the default disk size in a VM.
-	VMDiskGiB = 10
-
 	// VMDiskName is the default disk name in a VM.
 	VMDiskName = "disk"
 )
