@@ -32,6 +32,10 @@ const (
 	// script to be ready before starting the provisioning process.
 	WaitingForBootstrapDataReason = "WaitingForBootstrapData"
 
+	// WaitingForStaticIPAllocationReason (Severity=Info) documents a ElfMachine waiting for the allocation of
+	// a static IP address.
+	WaitingForStaticIPAllocationReason = "WaitingForStaticIPAllocation"
+
 	// CloningReason documents (Severity=Info) ElfMachine currently executing the clone operation.
 	CloningReason = "Cloning"
 
