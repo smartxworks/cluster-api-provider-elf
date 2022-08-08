@@ -21,8 +21,12 @@ import (
 	"fmt"
 	"sync"
 
+	httptransport "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
+
 	"github.com/pkg/errors"
 	towerclient "github.com/smartxworks/cloudtower-go-sdk/v2/client"
+	"github.com/smartxworks/cloudtower-go-sdk/v2/client/user"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -50,10 +54,12 @@ func GetOrCreate(ctx goctx.Context, tower infrav1.Tower) (*TowerSession, error) 
 		return session, nil
 	}
 
-	client, err := towerclient.NewWithUserConfig(towerclient.ClientConfig{
+	client, err := createTowerClient(httptransport.TLSClientOptions{
+		InsecureSkipVerify: tower.TLSSkipVerify,
+	}, towerclient.ClientConfig{
 		Host:     tower.Server,
 		BasePath: "/v2/api",
-		Schemes:  []string{"http"},
+		Schemes:  []string{"https"},
 	}, towerclient.UserConfig{
 		Name:     tower.Username,
 		Password: tower.Password,
@@ -74,4 +80,27 @@ func GetOrCreate(ctx goctx.Context, tower infrav1.Tower) (*TowerSession, error) 
 
 func getSessionKey(tower infrav1.Tower) string {
 	return fmt.Sprintf("%s-%s-%s", tower.Server, tower.Username, tower.AuthMode)
+}
+
+func createTowerClient(tlsOpts httptransport.TLSClientOptions, clientConfig towerclient.ClientConfig, userConfig towerclient.UserConfig) (*towerclient.Cloudtower, error) {
+	rt := httptransport.New(clientConfig.Host, clientConfig.BasePath, clientConfig.Schemes)
+	var err error
+	rt.Transport, err = httptransport.TLSTransport(tlsOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	client := towerclient.New(rt, strfmt.Default)
+	params := user.NewLoginParams()
+	params.RequestBody = &models.LoginInput{
+		Username: &userConfig.Name,
+		Password: &userConfig.Password,
+		Source:   userConfig.Source.Pointer(),
+	}
+	resp, err := client.User.Login(params)
+	if err != nil {
+		return nil, err
+	}
+	rt.DefaultAuthentication = httptransport.APIKeyAuth("Authorization", "header", *resp.Payload.Data.Token)
+	return client, nil
 }

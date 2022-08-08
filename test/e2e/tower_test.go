@@ -21,6 +21,7 @@ import (
 	"flag"
 	"os"
 
+	env "github.com/caitlinelfring/go-env-default"
 	. "github.com/onsi/gomega"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -34,6 +35,7 @@ var (
 	towerUsername        = os.Getenv("TOWER_USERNAME")
 	towerPassword        = os.Getenv("TOWER_PASSWORD")
 	towerAuthMode        = os.Getenv("TOWER_AUTH_MODE")
+	towerTLSSkipVerify   = env.GetBoolDefault("TOWER_TLS_SKIP_VERIFY", false)
 
 	towerServer string
 	vmService   service.VMService
@@ -46,10 +48,11 @@ func init() {
 func initTowerSession() {
 	var err error
 	vmService, err = service.NewVMService(goctx.Background(), infrav1.Tower{
-		Server:   towerServer,
-		Username: towerUsername,
-		Password: towerPassword,
-		AuthMode: towerAuthMode}, ctrllog.Log)
+		Server:        towerServer,
+		Username:      towerUsername,
+		Password:      towerPassword,
+		AuthMode:      towerAuthMode,
+		TLSSkipVerify: towerTLSSkipVerify}, ctrllog.Log)
 	Expect(err).ShouldNot(HaveOccurred())
 
 	template, err := vmService.GetVMTemplate(elfTemplate)

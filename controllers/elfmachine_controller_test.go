@@ -77,7 +77,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		// mock
 		mockCtrl = gomock.NewController(GinkgoT())
 		mockVMService = mock_services.NewMockVMService(mockCtrl)
-		// nolint:unparam
+		//nolint:unparam
 		mockNewVMService = func(_ goctx.Context, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
 			return mockVMService, nil
 		}
@@ -343,7 +343,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(*elfMachine.Status.FailureReason).To(Equal(capierrors.UpdateMachineError))
-			Expect(*elfMachine.Status.FailureMessage).To(Equal(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infra", elfMachine.Status.VMRef)))
+			Expect(*elfMachine.Status.FailureMessage).To(Equal(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", elfMachine.Status.VMRef)))
 		})
 
 		It("should retry when create a VM if failed", func() {

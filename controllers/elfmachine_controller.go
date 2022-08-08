@@ -248,7 +248,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 
 			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, errorMessage)
 
-			ctx.Logger.Error(errors.New("VM task failed"),
+			ctx.Logger.Error(errors.New("VM task failed"), "",
 				"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef, "message", errorMessage)
 		} else if task != nil {
 			ctx.Logger.Info("VM task successful",
@@ -485,8 +485,8 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		// If the machine was not found by UUID it means that it got deleted directly
 		if util.IsUUID(ctx.ElfMachine.Status.VMRef) {
 			ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capierrors.UpdateMachineError)
-			ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infra", ctx.ElfMachine.Status.VMRef))
-
+			ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", ctx.ElfMachine.Status.VMRef))
+			ctx.Logger.Error(errors.New("Failed to get VM"), "", "message", ctx.ElfMachine.Status.FailureMessage)
 			return nil, err
 		}
 
@@ -498,7 +498,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 			errorMessage = *task.ErrorMessage
 		}
 
-		ctx.Logger.Error(errors.New("VM task failed"), "vmRef", ctx.ElfMachine.Status.VMRef, "message", errorMessage)
+		ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", ctx.ElfMachine.Status.VMRef, "message", errorMessage)
 
 		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, errorMessage)
 
@@ -522,7 +522,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 				errorMessage = *task.ErrorMessage
 			}
 
-			ctx.Logger.Error(errors.New("VM task failed"),
+			ctx.Logger.Error(errors.New("VM task failed"), "",
 				"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef, "message", errorMessage)
 		} else if task != nil {
 			ctx.Logger.Info("VM task successful",

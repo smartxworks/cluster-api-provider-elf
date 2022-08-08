@@ -62,6 +62,7 @@ export ELF_VM_CLONE_MODE=FastClone
 export TOWER_SERVER=<YOUR_TOWER_SERVER_FQDN>
 export TOWER_USERNAME=root
 export TOWER_PASSWORD=tower
+export TOWER_TLS_SKIP_VERIFY=false
 # 认证模式，默认LOCAL（可选）
 export TOWER_AUTH_MODE=LOCAL
 
