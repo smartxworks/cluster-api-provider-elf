@@ -58,6 +58,9 @@ type Tower struct {
 	// AuthMode is the authentication mode of tower server.
 	// +kubebuilder:validation:Enum=LOCAL;LDAP
 	AuthMode string `json:"authMode,omitempty"`
+
+	// TLSSkipVerify indicates whether to skip verification for the SSL certificate of the tower server.
+	TLSSkipVerify bool `json:"tlsSkipVerify,omitempty"`
 }
 
 // ElfMachineTemplateResource describes the data needed to create a ElfMachine from a template.

@@ -56,7 +56,7 @@ func TestMain(m *testing.M) {
 	}()
 
 	code := m.Run()
-	os.Exit(code) // nolint:gocritic
+	os.Exit(code) //nolint:gocritic
 }
 
 func setup() {

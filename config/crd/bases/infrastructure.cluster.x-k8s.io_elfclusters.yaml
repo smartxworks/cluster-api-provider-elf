@@ -83,6 +83,10 @@ spec:
                   server:
                     description: Server is address of the tower server.
                     type: string
+                  tlsSkipVerify:
+                    description: TLSSkipVerify indicates whether to skip verification
+                      for the SSL certificate of the tower server.
+                    type: boolean
                   username:
                     description: Username is the name used to log into the tower server.
                     type: string

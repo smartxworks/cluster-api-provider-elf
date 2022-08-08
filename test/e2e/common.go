@@ -38,7 +38,7 @@ const (
 	ElfTemplateUpgradeTo         = "ELF_TEMPLATE_UPGRADE_TO"
 	ElfTemplate                  = "ELF_TEMPLATE"
 	ElfServerUsername            = "ELF_SERVER_USERNAME"
-	ElfServerPassword            = "ELF_SERVER_PASSWORD" // nolint:gosec
+	ElfServerPassword            = "ELF_SERVER_PASSWORD" //nolint:gosec
 )
 
 func Byf(format string, a ...interface{}) {
