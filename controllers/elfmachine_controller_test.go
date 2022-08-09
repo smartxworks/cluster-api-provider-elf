@@ -857,7 +857,75 @@ var _ = Describe("ElfMachineReconciler", func() {
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
 		})
 	})
+
+	Context("Reconcile static IP allocation", func() {
+		BeforeEach(func() {
+			cluster.Status.InfrastructureReady = true
+			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
+			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
+		})
+
+		It("should wait for IP allocation", func() {
+			// one IPV4 device without ipAddrs
+			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
+				{NetworkType: infrav1.NetworkTypeIPV4},
+			}
+			waitStaticIPAllocationSpec(mockNewVMService, elfCluster, cluster, elfMachine, machine, secret)
+
+			// one IPV4 device without ipAddrs and one with ipAddrs
+			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
+				{NetworkType: infrav1.NetworkTypeIPV4},
+				{NetworkType: infrav1.NetworkTypeIPV4, IPAddrs: []string{"127.0.0.1"}},
+			}
+			waitStaticIPAllocationSpec(mockNewVMService, elfCluster, cluster, elfMachine, machine, secret)
+
+			// one IPV4 device without ipAddrs and one DHCP device
+			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
+				{NetworkType: infrav1.NetworkTypeIPV4},
+				{NetworkType: infrav1.NetworkTypeIPV4DHCP},
+			}
+			waitStaticIPAllocationSpec(mockNewVMService, elfCluster, cluster, elfMachine, machine, secret)
+		})
+
+		It("should not wait for IP allocation", func() {
+			// one IPV4 device with ipAddrs
+			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
+				{NetworkType: infrav1.NetworkTypeIPV4, IPAddrs: []string{"127.0.0.1"}},
+			}
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("some error"))
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).To(BeZero())
+			Expect(err).ShouldNot(BeNil())
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.CloningFailedReason}})
+		})
+	})
 })
+
+func waitStaticIPAllocationSpec(mockNewVMService func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (service.VMService, error),
+	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
+	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine, secret *corev1.Secret) {
+	ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+	fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+	buf := new(bytes.Buffer)
+	klog.SetOutput(buf)
+
+	reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+	elfMachineKey := capiutil.ObjectKey(elfMachine)
+	result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
+	Expect(result.RequeueAfter).To(BeZero())
+	Expect(err).Should(BeNil())
+	Expect(buf.String()).To(ContainSubstring("VM is waiting for static ip to be available"))
+	elfMachine = &infrav1.ElfMachine{}
+	Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+	expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForStaticIPAllocationReason}})
+}
 
 func newCtrlContexts(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
 	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine, secret *corev1.Secret) *context.ControllerContext {

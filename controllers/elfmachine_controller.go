@@ -371,6 +371,12 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 		return reconcile.Result{}, nil
 	}
 
+	if r.isWaitingForStaticIPAllocation(ctx) {
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForStaticIPAllocationReason, clusterv1.ConditionSeverityInfo, "")
+		ctx.Logger.Info("VM is waiting for static ip to be available")
+		return reconcile.Result{}, nil
+	}
+
 	vm, err := r.reconcileVM(ctx)
 	if err != nil {
 		return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile VM")
@@ -700,4 +706,18 @@ func (r *ElfMachineReconciler) reconcileLabels(ctx *context.MachineContext, vm *
 		return false, err
 	}
 	return true, nil
+}
+
+// isWaitingForStaticIPAllocation checks whether the VM should wait for a static IP
+// to be allocated.
+func (r *ElfMachineReconciler) isWaitingForStaticIPAllocation(ctx *context.MachineContext) bool {
+	devices := ctx.ElfMachine.Spec.Network.Devices
+	for _, device := range devices {
+		if device.NetworkType == infrav1.NetworkTypeIPV4 && len(device.IPAddrs) == 0 {
+			// Static IP is not available yet
+			return true
+		}
+	}
+
+	return false
 }
