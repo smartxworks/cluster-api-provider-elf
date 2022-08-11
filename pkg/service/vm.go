@@ -196,7 +196,7 @@ func (svr *TowerVMService) Clone(
 	vmCreateVMFromTemplateParams := &models.VMCreateVMFromTemplateParams{
 		ClusterID:   cluster.ID,
 		HostID:      util.TowerString(hostID),
-		Name:        util.TowerString(machine.Name),
+		Name:        util.TowerString(elfMachine.Name),
 		Description: util.TowerString(config.VMDescription),
 		Vcpu:        util.TowerCPU(numCPUs),
 		CPUCores:    util.TowerCPU(numCoresPerSocket),

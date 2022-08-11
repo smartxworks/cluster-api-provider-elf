@@ -250,7 +250,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should create a new VM if none exists", func() {
 			vm := fake.NewTowerVM()
-			vm.Name = &machine.Name
+			vm.Name = &elfMachine.Name
 			task := fake.NewTowerTask()
 			withTaskVM := fake.NewWithTaskVM(vm, task)
 
@@ -279,14 +279,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should recover from lost task", func() {
 			vm := fake.NewTowerVM()
-			vm.Name = &machine.Name
+			vm.Name = &elfMachine.Name
 
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
 
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New(service.VMDuplicate))
-			mockVMService.EXPECT().GetByName(machine.Name).Return(vm, nil)
+			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
 			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
 
 			buf := new(bytes.Buffer)
@@ -483,10 +483,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 	Context("Reconcile ElfMachine providerID", func() {
 		BeforeEach(func() {
-			label := fake.NewTowerLabel()
-			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(3).Return(label, nil)
+			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(4).Return(fake.NewTowerLabel(), nil)
 			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(1)
 		})
+
 		It("should set providerID to ElfMachine when VM is created", func() {
 			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 			cluster.Status.InfrastructureReady = true
@@ -517,8 +517,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			cluster.Status.InfrastructureReady = true
 			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
-			label := fake.NewTowerLabel()
-			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(3).Return(label, nil)
+			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(4).Return(fake.NewTowerLabel(), nil)
 			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(1)
 		})
 
