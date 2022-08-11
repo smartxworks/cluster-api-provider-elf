@@ -695,11 +695,15 @@ func (r *ElfMachineReconciler) reconcileLabels(ctx *context.MachineContext, vm *
 	if err != nil {
 		return false, errors.Wrapf(err, "failed to upsert cluster name label")
 	}
+	nodeNameLabel, err := ctx.VMService.UpsertLabel("node-name", ctx.ElfMachine.Name)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to upsert node name label")
+	}
 	creatorLabel, err := ctx.VMService.UpsertLabel("created-by", "sks")
 	if err != nil {
 		return false, errors.Wrapf(err, "failed to upsert created by label")
 	}
-	labelIds := []string{*namespaceLabel.ID, *clusterNameLabel.ID, *creatorLabel.ID}
+	labelIds := []string{*namespaceLabel.ID, *clusterNameLabel.ID, *nodeNameLabel.ID, *creatorLabel.ID}
 	r.Logger.Info("Upsert Labels", "labelIds", labelIds)
 	_, err = ctx.VMService.AddLabelsToVM(*vm.ID, labelIds)
 	if err != nil {

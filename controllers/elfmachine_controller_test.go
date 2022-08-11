@@ -483,10 +483,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 	Context("Reconcile ElfMachine providerID", func() {
 		BeforeEach(func() {
-			label := fake.NewTowerLabel()
-			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(3).Return(label, nil)
+			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(4).Return(fake.NewTowerLabel(), nil)
 			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(1)
 		})
+
 		It("should set providerID to ElfMachine when VM is created", func() {
 			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 			cluster.Status.InfrastructureReady = true
@@ -517,8 +517,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			cluster.Status.InfrastructureReady = true
 			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
-			label := fake.NewTowerLabel()
-			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(3).Return(label, nil)
+			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(4).Return(fake.NewTowerLabel(), nil)
 			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(1)
 		})
 
