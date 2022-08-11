@@ -462,7 +462,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		withTaskVM, err := ctx.VMService.Clone(ctx.ElfCluster, ctx.Machine, ctx.ElfMachine, bootstrapData)
 		if err != nil {
 			if service.IsVMDuplicate(err) {
-				vm, err := ctx.VMService.GetByName(ctx.Machine.Name)
+				vm, err := ctx.VMService.GetByName(ctx.ElfMachine.Name)
 				if err != nil {
 					return nil, err
 				}
