@@ -59,8 +59,8 @@ type Tower struct {
 	// +kubebuilder:validation:Enum=LOCAL;LDAP
 	AuthMode string `json:"authMode,omitempty"`
 
-	// TLSSkipVerify indicates whether to skip verification for the SSL certificate of the tower server.
-	TLSSkipVerify bool `json:"tlsSkipVerify,omitempty"`
+	// SkipTLSVerify indicates whether to skip verification for the SSL certificate of the tower server.
+	SkipTLSVerify bool `json:"skipTLSVerify,omitempty"`
 }
 
 // ElfMachineTemplateResource describes the data needed to create a ElfMachine from a template.
