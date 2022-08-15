@@ -122,7 +122,7 @@ variables:
   # TOWER_USERNAME: "root"
   # TOWER_PASSWORD: "root"
   # TOWER_AUTH_MODE: "LOCAL"
-  # TOWER_TLS_SKIP_VERIFY: false
+  # TOWER_SKIP_TLS_VERIFY: false
 
 intervals:
   default/wait-controllers: ["8m", "10s"]

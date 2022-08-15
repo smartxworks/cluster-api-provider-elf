@@ -55,7 +55,7 @@ func GetOrCreate(ctx goctx.Context, tower infrav1.Tower) (*TowerSession, error) 
 	}
 
 	client, err := createTowerClient(httptransport.TLSClientOptions{
-		InsecureSkipVerify: tower.TLSSkipVerify,
+		InsecureSkipVerify: tower.SkipTLSVerify,
 	}, towerclient.ClientConfig{
 		Host:     tower.Server,
 		BasePath: "/v2/api",

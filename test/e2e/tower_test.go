@@ -35,7 +35,7 @@ var (
 	towerUsername        = os.Getenv("TOWER_USERNAME")
 	towerPassword        = os.Getenv("TOWER_PASSWORD")
 	towerAuthMode        = os.Getenv("TOWER_AUTH_MODE")
-	towerTLSSkipVerify   = env.GetBoolDefault("TOWER_TLS_SKIP_VERIFY", false)
+	towerSkipTLSVerify   = env.GetBoolDefault("TOWER_SKIP_TLS_VERIFY", false)
 
 	towerServer string
 	vmService   service.VMService
@@ -52,7 +52,7 @@ func initTowerSession() {
 		Username:      towerUsername,
 		Password:      towerPassword,
 		AuthMode:      towerAuthMode,
-		TLSSkipVerify: towerTLSSkipVerify}, ctrllog.Log)
+		SkipTLSVerify: towerSkipTLSVerify}, ctrllog.Log)
 	Expect(err).ShouldNot(HaveOccurred())
 
 	template, err := vmService.GetVMTemplate(elfTemplate)
