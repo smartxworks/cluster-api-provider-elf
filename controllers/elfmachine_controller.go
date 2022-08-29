@@ -626,7 +626,10 @@ func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineConte
 			Path:  "/spec/providerID",
 			Value: providerID,
 		})
-	payloadBytes, _ := json.Marshal(payloads)
+	payloadBytes, err := json.Marshal(payloads)
+	if err != nil {
+		return false, err
+	}
 	_, err = kubeClient.CoreV1().Nodes().Patch(ctx, node.Name, apitypes.JSONPatchType, payloadBytes, metav1.PatchOptions{})
 	if err != nil {
 		return false, err
