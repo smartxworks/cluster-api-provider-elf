@@ -1,11 +1,11 @@
 module github.com/smartxworks/cluster-api-provider-elf
 
-go 1.17
+go 1.18
 
 require (
 	github.com/go-logr/logr v1.2.0
 	github.com/golang/mock v1.6.0
-	github.com/google/uuid v1.2.0
+	github.com/google/uuid v1.3.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.1
 	github.com/pkg/errors v0.9.1
@@ -22,6 +22,8 @@ require (
 	sigs.k8s.io/cluster-api/test v1.2.0
 	sigs.k8s.io/controller-runtime v0.12.3
 )
+
+require github.com/rogpeppe/go-internal v1.8.1 // indirect
 
 require (
 	github.com/BurntSushi/toml v1.0.0 // indirect

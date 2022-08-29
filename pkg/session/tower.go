@@ -23,7 +23,6 @@ import (
 
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
-
 	"github.com/pkg/errors"
 	towerclient "github.com/smartxworks/cloudtower-go-sdk/v2/client"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/client/user"

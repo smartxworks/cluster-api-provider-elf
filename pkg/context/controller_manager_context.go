@@ -26,6 +26,7 @@ import (
 
 // ControllerManagerContext is the context of the controller that owns the
 // controllers.
+//nolint:containedctx
 type ControllerManagerContext struct {
 	context.Context
 
