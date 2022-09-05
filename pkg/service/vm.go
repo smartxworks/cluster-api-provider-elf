@@ -54,8 +54,11 @@ type VMService interface {
 	GetHost(id string) (*models.Host, error)
 	GetVlan(id string) (*models.Vlan, error)
 	UpsertLabel(key, value string) (*models.Label, error)
+	DeleteLabel(key, value string, strict bool) (string, error)
 	AddLabelsToVM(vmID string, labels []string) (*models.Task, error)
 }
+
+type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
 
 func NewVMService(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error) {
 	authSession, err := session.GetOrCreate(ctx, auth)
@@ -491,6 +494,35 @@ func (svr *TowerVMService) UpsertLabel(key, value string) (*models.Label, error)
 	}
 
 	return createLabelResp.Payload[0].Data, nil
+}
+
+// DeleteLabel deletes a label.
+func (svr *TowerVMService) DeleteLabel(key, value string, strict bool) (string, error) {
+	deleteLabelParams := clientlabel.NewDeleteLabelParams()
+	deleteLabelParams.RequestBody = &models.LabelDeletionParams{
+		Where: &models.LabelWhereInput{
+			AND: []*models.LabelWhereInput{
+				{Key: util.TowerString(key), Value: util.TowerString(value)},
+			},
+		},
+	}
+	if strict {
+		deleteLabelParams.RequestBody.Where.AND = append(
+			deleteLabelParams.RequestBody.Where.AND,
+			&models.LabelWhereInput{VMNum: util.TowerInt32(0)},
+		)
+	}
+
+	deleteLabelResp, err := svr.Session.Label.DeleteLabel(deleteLabelParams)
+	if err != nil {
+		return "", err
+	}
+
+	if len(deleteLabelResp.Payload) == 0 {
+		return "", nil
+	}
+
+	return *deleteLabelResp.Payload[0].Data.ID, nil
 }
 
 // AddLabelsToVM adds a label to a VM.

@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
+	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,7 +37,10 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/constants"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service/mock_services"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
 
@@ -45,9 +50,15 @@ const (
 
 var _ = Describe("ElfClusterReconciler", func() {
 	var (
-		elfCluster *infrav1.ElfCluster
-		cluster    *clusterv1.Cluster
+		elfCluster       *infrav1.ElfCluster
+		cluster          *clusterv1.Cluster
+		logBuffer        *bytes.Buffer
+		mockCtrl         *gomock.Controller
+		mockVMService    *mock_services.MockVMService
+		mockNewVMService service.NewVMServiceFunc
 	)
+
+	ctx := goctx.Background()
 
 	BeforeEach(func() {
 		// set log
@@ -57,12 +68,37 @@ var _ = Describe("ElfClusterReconciler", func() {
 		if err := flag.Set("v", "6"); err != nil {
 			_ = fmt.Errorf("Error setting v flag")
 		}
-		klog.SetOutput(GinkgoWriter)
+		logBuffer = new(bytes.Buffer)
+		klog.SetOutput(logBuffer)
 
 		elfCluster, cluster = fake.NewClusterObjects()
+		// mock
+		mockCtrl = gomock.NewController(GinkgoT())
+		mockVMService = mock_services.NewMockVMService(mockCtrl)
+		mockNewVMService = func(_ goctx.Context, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+			return mockVMService, nil
+		}
+	})
+
+	AfterEach(func() {
+		mockCtrl.Finish()
 	})
 
 	Context("Reconcile an ElfCluster", func() {
+		It("should not reconcile when ElfCluster not found", func() {
+			ctrlMgrContext := fake.NewControllerManagerContext()
+			ctrlContext := &context.ControllerContext{
+				ControllerManagerContext: ctrlMgrContext,
+				Logger:                   ctrllog.Log,
+			}
+
+			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: capiutil.ObjectKey(elfCluster)})
+			Expect(err).To(BeNil())
+			Expect(result.RequeueAfter).To(BeZero())
+			Expect(logBuffer.String()).To(ContainSubstring("ElfCluster not found, won't reconcile"))
+		})
+
 		It("should not error and not requeue the request without cluster", func() {
 			ctrlMgrContext := fake.NewControllerManagerContext(elfCluster)
 			ctrlContext := &context.ControllerContext{
@@ -70,15 +106,11 @@ var _ = Describe("ElfClusterReconciler", func() {
 				Logger:                   ctrllog.Log,
 			}
 
-			buf := new(bytes.Buffer)
-			klog.SetOutput(buf)
-
-			reconciler := &ElfClusterReconciler{ctrlContext}
-
-			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: capiutil.ObjectKey(elfCluster)})
+			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: capiutil.ObjectKey(elfCluster)})
 			Expect(err).To(BeNil())
 			Expect(result.RequeueAfter).To(BeZero())
-			Expect(buf.String()).To(ContainSubstring("Waiting for Cluster Controller to set OwnerRef on ElfCluster"))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for Cluster Controller to set OwnerRef on ElfCluster"))
 		})
 
 		It("should not error and not requeue the request when Cluster is paused", func() {
@@ -89,17 +121,13 @@ var _ = Describe("ElfClusterReconciler", func() {
 				ControllerManagerContext: ctrlMgrContext,
 				Logger:                   ctrlMgrContext.Logger,
 			}
-
 			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 
-			buf := new(bytes.Buffer)
-			klog.SetOutput(buf)
-
-			reconciler := &ElfClusterReconciler{ctrlContext}
-			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: capiutil.ObjectKey(elfCluster)})
+			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: capiutil.ObjectKey(elfCluster)})
 			Expect(err).To(BeNil())
 			Expect(result.RequeueAfter).To(BeZero())
-			Expect(buf.String()).To(ContainSubstring("ElfCluster linked to a cluster that is paused"))
+			Expect(logBuffer.String()).To(ContainSubstring("ElfCluster linked to a cluster that is paused"))
 		})
 
 		It("should add finalizer to the elfcluster", func() {
@@ -112,9 +140,8 @@ var _ = Describe("ElfClusterReconciler", func() {
 			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
-			reconciler := &ElfClusterReconciler{ctrlContext}
-			_, _ = reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfClusterKey})
-			elfCluster = &infrav1.ElfCluster{}
+			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			_, _ = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster)).To(Succeed())
 			Expect(elfCluster.Status.Ready).To(BeTrue())
 			Expect(elfCluster.Finalizers).To(ContainElement(infrav1.ClusterFinalizer))
@@ -126,11 +153,10 @@ var _ = Describe("ElfClusterReconciler", func() {
 				ControllerManagerContext: ctrlMgrContext,
 				Logger:                   ctrllog.Log,
 			}
-
 			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 
-			reconciler := &ElfClusterReconciler{ctrlContext}
-			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: capiutil.ObjectKey(elfCluster)})
+			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: capiutil.ObjectKey(elfCluster)})
 			Expect(err.Error()).To(ContainSubstring("Failed to reconcile ControlPlaneEndpoint for ElfCluster"))
 			Expect(result).To(BeZero())
 		})
@@ -144,48 +170,41 @@ var _ = Describe("ElfClusterReconciler", func() {
 
 		It("should not remove elfcluster finalizer when has elfmachines", func() {
 			elfMachine, machine := fake.NewMachineObjects(elfCluster, cluster)
-
 			ctrlMgrContext := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine)
 			ctrlContext := &context.ControllerContext{
 				ControllerManagerContext: ctrlMgrContext,
 				Logger:                   ctrllog.Log,
 			}
-
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			buf := new(bytes.Buffer)
-			klog.SetOutput(buf)
-
-			reconciler := &ElfClusterReconciler{ctrlContext}
-
+			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
-			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfClusterKey})
-			Expect(buf.String()).To(ContainSubstring("Waiting for ElfMachines to be deleted"))
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for ElfMachines to be deleted"))
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).Should(BeNil())
-			elfCluster = &infrav1.ElfCluster{}
 			Expect(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster)).To(Succeed())
 			Expect(elfCluster.Finalizers).To(ContainElement(infrav1.ClusterFinalizer))
 		})
 
-		It("should remove elfcluster finalizer", func() {
+		It("should delete labels and remove elfcluster finalizer", func() {
 			ctrlMgrContext := fake.NewControllerManagerContext(cluster, elfCluster)
 			ctrlContext := &context.ControllerContext{
 				ControllerManagerContext: ctrlMgrContext,
 				Logger:                   ctrllog.Log,
 			}
-
 			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 
-			reconciler := &ElfClusterReconciler{ctrlContext}
+			mockVMService.EXPECT().DeleteLabel(constants.NamespaceLabel, elfCluster.Namespace, true).Return("", nil)
+			mockVMService.EXPECT().DeleteLabel(constants.ClusterLabel, elfCluster.Name, false).Return("labelid", nil)
 
+			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
-			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfClusterKey})
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
-			Expect(err).To(BeZero())
-			elfCluster = &infrav1.ElfCluster{}
-			err = reconciler.Client.Get(reconciler, elfClusterKey, elfCluster)
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			Expect(err).To(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("label %s:%s already deleted", constants.ClusterLabel, elfCluster.Name)))
+			Expect(apierrors.IsNotFound(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster))).To(BeTrue())
 		})
 	})
 })

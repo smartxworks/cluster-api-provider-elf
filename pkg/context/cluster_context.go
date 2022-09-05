@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
 // ClusterContext is a Go context used with a ElfCluster.
@@ -33,9 +34,7 @@ type ClusterContext struct {
 	ElfCluster  *infrav1.ElfCluster
 	PatchHelper *patch.Helper
 	Logger      logr.Logger
-
-	Username string
-	Password string
+	VMService   service.VMService
 }
 
 // String returns ElfClusterGroupVersionKind ElfClusterNamespace/ElfClusterName.

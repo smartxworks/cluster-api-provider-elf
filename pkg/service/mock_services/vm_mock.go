@@ -81,6 +81,21 @@ func (mr *MockVMServiceMockRecorder) Delete(uuid interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockVMService)(nil).Delete), uuid)
 }
 
+// DeleteLabel mocks base method.
+func (m *MockVMService) DeleteLabel(key, value string, strict bool) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteLabel", key, value, strict)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteLabel indicates an expected call of DeleteLabel.
+func (mr *MockVMServiceMockRecorder) DeleteLabel(key, value, strict interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLabel", reflect.TypeOf((*MockVMService)(nil).DeleteLabel), key, value, strict)
+}
+
 // Get mocks base method.
 func (m *MockVMService) Get(id string) (*models.VM, error) {
 	m.ctrl.T.Helper()
