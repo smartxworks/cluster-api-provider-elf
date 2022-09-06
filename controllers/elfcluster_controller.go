@@ -166,6 +166,14 @@ func (r *ElfClusterReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 	// Always issue a patch when exiting this function so changes to the
 	// resource are patched back to the API server.
 	defer func() {
+		// always update the readyCondition.
+		conditions.SetSummary(clusterContext.ElfCluster,
+			conditions.WithConditions(
+				infrav1.ControlPlaneEndpointReadyCondition,
+				infrav1.TowerAvailableCondition,
+			),
+		)
+
 		if err := clusterContext.Patch(); err != nil {
 			if reterr == nil {
 				reterr = err
@@ -233,11 +241,16 @@ func (r *ElfClusterReconciler) reconcileDeleteLabel(ctx *context.ClusterContext,
 	return nil
 }
 
-func (r *ElfClusterReconciler) reconcileNormal(ctx *context.ClusterContext) (reconcile.Result, error) {
+func (r *ElfClusterReconciler) reconcileNormal(ctx *context.ClusterContext) (reconcile.Result, error) { //nolint:unparam
 	ctx.Logger.Info("Reconciling ElfCluster")
 
 	// If the ElfCluster doesn't have our finalizer, add it.
 	ctrlutil.AddFinalizer(ctx.ElfCluster, infrav1.ClusterFinalizer)
+
+	// If the cluster already has ControlPlaneEndpoint set then there is nothing to do.
+	if ok := r.reconcileControlPlaneEndpoint(ctx); !ok {
+		return reconcile.Result{}, nil
+	}
 
 	// Reconcile the ElfCluster resource's ready state.
 	ctx.ElfCluster.Status.Ready = true
@@ -245,13 +258,6 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx *context.ClusterContext) (rec
 	// If the cluster is deleted, that's mean that the workload cluster is being deleted
 	if !ctx.Cluster.DeletionTimestamp.IsZero() {
 		return reconcile.Result{}, nil
-	}
-
-	// Update the ElfCluster resource with its API endpoints.
-	if err := r.reconcileControlPlaneEndpoint(ctx); err != nil {
-		return reconcile.Result{}, errors.Wrapf(err,
-			"Failed to reconcile ControlPlaneEndpoint for ElfCluster %s/%s",
-			ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
 	}
 
 	// Wait until the API server is online and accessible.
@@ -262,15 +268,17 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx *context.ClusterContext) (rec
 	return reconcile.Result{}, nil
 }
 
-func (r *ElfClusterReconciler) reconcileControlPlaneEndpoint(ctx *context.ClusterContext) error {
-	// If the cluster already has ControlPlaneEndpoint set then there is nothing to do .
+func (r *ElfClusterReconciler) reconcileControlPlaneEndpoint(ctx *context.ClusterContext) bool {
 	if !ctx.ElfCluster.Spec.ControlPlaneEndpoint.IsZero() {
-		ctx.Logger.Info("The ControlPlaneEndpoint of ElfCluster has been set already")
+		conditions.MarkTrue(ctx.ElfCluster, infrav1.ControlPlaneEndpointReadyCondition)
 
-		return nil
+		return true
 	}
 
-	return util.ErrNoMachineIPAddr
+	conditions.MarkFalse(ctx.ElfCluster, infrav1.ControlPlaneEndpointReadyCondition, infrav1.WaitingForHostReason, clusterv1.ConditionSeverityInfo, "")
+	ctx.Logger.Info("The ControlPlaneEndpoint of ElfCluster is not set")
+
+	return false
 }
 
 func (r *ElfClusterReconciler) isAPIServerOnline(ctx *context.ClusterContext) bool {

@@ -71,3 +71,14 @@ const (
 	// issues with tower reachability.
 	TowerUnreachableReason = "TowerUnreachable"
 )
+
+// Conditions and condition Reasons for the ElfCluster object.
+
+const (
+	// ControlPlaneEndpointReadyCondition documents the status of control plane endpoint.
+	ControlPlaneEndpointReadyCondition clusterv1.ConditionType = "ControlPlaneEndpointReady"
+
+	// WaitingForHostReason (Severity=Info) documents the control plane endpoint of ElfCluster
+	// waiting for a address and port.
+	WaitingForHostReason = "WaitingForHost"
+)
