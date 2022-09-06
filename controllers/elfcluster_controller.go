@@ -28,6 +28,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,7 +41,9 @@ import (
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/constants"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
@@ -70,7 +73,10 @@ func AddClusterControllerToManager(ctx *context.ControllerManagerContext, mgr ct
 		Logger:                   ctx.Logger.WithName(controllerNameShort),
 	}
 
-	reconciler := &ElfClusterReconciler{ControllerContext: controllerContext}
+	reconciler := &ElfClusterReconciler{
+		ControllerContext: controllerContext,
+		NewVMService:      service.NewVMService,
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		// Watch the controlled, infrastructure resource.
@@ -87,6 +93,7 @@ func AddClusterControllerToManager(ctx *context.ControllerManagerContext, mgr ct
 // ElfClusterReconciler reconciles a ElfCluster object.
 type ElfClusterReconciler struct {
 	*context.ControllerContext
+	NewVMService service.NewVMServiceFunc
 }
 
 // Reconcile ensures the back-end state reflects the Kubernetes resource state intent.
@@ -137,12 +144,23 @@ func (r *ElfClusterReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 
 	// Create the cluster context for this request.
 	logger := r.Logger.WithValues("namespace", cluster.Namespace, "elfCluster", elfCluster.Name)
+
+	// Create the vm service.
+	vmService, err := r.NewVMService(r.Context, elfCluster.GetTower(), logger)
+	if err != nil {
+		conditions.MarkFalse(&elfCluster, infrav1.TowerAvailableCondition, infrav1.TowerUnreachableReason, clusterv1.ConditionSeverityError, err.Error())
+
+		return reconcile.Result{}, err
+	}
+	conditions.MarkTrue(&elfCluster, infrav1.TowerAvailableCondition)
+
 	clusterContext := &context.ClusterContext{
 		ControllerContext: r.ControllerContext,
 		Cluster:           cluster,
 		ElfCluster:        &elfCluster,
 		Logger:            logger,
 		PatchHelper:       patchHelper,
+		VMService:         vmService,
 	}
 
 	// Always issue a patch when exiting this function so changes to the
@@ -181,10 +199,38 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
 	}
 
+	if err := r.reconcileDeleteLabels(ctx); err != nil {
+		return reconcile.Result{}, errors.Wrapf(err, "failed to delete labels")
+	}
+
 	// Cluster is deleted so remove the finalizer.
 	ctrlutil.RemoveFinalizer(ctx.ElfCluster, infrav1.ClusterFinalizer)
 
 	return reconcile.Result{}, nil
+}
+
+func (r *ElfClusterReconciler) reconcileDeleteLabels(ctx *context.ClusterContext) error {
+	if err := r.reconcileDeleteLabel(ctx, constants.NamespaceLabel, ctx.ElfCluster.Namespace, true); err != nil {
+		return err
+	}
+
+	if err := r.reconcileDeleteLabel(ctx, constants.ClusterLabel, ctx.ElfCluster.Name, false); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ElfClusterReconciler) reconcileDeleteLabel(ctx *context.ClusterContext, key, value string, strict bool) error {
+	labelID, err := ctx.VMService.DeleteLabel(key, value, strict)
+	if err != nil {
+		return err
+	}
+	if labelID != "" {
+		ctx.Logger.Info(fmt.Sprintf("label %s:%s already deleted", key, value), "labelId", labelID)
+	}
+
+	return nil
 }
 
 func (r *ElfClusterReconciler) reconcileNormal(ctx *context.ClusterContext) (reconcile.Result, error) {
