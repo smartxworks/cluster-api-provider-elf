@@ -35,8 +35,8 @@ const (
 	EtcdVersionUpgradeTo         = "ETCD_VERSION_UPGRADE_TO"
 	CoreDNSVersionUpgradeTo      = "COREDNS_VERSION_UPGRADE_TO"
 	MachineTemplateUpgradeTo     = "MACHINE_TEMPLATE_UPGRADE_TO"
-	ElfTemplateUpgradeTo         = "ELF_TEMPLATE_UPGRADE_TO"
-	ElfTemplate                  = "ELF_TEMPLATE"
+	VMTemplateUpgradeTo          = "VM_TEMPLATE_UPGRADE_TO"
+	VMTemplate                   = "VM_TEMPLATE"
 	ElfServerUsername            = "ELF_SERVER_USERNAME"
 	ElfServerPassword            = "ELF_SERVER_PASSWORD" //nolint:gosec
 )

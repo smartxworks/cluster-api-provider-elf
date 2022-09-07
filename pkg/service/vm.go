@@ -22,12 +22,12 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	clientcluster "github.com/smartxworks/cloudtower-go-sdk/v2/client/cluster"
+	clientvmtemplate "github.com/smartxworks/cloudtower-go-sdk/v2/client/content_library_vm_template"
 	clienthost "github.com/smartxworks/cloudtower-go-sdk/v2/client/host"
 	clientlabel "github.com/smartxworks/cloudtower-go-sdk/v2/client/label"
 	clienttask "github.com/smartxworks/cloudtower-go-sdk/v2/client/task"
 	clientvlan "github.com/smartxworks/cloudtower-go-sdk/v2/client/vlan"
 	clientvm "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm"
-	clientvmtemplate "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_template"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
@@ -48,7 +48,7 @@ type VMService interface {
 	ShutDown(uuid string) (*models.Task, error)
 	Get(id string) (*models.VM, error)
 	GetByName(name string) (*models.VM, error)
-	GetVMTemplate(templateUUID string) (*models.VMTemplate, error)
+	GetVMTemplate(id string) (*models.ContentLibraryVMTemplate, error)
 	GetTask(id string) (*models.Task, error)
 	GetCluster(id string) (*models.Cluster, error)
 	GetHost(id string) (*models.Host, error)
@@ -196,7 +196,7 @@ func (svr *TowerVMService) Clone(
 		hostID = *host.ID
 	}
 
-	vmCreateVMFromTemplateParams := &models.VMCreateVMFromTemplateParams{
+	vmCreateVMFromTemplateParams := &models.VMCreateVMFromContentLibraryTemplateParams{
 		ClusterID:   cluster.ID,
 		HostID:      util.TowerString(hostID),
 		Name:        util.TowerString(elfMachine.Name),
@@ -211,12 +211,12 @@ func (svr *TowerVMService) Clone(
 		IsFullCopy:  util.TowerBool(isFullCopy),
 		TemplateID:  template.ID,
 		VMNics:      nics,
-		DiskOperate: &models.VMCreateVMFromTemplateParamsDiskOperate{
+		DiskOperate: &models.VMDiskOperate{
 			NewDisks: &models.VMDiskParams{
 				MountNewCreateDisks: mountDisks,
 			},
 		},
-		CloudInit: &models.VMCreateVMFromTemplateParamsCloudInit{
+		CloudInit: &models.TemplateCloudInit{
 			Hostname:    util.TowerString(elfMachine.Name),
 			UserData:    util.TowerString(bootstrapData),
 			Networks:    networks,
@@ -224,9 +224,9 @@ func (svr *TowerVMService) Clone(
 		},
 	}
 
-	createVMFromTemplateParams := clientvm.NewCreateVMFromTemplateParams()
-	createVMFromTemplateParams.RequestBody = []*models.VMCreateVMFromTemplateParams{vmCreateVMFromTemplateParams}
-	createVMFromTemplateResp, err := svr.Session.VM.CreateVMFromTemplate(createVMFromTemplateParams)
+	createVMFromTemplateParams := clientvm.NewCreateVMFromContentLibraryTemplateParams()
+	createVMFromTemplateParams.RequestBody = []*models.VMCreateVMFromContentLibraryTemplateParams{vmCreateVMFromTemplateParams}
+	createVMFromTemplateResp, err := svr.Session.VM.CreateVMFromContentLibraryTemplate(createVMFromTemplateParams)
 	if err != nil {
 		return nil, err
 	}
@@ -423,14 +423,15 @@ func (svr *TowerVMService) GetVlan(id string) (*models.Vlan, error) {
 }
 
 // GetVMTemplate searches for a virtual machine template.
-func (svr *TowerVMService) GetVMTemplate(id string) (*models.VMTemplate, error) {
-	getVMTemplatesParams := clientvmtemplate.NewGetVMTemplatesParams()
-	getVMTemplatesParams.RequestBody = &models.GetVMTemplatesRequestBody{
-		Where: &models.VMTemplateWhereInput{
-			OR: []*models.VMTemplateWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+func (svr *TowerVMService) GetVMTemplate(id string) (*models.ContentLibraryVMTemplate, error) {
+	getVMTemplatesParams := clientvmtemplate.NewGetContentLibraryVMTemplatesParams()
+	getVMTemplatesParams.RequestBody = &models.GetContentLibraryVMTemplatesRequestBody{
+		Where: &models.ContentLibraryVMTemplateWhereInput{
+			AND: []*models.ContentLibraryVMTemplateWhereInput{{ID: util.TowerString(id)}},
 		},
 	}
-	getVMTemplatesResp, err := svr.Session.VMTemplate.GetVMTemplates(getVMTemplatesParams)
+
+	getVMTemplatesResp, err := svr.Session.ContentLibraryVMTemplate.GetContentLibraryVMTemplates(getVMTemplatesParams)
 	if err != nil {
 		return nil, err
 	}

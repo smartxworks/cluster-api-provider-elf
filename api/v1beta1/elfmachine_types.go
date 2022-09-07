@@ -40,7 +40,7 @@ type ElfMachineSpec struct {
 	// For this infrastructure provider, the name is equivalent to the name of the ElfDeploymentZone.
 	FailureDomain *string `json:"failureDomain,omitempty"`
 
-	// Template is the name or UUID of the template used to clone new machines.
+	// Template is the ID of the template used to clone new machines.
 	Template string `json:"template"`
 
 	// Network is the network configuration for this machin's VM.

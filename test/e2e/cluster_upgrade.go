@@ -72,7 +72,7 @@ func ClusterUpgradeSpec(ctx context.Context, inputGetter func() ClusterUpgradeSp
 		Expect(input.E2EConfig.Variables).To(HaveKey(capie2e.KubernetesVersionUpgradeFrom))
 		Expect(input.E2EConfig.Variables).To(HaveKey(capie2e.EtcdVersionUpgradeTo))
 		Expect(input.E2EConfig.Variables).To(HaveKey(capie2e.CoreDNSVersionUpgradeTo))
-		Expect(input.E2EConfig.Variables).To(HaveKey(ElfTemplateUpgradeTo))
+		Expect(input.E2EConfig.Variables).To(HaveKey(VMTemplateUpgradeTo))
 
 		// Setup a Namespace where to host objects for this spec and create a watcher for the Namespace events.
 		namespace, cancelWatches = setupSpecNamespace(ctx, specName, input.BootstrapClusterProxy, input.ArtifactFolder)
@@ -108,7 +108,7 @@ func ClusterUpgradeSpec(ctx context.Context, inputGetter func() ClusterUpgradeSp
 			EtcdImageTag:                input.E2EConfig.GetVariable(EtcdVersionUpgradeTo),
 			DNSImageTag:                 input.E2EConfig.GetVariable(CoreDNSVersionUpgradeTo),
 			KubernetesUpgradeVersion:    input.E2EConfig.GetVariable(KubernetesVersionUpgradeTo),
-			VMTemplateUUID:              input.E2EConfig.GetVariable(ElfTemplateUpgradeTo),
+			VMTemplateID:                input.E2EConfig.GetVariable(VMTemplateUpgradeTo),
 			WaitForMachinesToBeUpgraded: input.E2EConfig.GetIntervals(specName, "wait-machine-upgrade"),
 			WaitForKubeProxyUpgrade:     input.E2EConfig.GetIntervals(specName, "wait-machine-upgrade"),
 			WaitForDNSUpgrade:           input.E2EConfig.GetIntervals(specName, "wait-machine-upgrade"),
@@ -120,7 +120,7 @@ func ClusterUpgradeSpec(ctx context.Context, inputGetter func() ClusterUpgradeSp
 			ClusterProxy:                input.BootstrapClusterProxy,
 			Cluster:                     clusterResources.Cluster,
 			UpgradeVersion:              input.E2EConfig.GetVariable(KubernetesVersionUpgradeTo),
-			VMTemplateUUID:              input.E2EConfig.GetVariable(ElfTemplateUpgradeTo),
+			VMTemplateID:                input.E2EConfig.GetVariable(VMTemplateUpgradeTo),
 			MachineDeployments:          clusterResources.MachineDeployments,
 			WaitForMachinesToBeUpgraded: input.E2EConfig.GetIntervals(specName, "wait-worker-nodes"),
 		})
