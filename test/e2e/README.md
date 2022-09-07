@@ -27,8 +27,8 @@
 | `TOWER_AUTH_MODE`           | Tower 认证模式                       | `LOCAL`                                                                     |
 | `TOWER_SKIP_TLS_VERIFY`     | Tower 验证服务器CA证书               | `false`                                                                     |
 | `ELF_CLUSTER`               | ELF 集群 ID                          | `576ad467-d09e-4235-9dec-b615814ddc7e`                                      |
-| `VM_TEMPLATE`              | 用来创建 Kubernetes 节点的虚拟机模板 | `cl7hao0tseso80758osh921f1`                                      |
-| `VM_TEMPLATE_UPGRADE_TO`   | 用来升级 Kubernetes 节点的虚拟机模板 | `cl7hfp6lgx7ts0758xf3oza3c`                                      |
+| `VM_TEMPLATE`              | 用来创建 Kubernetes 节点的虚拟机模板（模板名或 ID） | `cl7hao0tseso80758osh921f1`                                      |
+| `VM_TEMPLATE_UPGRADE_TO`   | 用来升级 Kubernetes 节点的虚拟机模板（模板名或 ID） | `cl7hfp6lgx7ts0758xf3oza3c`                                      |
 | `CONTROL_PLANE_ENDPOINT_IP` | Kubernetes 集群的 IP 地址            | `127.0.0.1`                                                                 |
 | `ELF_VLAN`                  | 虚拟网络 ID                          | `576ad467-d09e-4235-9dec-b615814ddc7e_c8a1e42d-e0f3-4d50-a190-53209a98f157` |
 

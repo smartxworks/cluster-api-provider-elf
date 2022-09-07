@@ -427,7 +427,7 @@ func (svr *TowerVMService) GetVMTemplate(id string) (*models.ContentLibraryVMTem
 	getVMTemplatesParams := clientvmtemplate.NewGetContentLibraryVMTemplatesParams()
 	getVMTemplatesParams.RequestBody = &models.GetContentLibraryVMTemplatesRequestBody{
 		Where: &models.ContentLibraryVMTemplateWhereInput{
-			AND: []*models.ContentLibraryVMTemplateWhereInput{{ID: util.TowerString(id)}},
+			OR: []*models.ContentLibraryVMTemplateWhereInput{{ID: util.TowerString(id)}, {Name: util.TowerString(id)}},
 		},
 	}
 

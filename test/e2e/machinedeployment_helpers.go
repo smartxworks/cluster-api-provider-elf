@@ -37,7 +37,7 @@ type UpgradeMachineDeploymentsAndWaitInput struct {
 	ClusterProxy                framework.ClusterProxy
 	Cluster                     *clusterv1.Cluster
 	UpgradeVersion              string
-	VMTemplateID                string
+	VMTemplate                  string
 	MachineDeployments          []*clusterv1.MachineDeployment
 	WaitForMachinesToBeUpgraded []interface{}
 }
@@ -48,7 +48,7 @@ func UpgradeMachineDeploymentsAndWait(ctx context.Context, input UpgradeMachineD
 	Expect(input.ClusterProxy).ToNot(BeNil(), "Invalid argument. input.ClusterProxy can't be nil when calling UpgradeMachineDeploymentsAndWait")
 	Expect(input.Cluster).ToNot(BeNil(), "Invalid argument. input.Cluster can't be nil when calling UpgradeMachineDeploymentsAndWait")
 	Expect(input.UpgradeVersion).ToNot(BeNil(), "Invalid argument. input.UpgradeVersion can't be nil when calling UpgradeMachineDeploymentsAndWait")
-	Expect(input.VMTemplateID).ToNot(BeNil(), "Invalid argument. input.VMTemplateID can't be nil when calling UpgradeMachineDeploymentsAndWait")
+	Expect(input.VMTemplate).ToNot(BeNil(), "Invalid argument. input.VMTemplate can't be nil when calling UpgradeMachineDeploymentsAndWait")
 	Expect(input.MachineDeployments).ToNot(BeEmpty(), "Invalid argument. input.MachineDeployments can't be empty when calling UpgradeMachineDeploymentsAndWait")
 
 	mgmtClient := input.ClusterProxy.GetClient()
@@ -62,8 +62,8 @@ func UpgradeMachineDeploymentsAndWait(ctx context.Context, input UpgradeMachineD
 			Namespace: input.Cluster.Namespace,
 			Name:      infraRef.Name,
 		}, &elfMachineTemplate)).NotTo(HaveOccurred())
-		oldVMTemplateID := elfMachineTemplate.Spec.Template.Spec.Template
-		elfMachineTemplate.Spec.Template.Spec.Template = input.VMTemplateID
+		oldVMTemplate := elfMachineTemplate.Spec.Template.Spec.Template
+		elfMachineTemplate.Spec.Template.Spec.Template = input.VMTemplate
 
 		// Convert the ElfMachineTemplate resource to unstructured
 		elfMachineTemplateData, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&elfMachineTemplate)
@@ -90,7 +90,7 @@ func UpgradeMachineDeploymentsAndWait(ctx context.Context, input UpgradeMachineD
 
 		Logf("Waiting for Kubernetes versions of machines in MachineDeployment %s/%s to be upgraded from %s to %s, VM template from %s to %s",
 			deployment.Namespace, deployment.Name, *oldVersion, input.UpgradeVersion,
-			oldVMTemplateID, input.VMTemplateID)
+			oldVMTemplate, input.VMTemplate)
 
 		Logf("Waiting for Kubernetes versions of machines in MachineDeployment %s/%s to be upgraded from %s to %s",
 			deployment.Namespace, deployment.Name, *oldVersion, input.UpgradeVersion)

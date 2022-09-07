@@ -108,7 +108,7 @@ func ClusterUpgradeSpec(ctx context.Context, inputGetter func() ClusterUpgradeSp
 			EtcdImageTag:                input.E2EConfig.GetVariable(EtcdVersionUpgradeTo),
 			DNSImageTag:                 input.E2EConfig.GetVariable(CoreDNSVersionUpgradeTo),
 			KubernetesUpgradeVersion:    input.E2EConfig.GetVariable(KubernetesVersionUpgradeTo),
-			VMTemplateID:                input.E2EConfig.GetVariable(VMTemplateUpgradeTo),
+			VMTemplate:                  input.E2EConfig.GetVariable(VMTemplateUpgradeTo),
 			WaitForMachinesToBeUpgraded: input.E2EConfig.GetIntervals(specName, "wait-machine-upgrade"),
 			WaitForKubeProxyUpgrade:     input.E2EConfig.GetIntervals(specName, "wait-machine-upgrade"),
 			WaitForDNSUpgrade:           input.E2EConfig.GetIntervals(specName, "wait-machine-upgrade"),
@@ -120,7 +120,7 @@ func ClusterUpgradeSpec(ctx context.Context, inputGetter func() ClusterUpgradeSp
 			ClusterProxy:                input.BootstrapClusterProxy,
 			Cluster:                     clusterResources.Cluster,
 			UpgradeVersion:              input.E2EConfig.GetVariable(KubernetesVersionUpgradeTo),
-			VMTemplateID:                input.E2EConfig.GetVariable(VMTemplateUpgradeTo),
+			VMTemplate:                  input.E2EConfig.GetVariable(VMTemplateUpgradeTo),
 			MachineDeployments:          clusterResources.MachineDeployments,
 			WaitForMachinesToBeUpgraded: input.E2EConfig.GetIntervals(specName, "wait-worker-nodes"),
 		})

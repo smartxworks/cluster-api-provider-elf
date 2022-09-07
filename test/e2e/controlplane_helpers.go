@@ -89,7 +89,7 @@ type UpgradeControlPlaneAndWaitForUpgradeInput struct {
 	KubernetesUpgradeVersion    string
 	EtcdImageTag                string
 	DNSImageTag                 string
-	VMTemplateID                string
+	VMTemplate                  string
 	WaitForMachinesToBeUpgraded []interface{}
 	WaitForDNSUpgrade           []interface{}
 	WaitForEtcdUpgrade          []interface{}
@@ -105,7 +105,7 @@ func UpgradeControlPlaneAndWaitForUpgrade(ctx context.Context, input UpgradeCont
 	Expect(input.KubernetesUpgradeVersion).ToNot(BeNil(), "Invalid argument. input.KubernetesUpgradeVersion can't be empty when calling UpgradeControlPlaneAndWaitForUpgrade")
 	Expect(input.EtcdImageTag).ToNot(BeNil(), "Invalid argument. input.EtcdImageTag can't be empty when calling UpgradeControlPlaneAndWaitForUpgrade")
 	Expect(input.DNSImageTag).ToNot(BeNil(), "Invalid argument. input.DNSImageTag can't be empty when calling UpgradeControlPlaneAndWaitForUpgrade")
-	Expect(input.VMTemplateID).ToNot(BeNil(), "Invalid argument. input.VMTemplateID can't be empty when calling UpgradeControlPlaneAndWaitForUpgrade")
+	Expect(input.VMTemplate).ToNot(BeNil(), "Invalid argument. input.VMTemplate can't be empty when calling UpgradeControlPlaneAndWaitForUpgrade")
 
 	mgmtClient := input.ClusterProxy.GetClient()
 
@@ -119,8 +119,8 @@ func UpgradeControlPlaneAndWaitForUpgrade(ctx context.Context, input UpgradeCont
 		Name:      infraRef.Name,
 	}
 	Expect(mgmtClient.Get(ctx, elfMachineTemplateKey, &elfMachineTemplate)).NotTo(HaveOccurred())
-	oldVMTemplateID := elfMachineTemplate.Spec.Template.Spec.Template
-	elfMachineTemplate.Spec.Template.Spec.Template = input.VMTemplateID
+	oldVMTemplate := elfMachineTemplate.Spec.Template.Spec.Template
+	elfMachineTemplate.Spec.Template.Spec.Template = input.VMTemplate
 
 	// Convert the ElfMachineTemplate resource to unstructured
 	elfMachineTemplateData, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&elfMachineTemplate)
@@ -162,7 +162,7 @@ func UpgradeControlPlaneAndWaitForUpgrade(ctx context.Context, input UpgradeCont
 
 	Logf("Waiting for Kubernetes versions of machines in KubeadmControlPlane %s/%s to be upgraded from %s to %s, VM template from %s to %s",
 		input.ControlPlane.Namespace, input.ControlPlane.Name, oldVersion, input.KubernetesUpgradeVersion,
-		oldVMTemplateID, input.VMTemplateID)
+		oldVMTemplate, input.VMTemplate)
 
 	Logf("Waiting for control-plane machines to have the upgraded kubernetes version")
 	framework.WaitForControlPlaneMachinesToBeUpgraded(ctx, framework.WaitForControlPlaneMachinesToBeUpgradedInput{
