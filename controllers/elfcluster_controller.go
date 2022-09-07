@@ -275,7 +275,7 @@ func (r *ElfClusterReconciler) reconcileControlPlaneEndpoint(ctx *context.Cluste
 		return true
 	}
 
-	conditions.MarkFalse(ctx.ElfCluster, infrav1.ControlPlaneEndpointReadyCondition, infrav1.WaitingForHostReason, clusterv1.ConditionSeverityInfo, "")
+	conditions.MarkFalse(ctx.ElfCluster, infrav1.ControlPlaneEndpointReadyCondition, infrav1.WaitingForVIPReason, clusterv1.ConditionSeverityInfo, "")
 	ctx.Logger.Info("The ControlPlaneEndpoint of ElfCluster is not set")
 
 	return false

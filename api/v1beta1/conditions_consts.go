@@ -78,7 +78,7 @@ const (
 	// ControlPlaneEndpointReadyCondition documents the status of control plane endpoint.
 	ControlPlaneEndpointReadyCondition clusterv1.ConditionType = "ControlPlaneEndpointReady"
 
-	// WaitingForHostReason (Severity=Info) documents the control plane endpoint of ElfCluster
+	// WaitingForVIPReason (Severity=Info) documents the control plane endpoint of ElfCluster
 	// waiting for a address and port.
-	WaitingForHostReason = "WaitingForHost"
+	WaitingForVIPReason = "WaitingForVIP"
 )
