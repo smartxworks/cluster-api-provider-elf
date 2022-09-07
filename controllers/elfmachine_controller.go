@@ -47,8 +47,8 @@ import (
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/constants"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/label"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
@@ -690,20 +690,32 @@ func (r *ElfMachineReconciler) getBootstrapData(ctx *context.MachineContext) (st
 }
 
 func (r *ElfMachineReconciler) reconcileLabels(ctx *context.MachineContext, vm *models.VM) (bool, error) {
-	namespaceLabel, err := ctx.VMService.UpsertLabel(constants.NamespaceLabel, ctx.ElfMachine.Namespace)
+	creatorLabel, err := ctx.VMService.UpsertLabel(label.GetVMLabelManaged(), "true")
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to upsert namespace label")
+		return false, errors.Wrapf(err, "failed to upsert label "+label.GetVMLabelManaged())
 	}
-	clusterNameLabel, err := ctx.VMService.UpsertLabel(constants.ClusterLabel, ctx.ElfCluster.Name)
+	namespaceLabel, err := ctx.VMService.UpsertLabel(label.GetVMLabelNamespace(), ctx.ElfMachine.Namespace)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to upsert cluster name label")
+		return false, errors.Wrapf(err, "failed to upsert label "+label.GetVMLabelNamespace())
 	}
-	creatorLabel, err := ctx.VMService.UpsertLabel(constants.CreatedByLabel, constants.CreatedByLabelValue)
+	clusterNameLabel, err := ctx.VMService.UpsertLabel(label.GetVMLabelClusterName(), ctx.ElfCluster.Name)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to upsert created by label")
+		return false, errors.Wrapf(err, "failed to upsert label "+label.GetVMLabelClusterName())
 	}
+
+	var vipLabel *models.Label
+	if util.IsControlPlaneMachine(ctx.ElfMachine) {
+		vipLabel, err = ctx.VMService.UpsertLabel(label.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host)
+		if err != nil {
+			return false, errors.Wrapf(err, "failed to upsert label "+label.GetVMLabelVIP())
+		}
+	}
+
 	labelIDs := []string{*namespaceLabel.ID, *clusterNameLabel.ID, *creatorLabel.ID}
-	r.Logger.Info("Upsert Labels", "labelIds", labelIDs)
+	if util.IsControlPlaneMachine(ctx.ElfMachine) {
+		labelIDs = append(labelIDs, *vipLabel.ID)
+	}
+	r.Logger.V(3).Info("Upsert labels", "labelIds", labelIDs)
 	_, err = ctx.VMService.AddLabelsToVM(*vm.ID, labelIDs)
 	if err != nil {
 		return false, err

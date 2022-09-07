@@ -41,8 +41,8 @@ import (
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/constants"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/label"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
@@ -218,11 +218,15 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 }
 
 func (r *ElfClusterReconciler) reconcileDeleteLabels(ctx *context.ClusterContext) error {
-	if err := r.reconcileDeleteLabel(ctx, constants.NamespaceLabel, ctx.ElfCluster.Namespace, true); err != nil {
+	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelNamespace(), ctx.ElfCluster.Namespace, true); err != nil {
 		return err
 	}
 
-	if err := r.reconcileDeleteLabel(ctx, constants.ClusterLabel, ctx.ElfCluster.Name, false); err != nil {
+	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelClusterName(), ctx.ElfCluster.Name, true); err != nil {
+		return err
+	}
+
+	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host, true); err != nil {
 		return err
 	}
 

@@ -23,6 +23,9 @@ spec:
         image: docker.io/smartxworks/cape-manager:latest
         imagePullPolicy: IfNotPresent
         name: manager
+        env:
+        - name: VM_LABEL_PREFIX
+          value: cape
         ports:
         - containerPort: 9440
           name: healthz
