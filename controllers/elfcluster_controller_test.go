@@ -27,6 +27,7 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -131,12 +132,13 @@ var _ = Describe("ElfClusterReconciler", func() {
 		})
 
 		It("should add finalizer to the elfcluster", func() {
+			elfCluster.Spec.ControlPlaneEndpoint.Host = "127.0.0.1"
+			elfCluster.Spec.ControlPlaneEndpoint.Port = 6443
 			ctrlMgrContext := fake.NewControllerManagerContext(cluster, elfCluster)
 			ctrlContext := &context.ControllerContext{
 				ControllerManagerContext: ctrlMgrContext,
 				Logger:                   ctrllog.Log,
 			}
-
 			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
@@ -145,9 +147,14 @@ var _ = Describe("ElfClusterReconciler", func() {
 			Expect(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster)).To(Succeed())
 			Expect(elfCluster.Status.Ready).To(BeTrue())
 			Expect(elfCluster.Finalizers).To(ContainElement(infrav1.ClusterFinalizer))
+			expectConditions(elfCluster, []conditionAssertion{
+				{conditionType: clusterv1.ReadyCondition, status: corev1.ConditionTrue},
+				{conditionType: infrav1.ControlPlaneEndpointReadyCondition, status: corev1.ConditionTrue},
+				{conditionType: infrav1.TowerAvailableCondition, status: corev1.ConditionTrue},
+			})
 		})
 
-		It("should error if without ControlPlaneEndpoint", func() {
+		It("should not reconcile if without ControlPlaneEndpoint", func() {
 			ctrlMgrContext := fake.NewControllerManagerContext(cluster, elfCluster)
 			ctrlContext := &context.ControllerContext{
 				ControllerManagerContext: ctrlMgrContext,
@@ -157,8 +164,15 @@ var _ = Describe("ElfClusterReconciler", func() {
 
 			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: capiutil.ObjectKey(elfCluster)})
-			Expect(err.Error()).To(ContainSubstring("Failed to reconcile ControlPlaneEndpoint for ElfCluster"))
+			Expect(err).To(BeNil())
 			Expect(result).To(BeZero())
+			Expect(logBuffer.String()).To(ContainSubstring("The ControlPlaneEndpoint of ElfCluster is not set"))
+			Expect(reconciler.Client.Get(reconciler, capiutil.ObjectKey(elfCluster), elfCluster)).To(Succeed())
+			expectConditions(elfCluster, []conditionAssertion{
+				{clusterv1.ReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForVIPReason},
+				{infrav1.ControlPlaneEndpointReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForVIPReason},
+				{conditionType: infrav1.TowerAvailableCondition, status: corev1.ConditionTrue},
+			})
 		})
 	})
 

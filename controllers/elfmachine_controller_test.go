@@ -805,10 +805,10 @@ type conditionAssertion struct {
 	reason        string
 }
 
-func expectConditions(m *infrav1.ElfMachine, expected []conditionAssertion) {
-	Expect(len(m.Status.Conditions)).To(BeNumerically(">=", len(expected)), "number of conditions")
+func expectConditions(getter conditions.Getter, expected []conditionAssertion) {
+	Expect(len(getter.GetConditions())).To(BeNumerically(">=", len(expected)), "number of conditions")
 	for _, c := range expected {
-		actual := conditions.Get(m, c.conditionType)
+		actual := conditions.Get(getter, c.conditionType)
 		Expect(actual).To(Not(BeNil()))
 		Expect(actual.Type).To(Equal(c.conditionType))
 		Expect(actual.Status).To(Equal(c.status))
