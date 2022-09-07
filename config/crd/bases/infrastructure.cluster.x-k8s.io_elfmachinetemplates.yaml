@@ -155,8 +155,8 @@ spec:
                           as elf://f0f6f65d-0786-4170-9ab9-d02187a61ad6
                         type: string
                       template:
-                        description: Template is the name or UUID of the template
-                          used to clone new machines.
+                        description: Template is the name or ID of the template used
+                          to clone new machines.
                         type: string
                     required:
                     - template

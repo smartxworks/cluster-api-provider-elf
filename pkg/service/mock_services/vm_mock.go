@@ -172,18 +172,18 @@ func (mr *MockVMServiceMockRecorder) GetTask(id interface{}) *gomock.Call {
 }
 
 // GetVMTemplate mocks base method.
-func (m *MockVMService) GetVMTemplate(templateUUID string) (*models.VMTemplate, error) {
+func (m *MockVMService) GetVMTemplate(id string) (*models.ContentLibraryVMTemplate, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVMTemplate", templateUUID)
-	ret0, _ := ret[0].(*models.VMTemplate)
+	ret := m.ctrl.Call(m, "GetVMTemplate", id)
+	ret0, _ := ret[0].(*models.ContentLibraryVMTemplate)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetVMTemplate indicates an expected call of GetVMTemplate.
-func (mr *MockVMServiceMockRecorder) GetVMTemplate(templateUUID interface{}) *gomock.Call {
+func (mr *MockVMServiceMockRecorder) GetVMTemplate(id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMTemplate", reflect.TypeOf((*MockVMService)(nil).GetVMTemplate), templateUUID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMTemplate", reflect.TypeOf((*MockVMService)(nil).GetVMTemplate), id)
 }
 
 // GetVlan mocks base method.

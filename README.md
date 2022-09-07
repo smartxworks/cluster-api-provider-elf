@@ -76,8 +76,8 @@ export ELF_VLAN=576ad467-d09e-4235-9dec-b615814ddc7e_c8a1e42d-e0f3-4d50-a190-532
 # Control plane endpoint
 export CONTROL_PLANE_ENDPOINT_IP=<YOUR_CONTROL_PLANE_VIP>
 
-# ELF虚拟机模板
-export ELF_TEMPLATE=336820d7-5ba5-4707-9d0c-8f3e583b950f
+# 内容库的虚拟机模板名或ID
+export VM_TEMPLATE=cl7hao0tseso80758osh921f1
 
 # 创建工作负载集群的配置文件
 clusterctl generate yaml --from templates/cluster-template.yaml > cape-cluster.yaml

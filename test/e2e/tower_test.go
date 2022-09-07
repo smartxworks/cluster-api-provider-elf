@@ -30,12 +30,12 @@ import (
 )
 
 var (
-	elfTemplate          = os.Getenv("ELF_TEMPLATE")
-	elfTemplateUpgradeTo = os.Getenv("ELF_TEMPLATE_UPGRADE_TO")
-	towerUsername        = os.Getenv("TOWER_USERNAME")
-	towerPassword        = os.Getenv("TOWER_PASSWORD")
-	towerAuthMode        = os.Getenv("TOWER_AUTH_MODE")
-	towerSkipTLSVerify   = env.GetBoolDefault("TOWER_SKIP_TLS_VERIFY", false)
+	vmTemplate          = os.Getenv("VM_TEMPLATE")
+	vmTemplateUpgradeTo = os.Getenv("VM_TEMPLATE_UPGRADE_TO")
+	towerUsername       = os.Getenv("TOWER_USERNAME")
+	towerPassword       = os.Getenv("TOWER_PASSWORD")
+	towerAuthMode       = os.Getenv("TOWER_AUTH_MODE")
+	towerSkipTLSVerify  = env.GetBoolDefault("TOWER_SKIP_TLS_VERIFY", false)
 
 	towerServer string
 	vmService   service.VMService
@@ -55,11 +55,11 @@ func initTowerSession() {
 		SkipTLSVerify: towerSkipTLSVerify}, ctrllog.Log)
 	Expect(err).ShouldNot(HaveOccurred())
 
-	template, err := vmService.GetVMTemplate(elfTemplate)
+	template, err := vmService.GetVMTemplate(vmTemplate)
 	Expect(err).ShouldNot(HaveOccurred())
-	Expect(*template.LocalID).Should(Equal(elfTemplate))
+	Expect(*template.ID).Should(Equal(vmTemplate))
 
-	template, err = vmService.GetVMTemplate(elfTemplateUpgradeTo)
+	template, err = vmService.GetVMTemplate(vmTemplateUpgradeTo)
 	Expect(err).ShouldNot(HaveOccurred())
-	Expect(*template.LocalID).Should(Equal(elfTemplateUpgradeTo))
+	Expect(*template.ID).Should(Equal(vmTemplateUpgradeTo))
 }
