@@ -38,8 +38,8 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/constants"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/label"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service/mock_services"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
@@ -209,15 +209,16 @@ var _ = Describe("ElfClusterReconciler", func() {
 			}
 			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 
-			mockVMService.EXPECT().DeleteLabel(constants.NamespaceLabel, elfCluster.Namespace, true).Return("", nil)
-			mockVMService.EXPECT().DeleteLabel(constants.ClusterLabel, elfCluster.Name, false).Return("labelid", nil)
+			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelNamespace(), elfCluster.Namespace, true).Return("", nil)
+			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelClusterName(), elfCluster.Name, true).Return("labelid", nil)
+			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelVIP(), elfCluster.Spec.ControlPlaneEndpoint.Host, true).Return("labelid", nil)
 
 			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("label %s:%s already deleted", constants.ClusterLabel, elfCluster.Name)))
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("label %s:%s already deleted", label.GetVMLabelClusterName(), elfCluster.Name)))
 			Expect(apierrors.IsNotFound(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster))).To(BeTrue())
 		})
 	})

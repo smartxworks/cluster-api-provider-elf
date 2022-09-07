@@ -15,11 +15,3 @@ limitations under the License.
 */
 
 package constants
-
-// Tower labels.
-const (
-	NamespaceLabel      = "namespace"
-	ClusterLabel        = "cluster-name"
-	CreatedByLabel      = "created-by"
-	CreatedByLabelValue = "sks"
-)
