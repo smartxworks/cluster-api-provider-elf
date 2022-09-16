@@ -56,6 +56,7 @@ type ElfClusterStatus struct {
 //+kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="Cluster infrastructure is ready"
 //+kubebuilder:printcolumn:name="Tower",type="string",JSONPath=".spec.tower.server",description="Tower is the address of the Tower endpoint"
 //+kubebuilder:printcolumn:name="ControlPlaneEndpoint",type="string",JSONPath=".spec.controlPlaneEndpoint",description="API Endpoint",priority=1
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of Cluster"
 
 // ElfCluster is the Schema for the elfclusters API.
 type ElfCluster struct {
