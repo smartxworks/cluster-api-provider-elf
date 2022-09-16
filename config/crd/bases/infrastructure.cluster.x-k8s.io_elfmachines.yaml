@@ -32,6 +32,10 @@ spec:
       jsonPath: .metadata.ownerReferences[?(@.kind=="Machine")].name
       name: Machine
       type: string
+    - description: Time duration since creation of ElfMachine
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1beta1
     schema:
       openAPIV3Schema:
