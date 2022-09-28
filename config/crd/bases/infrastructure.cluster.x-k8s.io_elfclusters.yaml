@@ -71,6 +71,11 @@ spec:
                 - host
                 - port
                 type: object
+              graciedShutdown:
+                description: GraciedShutdown is the config for whether cluster machine
+                  should grace shutdown when cluster machine need be delete. Defaults
+                  is false to force shutdown
+                type: boolean
               tower:
                 description: Tower is the config of tower.
                 properties:

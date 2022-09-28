@@ -39,6 +39,12 @@ type ElfClusterSpec struct {
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
 	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint"`
+
+	// GraciedShutdown is the config for whether cluster machine should grace shutdown
+	// when cluster machine need be delete.
+	// Defaults is false to force shutdown
+	// +optional
+	GraciedShutdown bool `json:"graciedShutdown,omitempty"`
 }
 
 // ElfClusterStatus defines the observed state of ElfCluster.
