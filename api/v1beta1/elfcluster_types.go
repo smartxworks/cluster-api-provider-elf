@@ -40,11 +40,10 @@ type ElfClusterSpec struct {
 	// +optional
 	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint"`
 
-	// GraciedShutdown is the config for whether cluster machine should grace shutdown
-	// when cluster machine need be delete.
-	// Defaults is false to force shutdown
+	// VMGracefulShutdown indicates the VMs in this ElfCluster should shutdown gracefully when deleting the VMs.
+	// Default to false because sometimes the OS stuck when shutting down gracefully.
 	// +optional
-	GraciedShutdown bool `json:"graciedShutdown,omitempty"`
+	VMGracefulShutdown bool `json:"vmGracefulShutdown,omitempty"`
 }
 
 // ElfClusterStatus defines the observed state of ElfCluster.

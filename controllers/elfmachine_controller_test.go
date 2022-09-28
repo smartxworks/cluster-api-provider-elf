@@ -496,6 +496,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
 			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			elfMachine.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
+			elfCluster.Spec.VMGracefulShutdown = true
 		})
 
 		It("should delete ElfMachine without VM", func() {
@@ -710,6 +711,33 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).To(BeZero())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be deleted"))
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
+			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+		})
+
+		It("should power off when VM is running and VMGracefulShutdown is false", func() {
+			vm := fake.NewTowerVM()
+			vm.EntityAsyncStatus = nil
+			status := models.VMStatusRUNNING
+			vm.Status = &status
+			task := fake.NewTowerTask()
+			elfMachine.Status.VMRef = *vm.LocalID
+			elfCluster.Spec.VMGracefulShutdown = false
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().PowerOff(elfMachine.Status.VMRef).Return(task, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).To(BeZero())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM shut down"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
