@@ -265,7 +265,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 	if *vm.Status == models.VMStatusRUNNING {
 		var task *models.Task
 		var err error
-		// If shut down timeout or cluster machine force shutdown , the VM may not be shut down unexpectedly, just power off the VM.
+		// If VM shutdown timed out or VMGracefulShutdown is set to false, simply power off the VM.
 		if service.IsShutDownTimeout(conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)) ||
 			!ctx.ElfCluster.Spec.VMGracefulShutdown {
 			task, err = ctx.VMService.PowerOff(ctx.ElfMachine.Status.VMRef)
