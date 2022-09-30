@@ -95,6 +95,11 @@ spec:
                     description: Username is the name used to log into the tower server.
                     type: string
                 type: object
+              vmGracefulShutdown:
+                description: VMGracefulShutdown indicates the VMs in this ElfCluster
+                  should shutdown gracefully when deleting the VMs. Default to false
+                  because sometimes the OS stuck when shutting down gracefully.
+                type: boolean
             type: object
           status:
             description: ElfClusterStatus defines the observed state of ElfCluster.

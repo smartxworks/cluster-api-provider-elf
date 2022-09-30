@@ -39,6 +39,11 @@ type ElfClusterSpec struct {
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
 	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint"`
+
+	// VMGracefulShutdown indicates the VMs in this ElfCluster should shutdown gracefully when deleting the VMs.
+	// Default to false because sometimes the OS stuck when shutting down gracefully.
+	// +optional
+	VMGracefulShutdown bool `json:"vmGracefulShutdown,omitempty"`
 }
 
 // ElfClusterStatus defines the observed state of ElfCluster.
