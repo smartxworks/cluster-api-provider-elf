@@ -39,8 +39,6 @@ providers:
       replacements:
       - old: "imagePullPolicy: Always"
         new: "imagePullPolicy: IfNotPresent"
-      - old: --metrics-addr=127.0.0.1:8080
-        new: --metrics-addr=:8080
 
 - name: kubeadm
   type: BootstrapProvider
@@ -56,8 +54,6 @@ providers:
     replacements:
     - old: "imagePullPolicy: Always"
       new: "imagePullPolicy: IfNotPresent"
-    - old: --metrics-addr=127.0.0.1:8080
-      new: --metrics-addr=:8080
 
 - name: kubeadm
   type: ControlPlaneProvider
@@ -73,13 +69,11 @@ providers:
     replacements:
     - old: "imagePullPolicy: Always"
       new: "imagePullPolicy: IfNotPresent"
-    - old: --metrics-addr=127.0.0.1:8080
-      new: --metrics-addr=:8080
 
 - name: elf
   type: InfrastructureProvider
   versions:
-  - name: v0.3.7
+  - name: v0.3.8
   # Use manifest from source files
     value: ../../../../cluster-api-provider-elf/config/default
     contract: v1beta1
