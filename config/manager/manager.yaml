@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - args:
-        - --enable-leader-election
+        - --leader-elect
         - --logtostderr
         - --v=4
         image: docker.io/smartxworks/cape-manager:latest
@@ -42,3 +42,5 @@ spec:
       tolerations:
         - effect: NoSchedule
           key: node-role.kubernetes.io/master
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
