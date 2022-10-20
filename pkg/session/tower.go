@@ -20,7 +20,9 @@ import (
 	goctx "context"
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/go-logr/logr"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 	"github.com/pkg/errors"
@@ -32,9 +34,18 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
+var lastGCTime = time.Now()
+var gcMinInterval = 10 * time.Minute
+var sessionIdleTime = 10 * time.Minute
+
 // global Session map against sessionKeys
-// in map[sessionKey]Session.
+// in map[sessionKey]cacheItem.
 var sessionCache sync.Map
+
+type cacheItem struct {
+	LastUsedTime time.Time
+	Session      *TowerSession
+}
 
 type TowerSession struct {
 	*towerclient.Cloudtower
@@ -45,12 +56,20 @@ type TowerSession struct {
 func GetOrCreate(ctx goctx.Context, tower infrav1.Tower) (*TowerSession, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName("session").WithValues("server", tower.Server, "username", tower.Username, "source", tower.AuthMode)
 
+	defer func() {
+		if lastGCTime.Add(gcMinInterval).Before(time.Now()) {
+			clearCache(logger)
+			lastGCTime = time.Now()
+		}
+	}()
+
 	sessionKey := getSessionKey(tower)
-	if cachedSession, ok := sessionCache.Load(sessionKey); ok {
-		session := cachedSession.(*TowerSession)
+	if value, ok := sessionCache.Load(sessionKey); ok {
+		item := value.(*cacheItem)
+		item.LastUsedTime = time.Now()
 		logger.V(3).Info("found active cached tower client session")
 
-		return session, nil
+		return item.Session, nil
 	}
 
 	client, err := createTowerClient(httptransport.TLSClientOptions{
@@ -71,14 +90,14 @@ func GetOrCreate(ctx goctx.Context, tower infrav1.Tower) (*TowerSession, error) 
 	session := &TowerSession{client}
 
 	// Cache the session.
-	sessionCache.Store(sessionKey, session)
+	sessionCache.Store(sessionKey, &cacheItem{LastUsedTime: time.Now(), Session: session})
 	logger.V(3).Info("cached tower client session")
 
 	return session, nil
 }
 
 func getSessionKey(tower infrav1.Tower) string {
-	return fmt.Sprintf("%s-%s-%s", tower.Server, tower.Username, tower.AuthMode)
+	return fmt.Sprintf("%v", tower)
 }
 
 func createTowerClient(tlsOpts httptransport.TLSClientOptions, clientConfig towerclient.ClientConfig, userConfig towerclient.UserConfig) (*towerclient.Cloudtower, error) {
@@ -102,4 +121,16 @@ func createTowerClient(tlsOpts httptransport.TLSClientOptions, clientConfig towe
 	}
 	rt.DefaultAuthentication = httptransport.APIKeyAuth("Authorization", "header", *resp.Payload.Data.Token)
 	return client, nil
+}
+
+func clearCache(logger logr.Logger) {
+	sessionCache.Range(func(key interface{}, value interface{}) bool {
+		item := value.(*cacheItem)
+		if item.LastUsedTime.Add(sessionIdleTime).Before(time.Now()) {
+			sessionCache.Delete(key)
+			logger.V(3).Info(fmt.Sprintf("delete inactive tower client session %s from sessionCache", key))
+		}
+
+		return true
+	})
 }
