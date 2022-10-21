@@ -26,6 +26,10 @@ const (
 	// resources associated with ElfCluster before removing it from the
 	// API server.
 	ClusterFinalizer = "elfcluster.infrastructure.cluster.x-k8s.io"
+
+	// ElfClusterForceDeleteAnnotation means to skip the deletion of infrastructure resources in Tower (e.g. VM and labels)
+	// when deleting an ElfCluster. This is useful when the Tower server or SMTX ELF cluster is disconnected.
+	ElfClusterForceDeleteAnnotation = "cape.infrastructure.cluster.x-k8s.io/force-delete-cluste"
 )
 
 // ElfClusterSpec defines the desired state of ElfCluster.
@@ -82,6 +86,14 @@ func (c *ElfCluster) SetConditions(conditions clusterv1.Conditions) {
 
 func (c *ElfCluster) GetTower() Tower {
 	return c.Spec.Tower
+}
+
+func (c *ElfCluster) HasForceDeleteCluster() bool {
+	if c.Annotations == nil {
+		return false
+	}
+	_, ok := c.Annotations[ElfClusterForceDeleteAnnotation]
+	return ok
 }
 
 //+kubebuilder:object:root=true

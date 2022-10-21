@@ -207,8 +207,11 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
 	}
 
-	if err := r.reconcileDeleteLabels(ctx); err != nil {
-		return reconcile.Result{}, errors.Wrapf(err, "failed to delete labels")
+	// if cluster need to force delete, skipping infra resource deletion and remove the finalizer.
+	if !ctx.ElfCluster.HasForceDeleteCluster() {
+		if err := r.reconcileDeleteLabels(ctx); err != nil {
+			return reconcile.Result{}, errors.Wrapf(err, "failed to delete labels")
+		}
 	}
 
 	// Cluster is deleted so remove the finalizer.
