@@ -27,8 +27,8 @@ const (
 	// API server.
 	ClusterFinalizer = "elfcluster.infrastructure.cluster.x-k8s.io"
 
-	// ElfClusterForceDeleteAnnotation is an annotation that can be applied to ElfCluster
-	// skipping infra resource deletion when delete ElfCluster
+	// ElfClusterForceDeleteAnnotation means to skip the deletion of infrastructure resources in Tower (e.g. VM and labels)
+	// when deleting an ElfCluster. This is useful when the Tower server or SMTX ELF cluster is disconnected.
 	ElfClusterForceDeleteAnnotation = "cape.infrastructure.cluster.x-k8s.io/force-delete-cluste"
 )
 
