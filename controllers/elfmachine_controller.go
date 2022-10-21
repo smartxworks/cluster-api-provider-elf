@@ -307,6 +307,14 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 
 	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.DeletingReason, clusterv1.ConditionSeverityInfo, "")
 
+	// if cluster need to force delete, skipping VM deletion and remove the finalizer.
+	if ctx.ElfCluster.ForceDelete() {
+		ctx.Logger.Info("skipping VM deletion")
+
+		ctrlutil.RemoveFinalizer(ctx.ElfMachine, infrav1.MachineFinalizer)
+		return reconcile.Result{}, nil
+	}
+
 	if !ctx.ElfMachine.HasVM() || !ctx.ElfMachine.WithVM() {
 		ctx.Logger.Info("VM already deleted")
 
