@@ -18,6 +18,8 @@ package session
 
 import (
 	goctx "context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
@@ -58,12 +60,12 @@ func GetOrCreate(ctx goctx.Context, tower infrav1.Tower) (*TowerSession, error) 
 
 	defer func() {
 		if lastGCTime.Add(gcMinInterval).Before(time.Now()) {
-			clearCache(logger)
+			cleanupSessionCache(logger)
 			lastGCTime = time.Now()
 		}
 	}()
 
-	sessionKey := getSessionKey(tower)
+	sessionKey := getSessionKey(&tower)
 	if value, ok := sessionCache.Load(sessionKey); ok {
 		item := value.(*cacheItem)
 		item.LastUsedTime = time.Now()
@@ -96,10 +98,6 @@ func GetOrCreate(ctx goctx.Context, tower infrav1.Tower) (*TowerSession, error) 
 	return session, nil
 }
 
-func getSessionKey(tower infrav1.Tower) string {
-	return fmt.Sprintf("%v", tower)
-}
-
 func createTowerClient(tlsOpts httptransport.TLSClientOptions, clientConfig towerclient.ClientConfig, userConfig towerclient.UserConfig) (*towerclient.Cloudtower, error) {
 	rt := httptransport.New(clientConfig.Host, clientConfig.BasePath, clientConfig.Schemes)
 	var err error
@@ -123,7 +121,7 @@ func createTowerClient(tlsOpts httptransport.TLSClientOptions, clientConfig towe
 	return client, nil
 }
 
-func clearCache(logger logr.Logger) {
+func cleanupSessionCache(logger logr.Logger) {
 	sessionCache.Range(func(key interface{}, value interface{}) bool {
 		item := value.(*cacheItem)
 		if item.LastUsedTime.Add(sessionIdleTime).Before(time.Now()) {
@@ -133,4 +131,12 @@ func clearCache(logger logr.Logger) {
 
 		return true
 	})
+}
+
+func getSessionKey(tower *infrav1.Tower) string {
+	encryptedTower := tower.DeepCopy()
+	sum256 := sha256.Sum256([]byte(tower.Password))
+	encryptedTower.Password = hex.EncodeToString(sum256[:])
+
+	return fmt.Sprintf("%v", encryptedTower)
 }

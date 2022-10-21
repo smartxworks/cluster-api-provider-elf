@@ -21,10 +21,10 @@ func TestGetOrCreate(t *testing.T) {
 		invalidTower := tower.DeepCopy()
 		invalidTower.Username = "invalid"
 
-		sessionKey := getSessionKey(tower)
+		sessionKey := getSessionKey(&tower)
 		cachedSession := &TowerSession{}
 		sessionCache.Store(sessionKey, &cacheItem{Session: cachedSession})
-		inactiveSessionKey := getSessionKey(*inactiveTower)
+		inactiveSessionKey := getSessionKey(inactiveTower)
 		sessionCache.Store(inactiveSessionKey, &cacheItem{Session: &TowerSession{}, LastUsedTime: time.Now().Add(-sessionIdleTime)})
 
 		session, err := GetOrCreate(goctx.Background(), tower)
