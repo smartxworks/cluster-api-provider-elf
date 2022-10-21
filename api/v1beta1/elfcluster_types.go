@@ -29,7 +29,7 @@ const (
 
 	// ElfClusterForceDeleteAnnotation is an annotation that can be applied to ElfCluster
 	// skipping infra resource deletion when delete ElfCluster
-	ElfClusterForceDeleteAnnotation = "kubesmart.smtx.io/force-delete-cluster"
+	ElfClusterForceDeleteAnnotation = "cape.infrastructure.cluster.x-k8s.io/force-delete-cluste"
 )
 
 // ElfClusterSpec defines the desired state of ElfCluster.
@@ -88,7 +88,7 @@ func (c *ElfCluster) GetTower() Tower {
 	return c.Spec.Tower
 }
 
-func (c *ElfCluster) ForceDelete() bool {
+func (c *ElfCluster) HasForceDeleteCluster() bool {
 	if c.Annotations == nil {
 		return false
 	}

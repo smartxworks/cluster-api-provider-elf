@@ -208,7 +208,7 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 	}
 
 	// if cluster need to force delete, skipping infra resource deletion and remove the finalizer.
-	if ctx.ElfCluster.ForceDelete() {
+	if ctx.ElfCluster.HasForceDeleteCluster() {
 		ctx.Logger.Info("skipping infra resource deletion")
 
 		ctrlutil.RemoveFinalizer(ctx.ElfCluster, infrav1.ClusterFinalizer)
