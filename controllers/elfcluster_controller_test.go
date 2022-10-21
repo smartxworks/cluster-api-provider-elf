@@ -238,7 +238,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("skipping infra resource deletion"))
+			Expect(logBuffer.String()).To(ContainSubstring(""))
 			Expect(apierrors.IsNotFound(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster))).To(BeTrue())
 		})
 	})
