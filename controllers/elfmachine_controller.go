@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
@@ -388,6 +389,14 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 
 	vm, err := r.reconcileVM(ctx)
 	if err != nil {
+		if service.IsVMNotFound(err) {
+			if ctx.ElfMachine.IsFailed() {
+				return reconcile.Result{}, nil
+			}
+
+			return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
+		}
+
 		return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile VM")
 	}
 	if vm == nil || *vm.Status != models.VMStatusRUNNING || !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
@@ -497,11 +506,26 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 			return nil, err
 		}
 
-		// If the machine was not found by UUID it means that it got deleted directly
 		if util.IsUUID(ctx.ElfMachine.Status.VMRef) {
+			vmDisconnectionTimestamp := ctx.ElfMachine.GetVMDisconnectionTimestamp()
+			if vmDisconnectionTimestamp == nil {
+				now := metav1.Now()
+				vmDisconnectionTimestamp = &now
+				ctx.ElfMachine.SetVMDisconnectionTimestamp(vmDisconnectionTimestamp)
+			}
+
+			// The machine may only be temporarily disconnected before timeout
+			if !vmDisconnectionTimestamp.Add(infrav1.VMDisconnectionTimeout).Before(time.Now()) {
+				ctx.Logger.Error(err, "the VM has been disconnected", "vmRef", ctx.ElfMachine.Status.VMRef, "disconnectionTimestamp", vmDisconnectionTimestamp.Format(time.RFC3339))
+
+				return nil, err
+			}
+
+			// If the machine was not found by UUID and timed out it means that it got deleted directly
 			ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capierrors.UpdateMachineError)
 			ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", ctx.ElfMachine.Status.VMRef))
-			ctx.Logger.Error(errors.New("Failed to get VM"), "", "message", ctx.ElfMachine.Status.FailureMessage)
+			ctx.Logger.Error(err, fmt.Sprintf("failed to get VM timed out in %s", infrav1.VMDisconnectionTimeout.String()), "message", ctx.ElfMachine.Status.FailureMessage)
+
 			return nil, err
 		}
 
@@ -520,6 +544,14 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		ctx.ElfMachine.SetVM("")
 
 		return nil, errors.Errorf("VM task failed for ElfMachine %s/%s", ctx.ElfMachine.Namespace, ctx.ElfMachine.Name)
+	}
+
+	// Remove VM disconnection timestamp
+	vmDisconnectionTimestamp := ctx.ElfMachine.GetVMDisconnectionTimestamp()
+	if vmDisconnectionTimestamp != nil {
+		ctx.ElfMachine.SetVMDisconnectionTimestamp(nil)
+
+		ctx.Logger.Info("The VM was found again", "vmRef", ctx.ElfMachine.Status.VMRef, "disconnectionTimestamp", vmDisconnectionTimestamp.Format(time.RFC3339))
 	}
 
 	// Create VM successful or power on VM done
