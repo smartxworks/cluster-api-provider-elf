@@ -17,6 +17,8 @@ limitations under the License.
 package v1beta1
 
 import (
+	"time"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
@@ -27,6 +29,9 @@ const (
 	// resources associated with ElfMachine before removing it from the
 	// API Server.
 	MachineFinalizer = "elfmachine.infrastructure.cluster.x-k8s.io"
+
+	// VMDisconnectionTimestampAnnotation is the annotation identifying the VM of ElfMachine disconnection time.
+	VMDisconnectionTimestampAnnotation = "cape.infrastructure.cluster.x-k8s.io/vm-disconnection-timestamp"
 )
 
 // ElfMachineSpec defines the desired state of ElfMachine.
@@ -190,6 +195,38 @@ func (m *ElfMachine) SetTask(taskID string) {
 
 func (m *ElfMachine) IsFailed() bool {
 	return m.Status.FailureReason != nil || m.Status.FailureMessage != nil
+}
+
+func (m *ElfMachine) SetVMDisconnectionTimestamp(timestamp *metav1.Time) {
+	if m.Annotations == nil {
+		m.Annotations = make(map[string]string)
+	}
+
+	if timestamp == nil {
+		delete(m.Annotations, VMDisconnectionTimestampAnnotation)
+	} else {
+		m.Annotations[VMDisconnectionTimestampAnnotation] = timestamp.Format(time.RFC3339)
+	}
+}
+
+func (m *ElfMachine) GetVMDisconnectionTimestamp() *metav1.Time {
+	if m.Annotations == nil {
+		return nil
+	}
+
+	if _, ok := m.Annotations[VMDisconnectionTimestampAnnotation]; ok {
+		timestampAnnotation := m.Annotations[VMDisconnectionTimestampAnnotation]
+		timestamp, err := time.Parse(time.RFC3339, timestampAnnotation)
+		if err != nil {
+			return nil
+		}
+
+		disconnectionTimestamp := metav1.NewTime(timestamp)
+
+		return &disconnectionTimestamp
+	}
+
+	return nil
 }
 
 //+kubebuilder:object:root=true

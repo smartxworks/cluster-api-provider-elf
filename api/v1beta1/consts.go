@@ -14,12 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package config
+package v1beta1
 
-import "time"
+import (
+	"time"
+)
 
-var (
-	// DefaultRequeueTimeout is the default time for how long to wait when
-	// requeueing a CAPE operation.
-	DefaultRequeueTimeout = 20 * time.Second
+const (
+	// VMDisconnectionTimeout is the time allowed for the virtual machine to be disconnected.
+	// The virtual machine will be marked as deleted after the timeout.
+	VMDisconnectionTimeout = 1 * time.Minute
 )
