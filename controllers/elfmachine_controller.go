@@ -169,15 +169,6 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 	logger := r.Logger.WithValues("namespace", elfMachine.Namespace,
 		"elfCluster", elfCluster.Name, "elfMachine", elfMachine.Name)
 
-	// Create the vm service.
-	vmService, err := r.NewVMService(r.Context, elfCluster.GetTower(), logger)
-	if err != nil {
-		conditions.MarkFalse(&elfMachine, infrav1.TowerAvailableCondition, infrav1.TowerUnreachableReason, clusterv1.ConditionSeverityError, err.Error())
-
-		return reconcile.Result{}, err
-	}
-	conditions.MarkTrue(&elfMachine, infrav1.TowerAvailableCondition)
-
 	// Create the machine context for this request.
 	machineContext := &context.MachineContext{
 		ControllerContext: r.ControllerContext,
@@ -187,7 +178,20 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 		ElfMachine:        &elfMachine,
 		Logger:            logger,
 		PatchHelper:       patchHelper,
-		VMService:         vmService,
+	}
+
+	// Create the vm service.
+	// if ElfMachine is in deleting and ElfCluster need to force delete, may be Tower server is disconnected, skipping NewVMService
+	if elfMachine.ObjectMeta.DeletionTimestamp.IsZero() || !elfCluster.HasForceDeleteCluster() {
+		vmService, err := r.NewVMService(r.Context, elfCluster.GetTower(), logger)
+		if err != nil {
+			conditions.MarkFalse(&elfMachine, infrav1.TowerAvailableCondition, infrav1.TowerUnreachableReason, clusterv1.ConditionSeverityError, err.Error())
+
+			return reconcile.Result{}, err
+		}
+		conditions.MarkTrue(&elfMachine, infrav1.TowerAvailableCondition)
+
+		machineContext.VMService = vmService
 	}
 
 	// Always issue a patch when exiting this function so changes to the

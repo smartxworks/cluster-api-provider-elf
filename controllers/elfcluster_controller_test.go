@@ -237,7 +237,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
-			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeNil())
 			Expect(logBuffer.String()).To(ContainSubstring(""))
 			Expect(apierrors.IsNotFound(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster))).To(BeTrue())
 		})
