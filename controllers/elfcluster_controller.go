@@ -204,7 +204,7 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 	if len(elfMachines) > 0 {
 		ctx.Logger.Info("Waiting for ElfMachines to be deleted", "count", len(elfMachines))
 
-		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
+		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 	}
 
 	// if cluster need to force delete, skipping infra resource deletion and remove the finalizer.

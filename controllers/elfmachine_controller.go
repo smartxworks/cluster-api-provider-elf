@@ -341,7 +341,7 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 	ctx.Logger.Info("Waiting for VM to be deleted",
 		"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
 
-	return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
+	return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 }
 
 func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (reconcile.Result, error) {
@@ -394,7 +394,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 				return reconcile.Result{}, nil
 			}
 
-			return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
+			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 		}
 
 		return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile VM")
@@ -402,7 +402,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 	if vm == nil || *vm.Status != models.VMStatusRUNNING || !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
 		ctx.Logger.Info("VM state is not reconciled")
 
-		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
+		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 	}
 	// Reconcile the ElfMachine's Labels using the cluster info
 	if len(vm.Labels) == 0 {
@@ -421,7 +421,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 		ctx.Logger.Info("providerID is not reconciled",
 			"namespace", ctx.ElfMachine.Namespace, "elfMachine", ctx.ElfMachine.Name)
 
-		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
+		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 	}
 
 	// Reconcile the ElfMachine's node addresses from the VM's IP addresses.
@@ -431,7 +431,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 
 		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityInfo, "")
 
-		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
+		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 	}
 
 	ctx.ElfMachine.Status.Ready = true
@@ -446,7 +446,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 		ctx.Logger.Info("Node providerID is not reconciled",
 			"namespace", ctx.ElfMachine.Namespace, "elfMachine", ctx.ElfMachine.Name)
 
-		return reconcile.Result{RequeueAfter: config.DefaultRequeue}, nil
+		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 	}
 
 	return reconcile.Result{}, nil
@@ -516,7 +516,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 
 			// The machine may only be temporarily disconnected before timeout
 			if !vmDisconnectionTimestamp.Add(infrav1.VMDisconnectionTimeout).Before(time.Now()) {
-				ctx.Logger.Error(err, "the VM has been disconnected", "vmRef", ctx.ElfMachine.Status.VMRef, "disconnectionTimestamp", vmDisconnectionTimestamp.Format(time.RFC3339))
+				ctx.Logger.Error(err, "the VM has been disconnected, will try to reconnect", "vmRef", ctx.ElfMachine.Status.VMRef, "disconnectionTimestamp", vmDisconnectionTimestamp.Format(time.RFC3339))
 
 				return nil, err
 			}
@@ -524,7 +524,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 			// If the machine was not found by UUID and timed out it means that it got deleted directly
 			ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capierrors.UpdateMachineError)
 			ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", ctx.ElfMachine.Status.VMRef))
-			ctx.Logger.Error(err, fmt.Sprintf("failed to get VM timed out in %s", infrav1.VMDisconnectionTimeout.String()), "message", ctx.ElfMachine.Status.FailureMessage)
+			ctx.Logger.Error(err, fmt.Sprintf("failed to get VM by UUID %s in %s", ctx.ElfMachine.Status.VMRef, infrav1.VMDisconnectionTimeout.String()), "message", ctx.ElfMachine.Status.FailureMessage)
 
 			return nil, err
 		}
