@@ -535,7 +535,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfCluster.Spec.VMGracefulShutdown = true
 		})
 
-		It("should delete ElfMachine when need to force delete", func() {
+		It("should delete ElfMachine when tower is out of service and cluster need to force delete", func() {
+			mockNewVMService = func(_ goctx.Context, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+				return mockVMService, errors.New("get vm service failed")
+			}
 			elfCluster.Annotations = map[string]string{
 				infrav1.ElfClusterForceDeleteAnnotation: "",
 			}
@@ -551,6 +554,22 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfCluster = &infrav1.ElfCluster{}
 			err = reconciler.Client.Get(reconciler, elfMachineKey, elfCluster)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+
+		It("should delete ElfMachine failed when tower is out of service", func() {
+			mockNewVMService = func(_ goctx.Context, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+				return mockVMService, errors.New("get vm service failed")
+			}
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result).To(BeZero())
+			Expect(err).To(HaveOccurred())
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(elfMachine.Finalizers).To(ContainElement(infrav1.MachineFinalizer))
 		})
 
 		It("should delete ElfMachine without VM", func() {
