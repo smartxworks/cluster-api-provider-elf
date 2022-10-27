@@ -27,6 +27,7 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -222,7 +223,30 @@ var _ = Describe("ElfClusterReconciler", func() {
 			Expect(apierrors.IsNotFound(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster))).To(BeTrue())
 		})
 
-		It("should force delete and skipping infra resource deletion", func() {
+		It("should delete failed when tower is out of service", func() {
+			mockNewVMService = func(_ goctx.Context, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+				return mockVMService, errors.New("get vm service failed")
+			}
+			ctrlMgrContext := fake.NewControllerManagerContext(elfCluster, cluster)
+			ctrlContext := &context.ControllerContext{
+				ControllerManagerContext: ctrlMgrContext,
+				Logger:                   ctrllog.Log,
+			}
+			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
+
+			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfClusterKey := capiutil.ObjectKey(elfCluster)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
+			Expect(result).To(BeZero())
+			Expect(err).To(HaveOccurred())
+			Expect(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster)).To(Succeed())
+			Expect(elfCluster.Finalizers).To(ContainElement(infrav1.ClusterFinalizer))
+		})
+
+		It("should force delete when tower is out of service and cluster need to force delete", func() {
+			mockNewVMService = func(_ goctx.Context, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+				return mockVMService, errors.New("get vm service failed")
+			}
 			elfCluster.Annotations = map[string]string{
 				infrav1.ElfClusterForceDeleteAnnotation: "",
 			}
