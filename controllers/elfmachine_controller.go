@@ -180,8 +180,8 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 		PatchHelper:       patchHelper,
 	}
 
-	// Create the vm service.
-	// if ElfMachine is in deleting and ElfCluster need to force delete, may be Tower server is disconnected, skipping NewVMService
+	// If ElfMachine is being deleting and ElfCLuster ForceDeleteCluster flag is set, skip creating the VMService object,
+	// because Tower server may be out of service. So we can force delete ElfCluster.
 	if elfMachine.ObjectMeta.DeletionTimestamp.IsZero() || !elfCluster.HasForceDeleteCluster() {
 		vmService, err := r.NewVMService(r.Context, elfCluster.GetTower(), logger)
 		if err != nil {
