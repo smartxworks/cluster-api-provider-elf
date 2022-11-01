@@ -16,7 +16,10 @@ limitations under the License.
 
 package service
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // error codes.
 const (
@@ -29,6 +32,7 @@ const (
 	VlanNotFound       = "VLAN_NOT_FOUND"
 	LabelCreateFailed  = "LABEL_CREATE_FAILED"
 	LabelAddFailed     = "LABEL_ADD_FAILED"
+	CloudInitError     = "VM_CLOUD_INIT_CONFIG_ERROR"
 )
 
 func IsVMNotFound(err error) bool {
@@ -41,4 +45,29 @@ func IsVMDuplicate(err error) bool {
 
 func IsShutDownTimeout(message string) bool {
 	return strings.Contains(message, "JOB_VM_SHUTDOWN_TIMEOUT")
+}
+
+func IsTaskNotFound(err error) bool {
+	return err.Error() == TaskNotFound
+}
+
+func IsCloudInitConfigError(message string) bool {
+	return strings.Contains(message, CloudInitError)
+}
+
+// FormatCloudInitError parses useful error message from orignal tower error message.
+// Example: The gateway [192.168.31.215] is unreachable.
+func FormatCloudInitError(message string) string {
+	firstIndex := strings.LastIndex(message, fmt.Sprintf("[%s]", CloudInitError))
+	if firstIndex == -1 {
+		return message
+	}
+
+	msg := message[firstIndex+len(CloudInitError)+2:]
+	msg = strings.TrimRight(msg, "}")
+	msg = strings.TrimRight(msg, "\"")
+	msg = strings.TrimRight(msg, "\\")
+	msg = strings.TrimSpace(msg)
+
+	return msg
 }
