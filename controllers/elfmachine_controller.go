@@ -318,6 +318,14 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 		}
 	}
 
+	if ok, err := r.shouldWaitForELFCSIVMVolumeDetach(ctx); ok || err != nil {
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		ctx.Logger.Info("Waiting for VM volumes which created by ELF CSI to be detached", "elfMachine", ctx.ElfMachine.Name)
+		return ctrl.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+	}
+
 	err := r.reconcileDeleteVM(ctx)
 	if err != nil {
 		if service.IsVMNotFound(err) {
@@ -564,6 +572,93 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	}
 
 	return vm, nil
+}
+
+// shouldWaitForELFCSIVMVolumeDetach returns true if VM still have volumes which created by ELF CSI attached or cluster is being deleted.
+// VM deletion and volume detach happen asynchronously, so VM shutdown or deletion and volume detach may occur at the same time
+// this could cause issue for SMTX OS ELF, the volume which has been detached will be deleted together with the VM,
+// so we need to check if all volumes are detached before deleting the VM.
+func (r *ElfMachineReconciler) shouldWaitForELFCSIVMVolumeDetach(ctx *context.MachineContext) (bool, error) {
+	// Return early if the cluster is being deleted.
+	if !ctx.Cluster.DeletionTimestamp.IsZero() {
+		return false, nil
+	}
+
+	// Get all VM Disk in this VM
+	vmDisks, err := ctx.VMService.GetVMDisksByVMID(ctx.ElfMachine.Status.VMRef)
+	if err != nil {
+		return false, err
+	}
+
+	// Return early if the VM disks length is 0.
+	if len(vmDisks) == 0 {
+		return false, nil
+	}
+
+	// Get all labels which create by ELF CSI
+	systemLabelsCreatedByELFCSI, err := ctx.VMService.GetLabelsByKey(infrav1.DefaultELFCSIVMVolumeClusterLabel)
+	if err != nil {
+		return false, err
+	}
+
+	// the label value created by ELF CSI like this sks.{{cluster.Namespace}}.{{cluster.Name}}.UUID
+	// If label value contains {{cluster.Namespace}}.{{cluster.Name}},
+	// we can make sure that the label is created by this cluster's ELF CSI.
+	labelValueContains := fmt.Sprintf("%s.%s", ctx.Cluster.Namespace, ctx.Cluster.Name)
+	currentClusterLabelCreatedByELFCSIMap := make(map[string]string)
+	for i := 0; i < len(systemLabelsCreatedByELFCSI); i++ {
+		if strings.Contains(*systemLabelsCreatedByELFCSI[i].Value, labelValueContains) {
+			currentClusterLabelCreatedByELFCSIMap[*systemLabelsCreatedByELFCSI[i].ID] = *systemLabelsCreatedByELFCSI[i].ID
+		}
+	}
+
+	if len(currentClusterLabelCreatedByELFCSIMap) == 0 {
+		return false, fmt.Errorf("the label which create by ELF CSI in this cluster %s/%s is not found", ctx.Cluster.Namespace, ctx.Cluster.Name)
+	}
+
+	for i := 0; i < len(vmDisks); i++ {
+		ok, err := r.isVMDiskAttachedByELFCSI(ctx, vmDisks[i], currentClusterLabelCreatedByELFCSIMap)
+		if err != nil {
+			return false, err
+		}
+
+		// if VM Disk is attached by ELF CSI,
+		// should wait for VM Disk to be detached.
+		if ok {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// isVMDiskAttachedByELFCSI return true if VM Disk attached by ELF CSI.
+func (r *ElfMachineReconciler) isVMDiskAttachedByELFCSI(ctx *context.MachineContext, vmDisk *models.VMDisk,
+	currentClusterLabelCreatedByELFCSIMap map[string]string) (bool, error) {
+	// Skip VM Disk which type is CD_ROM
+	if *vmDisk.Type == models.VMDiskTypeCDROM {
+		return false, nil
+	}
+
+	if vmDisk.VMVolume == nil || vmDisk.ID == nil {
+		return false, fmt.Errorf("failed to get VM volume associated with the VM Disk %s, because VM Disk VM Volume is nil", *vmDisk.ID)
+	}
+
+	vmVolume, err := ctx.VMService.GetVMVolumeByID(*vmDisk.VMVolume.ID)
+	if err != nil {
+		return false, err
+	}
+
+	// If the volume associated with the VM Disk has a label created by the cluster's ELF CSI,
+	// we can make sure that the volume was created by ELF CSI,
+	// this is means the VM Disk is attached by ELF CSI.
+	for j := 0; j < len(vmVolume.Labels); j++ {
+		if _, ok := currentClusterLabelCreatedByELFCSIMap[*vmVolume.Labels[j].ID]; ok {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *models.VM) (bool, error) {

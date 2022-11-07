@@ -33,6 +33,7 @@ const (
 	LabelCreateFailed  = "LABEL_CREATE_FAILED"
 	LabelAddFailed     = "LABEL_ADD_FAILED"
 	CloudInitError     = "VM_CLOUD_INIT_CONFIG_ERROR"
+	VMVolumeNotFound   = "VM_VOLUME_NOT_FOUND"
 )
 
 func IsVMNotFound(err error) bool {
