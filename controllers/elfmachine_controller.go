@@ -645,12 +645,12 @@ func (r *ElfMachineReconciler) isVMDiskAttachedByELFCSI(ctx *context.MachineCont
 	}
 
 	if vmDisk.VMVolume == nil || vmDisk.ID == nil {
-		return false, fmt.Errorf("failed to get VM volume associated with the VM Disk %s, because VM Disk VM Volume is nil", *vmDisk.ID)
+		return true, fmt.Errorf("failed to get VM volume associated with the VM Disk %s, because VM Disk VM Volume is nil", *vmDisk.ID)
 	}
 
 	vmVolume, err := ctx.VMService.GetVMVolumeByID(*vmDisk.VMVolume.ID)
 	if err != nil {
-		return false, err
+		return true, err
 	}
 
 	// If the volume associated with the VM Disk has a label created by the cluster's ELF CSI,
