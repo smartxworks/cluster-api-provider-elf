@@ -615,9 +615,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(elfMachine.Finalizers).To(ContainElement(infrav1.MachineFinalizer))
 		})
 
-		It("should delete ElfMachine without VM", func() {
+		It("should delete ElfMachine when vmRef is empty and VM not found", func() {
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(nil, errors.New(service.VMNotFound))
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -628,6 +629,56 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfCluster = &infrav1.ElfCluster{}
 			err = reconciler.Client.Get(reconciler, elfMachineKey, elfCluster)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+
+		It("should delete the VM that in creating status and have not been saved to ElfMachine", func() {
+			buf := new(bytes.Buffer)
+			klog.SetOutput(buf)
+			vm := fake.NewTowerVM()
+			vm.LocalID = nil
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
+			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(buf.String()).To(ContainSubstring("Waiting for VM task done"))
+			Expect(buf.String()).To(ContainSubstring("Waiting for VM to be deleted"))
+			elfCluster = &infrav1.ElfCluster{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(elfMachine.Status.VMRef).To(Equal(*vm.ID))
+			Expect(elfMachine.Status.TaskRef).To(Equal(""))
+		})
+
+		It("should delete the VM that in created status and have not been saved to ElfMachine", func() {
+			buf := new(bytes.Buffer)
+			klog.SetOutput(buf)
+			vm := fake.NewTowerVM()
+			vm.EntityAsyncStatus = nil
+			status := models.VMStatusRUNNING
+			vm.Status = &status
+			task := fake.NewTowerTask()
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
+			mockVMService.EXPECT().Get(*vm.LocalID).Return(vm, nil)
+			mockVMService.EXPECT().ShutDown(*vm.LocalID).Return(task, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).To(BeZero())
+			Expect(buf.String()).To(ContainSubstring("Waiting for VM shut down"))
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
+			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
 		})
 
 		It("should remove vmRef when VM not found", func() {

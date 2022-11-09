@@ -296,12 +296,26 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 		return reconcile.Result{}, nil
 	}
 
-	if !ctx.ElfMachine.HasVM() || !ctx.ElfMachine.WithVM() {
-		ctx.Logger.Info("VM already deleted")
+	if !ctx.ElfMachine.HasVM() {
+		// ElfMachine may not have saved the created virtual machine when deleting ElfMachine
+		vm, err := ctx.VMService.GetByName(ctx.ElfMachine.Name)
+		if err != nil {
+			if !service.IsVMNotFound(err) {
+				return reconcile.Result{}, err
+			}
 
-		ctrlutil.RemoveFinalizer(ctx.ElfMachine, infrav1.MachineFinalizer)
+			ctx.Logger.Info("VM already deleted")
 
-		return reconcile.Result{}, nil
+			ctrlutil.RemoveFinalizer(ctx.ElfMachine, infrav1.MachineFinalizer)
+
+			return reconcile.Result{}, nil
+		}
+
+		if vm.LocalID != nil && len(*vm.LocalID) > 0 {
+			ctx.ElfMachine.SetVM(*vm.LocalID)
+		} else {
+			ctx.ElfMachine.SetVM(*vm.ID)
+		}
 	}
 
 	err := r.reconcileDeleteVM(ctx)
