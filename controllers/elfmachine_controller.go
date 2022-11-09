@@ -595,12 +595,12 @@ func (r *ElfMachineReconciler) shouldWaitForVMVolumesToBeDetached(ctx *context.M
 		return 0, false, nil
 	}
 
-	// The volume label value created by ELF CSI is like "sks.{{cluster.Namespace}}.{{cluster.Name}}.KSC_UUID",
-	// If label value starts with "sks.{{cluster.Namespace}}.{{cluster.Name}}.", it means the label is created by ELF CSI running in this cluster.
-	labelValueStarts := label.GetELFCSILabelValueStarts(ctx.Cluster)
+	// The volume label value created by ELF CSI contains ".{cluster.Namespace}.{cluster.Name}.",
+	// If label value contains with ".{{cluster.Namespace}}.{{cluster.Name}}.", it means the label is created by ELF CSI running in this cluster.
+	labelValueContains := label.GetELFCSILabelValueSubstring(ctx.Cluster)
 
 	// Get labels which create by ELF CSI running in this cluster.
-	systemLabelsCreatedByELFCSI, err := ctx.VMService.GetLabelsByKeyAndValueStarts(infrav1.DefaultELFCSIVMVolumeClusterLabel, labelValueStarts)
+	systemLabelsCreatedByELFCSI, err := ctx.VMService.GetLabelsByKeyAndValueContains(infrav1.DefaultELFCSIVMVolumeClusterLabel, labelValueContains)
 	if err != nil {
 		return 0, false, err
 	}
@@ -645,7 +645,8 @@ func (r *ElfMachineReconciler) isVMDiskAttachedByELFCSI(ctx *context.MachineCont
 	}
 
 	if vmDisk.VMVolume == nil || vmDisk.ID == nil {
-		return true, fmt.Errorf("failed to get VM volume associated with the VM Disk %s, because VM Disk VM Volume is nil", *vmDisk.ID)
+		ctx.Logger.Info(fmt.Sprintf("failed to get VM volume associated with the VM Disk %s, because VM Disk VM Volume is nil, skip this vm disk check", *vmDisk.ID))
+		return false, nil
 	}
 
 	vmVolume, err := ctx.VMService.GetVMVolumeByID(*vmDisk.VMVolume.ID)

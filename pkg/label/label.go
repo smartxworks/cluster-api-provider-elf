@@ -53,6 +53,6 @@ func GetVMLabelVIP() string {
 	return fmt.Sprintf("%s-%s", GetVMLabelPrefix(), VMLabelVIP)
 }
 
-func GetELFCSILabelValueStarts(cluster *clusterv1.Cluster) string {
-	return fmt.Sprintf("sks.%s.%s.", cluster.Namespace, cluster.Name)
+func GetELFCSILabelValueSubstring(cluster *clusterv1.Cluster) string {
+	return fmt.Sprintf(".%s.%s.", cluster.Namespace, cluster.Name)
 }

@@ -156,19 +156,19 @@ func (mr *MockVMServiceMockRecorder) GetHost(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHost", reflect.TypeOf((*MockVMService)(nil).GetHost), id)
 }
 
-// GetLabelsByKeyAndValueStarts mocks base method.
-func (m *MockVMService) GetLabelsByKeyAndValueStarts(key, valueStart string) ([]*models.Label, error) {
+// GetLabelsByKeyAndValueContains mocks base method.
+func (m *MockVMService) GetLabelsByKeyAndValueContains(key, valueContains string) ([]*models.Label, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLabelsByKeyAndValueStarts", key, valueStart)
+	ret := m.ctrl.Call(m, "GetLabelsByKeyAndValueContains", key, valueContains)
 	ret0, _ := ret[0].([]*models.Label)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetLabelsByKeyAndValueStarts indicates an expected call of GetLabelsByKeyAndValueStarts.
-func (mr *MockVMServiceMockRecorder) GetLabelsByKeyAndValueStarts(key, valueStart interface{}) *gomock.Call {
+// GetLabelsByKeyAndValueContains indicates an expected call of GetLabelsByKeyAndValueContains.
+func (mr *MockVMServiceMockRecorder) GetLabelsByKeyAndValueContains(key, valueContains interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLabelsByKeyAndValueStarts", reflect.TypeOf((*MockVMService)(nil).GetLabelsByKeyAndValueStarts), key, valueStart)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLabelsByKeyAndValueContains", reflect.TypeOf((*MockVMService)(nil).GetLabelsByKeyAndValueContains), key, valueContains)
 }
 
 // GetTask mocks base method.
