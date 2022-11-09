@@ -60,7 +60,7 @@ type VMService interface {
 	AddLabelsToVM(vmID string, labels []string) (*models.Task, error)
 	GetVMDisksByVMID(vmID string) ([]*models.VMDisk, error)
 	GetVMVolumeByID(volumeID string) (*models.VMVolume, error)
-	GetLabelsByKey(key string) ([]*models.Label, error)
+	GetLabelsByKeyAndValueStarts(key, valueStart string) ([]*models.Label, error)
 }
 
 type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
@@ -592,14 +592,15 @@ func (svr *TowerVMService) GetVMVolumeByID(volumeID string) (*models.VMVolume, e
 	return getVMVolumeResp.Payload[0], nil
 }
 
-func (svr *TowerVMService) GetLabelsByKey(key string) ([]*models.Label, error) {
+func (svr *TowerVMService) GetLabelsByKeyAndValueStarts(key, valueStarts string) ([]*models.Label, error) {
 	getLabelParams := clientlabel.NewGetLabelsParams()
 	getLabelParams.RequestBody = &models.GetLabelsRequestBody{
 		Where: &models.LabelWhereInput{
-
-			Key: util.TowerString(key),
+			Key:             util.TowerString(key),
+			ValueStartsWith: util.TowerString(valueStarts),
 		},
 	}
+
 	getLabelResp, err := svr.Session.Label.GetLabels(getLabelParams)
 	if err != nil {
 		return nil, err
