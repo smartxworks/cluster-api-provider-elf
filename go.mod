@@ -18,8 +18,8 @@ require (
 	k8s.io/client-go v0.24.2
 	k8s.io/klog/v2 v2.60.1
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
-	sigs.k8s.io/cluster-api v1.2.4
-	sigs.k8s.io/cluster-api/test v1.2.4
+	sigs.k8s.io/cluster-api v1.2.5
+	sigs.k8s.io/cluster-api/test v1.2.5
 	sigs.k8s.io/controller-runtime v0.12.3
 )
 
@@ -47,7 +47,7 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46 // indirect
-	github.com/emicklei/go-restful v2.15.0+incompatible // indirect
+	github.com/emicklei/go-restful v2.16.0+incompatible // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
@@ -111,7 +111,7 @@ require (
 	github.com/valyala/fastjson v1.6.3 // indirect
 	go.mongodb.org/mongo-driver v1.10.1 // indirect
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
-	golang.org/x/net v0.0.0-20220826154423-83b083e8dc8b // indirect
+	golang.org/x/net v0.0.0-20220906165146-f3363e06e74c // indirect
 	golang.org/x/oauth2 v0.0.0-20220608161450-d0670ef3b1eb // indirect
 	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
@@ -137,5 +137,5 @@ require (
 
 replace (
 	github.com/onsi/ginkgo => github.com/onsi/ginkgo v1.16.5
-	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.2.4
+	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.2.5
 )
