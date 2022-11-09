@@ -47,7 +47,6 @@ import (
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/label"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service/mock_services"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
@@ -939,7 +938,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().GetVMDisksByVMID(elfMachine.Status.VMRef).Return([]*models.VMDisk{vmDisk}, nil)
-			mockVMService.EXPECT().GetLabelsByKeyAndValueContains(infrav1.DefaultELFCSIVMVolumeClusterLabel, label.GetELFCSILabelValueSubstring(cluster)).Return([]*models.Label{towerLabel}, nil)
+			mockVMService.EXPECT().GetLabelByID(*towerLabel.ID).Return(towerLabel, nil)
 			mockVMService.EXPECT().GetVMVolumeByID(*volume.ID).Return(volume, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -983,7 +982,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().GetVMDisksByVMID(elfMachine.Status.VMRef).Return([]*models.VMDisk{vmDisk}, nil)
-			mockVMService.EXPECT().GetLabelsByKeyAndValueContains(infrav1.DefaultELFCSIVMVolumeClusterLabel, label.GetELFCSILabelValueSubstring(cluster)).Return(nil, errors.New("failed to get label"))
+			mockVMService.EXPECT().GetLabelByID(*towerLabel.ID).Return(nil, errors.New("failed to get label"))
+			mockVMService.EXPECT().GetVMVolumeByID(*volume.ID).Return(volume, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -991,27 +991,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).To(BeZero())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get label"))
-		})
-
-		It("should return error when the labels which created by ELF CSI in this cluster is not found", func() {
-			vm := fake.NewTowerVM()
-			volume := fake.NewTowerVMVolume()
-			vmDisk := fake.NewTowerVMDisk(*vm.ID, *volume.ID)
-
-			elfMachine.Status.VMRef = *vm.LocalID
-			elfCluster.Spec.VMGracefulShutdown = false
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
-			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
-
-			mockVMService.EXPECT().GetVMDisksByVMID(elfMachine.Status.VMRef).Return([]*models.VMDisk{vmDisk}, nil)
-			mockVMService.EXPECT().GetLabelsByKeyAndValueContains(infrav1.DefaultELFCSIVMVolumeClusterLabel, label.GetELFCSILabelValueSubstring(cluster)).Return([]*models.Label{}, nil)
-
-			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-			elfMachineKey := capiutil.ObjectKey(elfMachine)
-			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
-			Expect(result.RequeueAfter).To(BeZero())
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not found"))
 		})
 
 		It("should return error when get VM volume failed", func() {
@@ -1029,7 +1008,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().GetVMDisksByVMID(elfMachine.Status.VMRef).Return([]*models.VMDisk{vmDisk}, nil)
-			mockVMService.EXPECT().GetLabelsByKeyAndValueContains(infrav1.DefaultELFCSIVMVolumeClusterLabel, label.GetELFCSILabelValueSubstring(cluster)).Return([]*models.Label{towerLabel}, nil)
 			mockVMService.EXPECT().GetVMVolumeByID(*volume.ID).Return(nil, errors.New("failed to get volume"))
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -1057,7 +1035,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(nil, errors.New(service.VMNotFound))
 			mockVMService.EXPECT().GetVMDisksByVMID(elfMachine.Status.VMRef).Return([]*models.VMDisk{vmDisk}, nil)
-			mockVMService.EXPECT().GetLabelsByKeyAndValueContains(infrav1.DefaultELFCSIVMVolumeClusterLabel, label.GetELFCSILabelValueSubstring(cluster)).Return([]*models.Label{towerLabel}, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -1073,7 +1050,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should delete when vm volume which create by ELF CSI has been detached", func() {
 			vm := fake.NewTowerVM()
 			volume := fake.NewTowerVMVolume()
-			towerLabel := fake.NewTowerLabelWithKeyValue(infrav1.DefaultELFCSIVMVolumeClusterLabel, fmt.Sprintf("test.%s.%s.%s", cluster.Namespace, cluster.Name, uuid.NewString()))
 			vmDisk := fake.NewTowerVMDisk(*vm.ID, *volume.ID)
 
 			elfMachine.Status.VMRef = *vm.LocalID
@@ -1083,7 +1059,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(nil, errors.New(service.VMNotFound))
 			mockVMService.EXPECT().GetVMDisksByVMID(elfMachine.Status.VMRef).Return([]*models.VMDisk{vmDisk}, nil)
-			mockVMService.EXPECT().GetLabelsByKeyAndValueContains(infrav1.DefaultELFCSIVMVolumeClusterLabel, label.GetELFCSILabelValueSubstring(cluster)).Return([]*models.Label{towerLabel}, nil)
 			mockVMService.EXPECT().GetVMVolumeByID(*volume.ID).Return(volume, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}

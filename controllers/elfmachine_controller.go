@@ -595,29 +595,10 @@ func (r *ElfMachineReconciler) shouldWaitForVMVolumesToBeDetached(ctx *context.M
 		return 0, false, nil
 	}
 
-	// The volume label value created by ELF CSI contains ".{cluster.Namespace}.{cluster.Name}.",
-	// If label value contains with ".{{cluster.Namespace}}.{{cluster.Name}}.", it means the label is created by ELF CSI running in this cluster.
-	labelValueContains := label.GetELFCSILabelValueSubstring(ctx.Cluster)
-
-	// Get labels which create by ELF CSI running in this cluster.
-	systemLabelsCreatedByELFCSI, err := ctx.VMService.GetLabelsByKeyAndValueContains(infrav1.DefaultELFCSIVMVolumeClusterLabel, labelValueContains)
-	if err != nil {
-		return 0, false, err
-	}
-
-	if len(systemLabelsCreatedByELFCSI) == 0 {
-		return 0, false, fmt.Errorf("the label which create by ELF CSI in this cluster %s/%s is not found", ctx.Cluster.Namespace, ctx.Cluster.Name)
-	}
-
-	currentClusterLabelCreatedByELFCSIMap := make(map[string]bool)
-	for i := 0; i < len(systemLabelsCreatedByELFCSI); i++ {
-		currentClusterLabelCreatedByELFCSIMap[*systemLabelsCreatedByELFCSI[i].ID] = true
-	}
-
 	vmDiskAttachedByELFCSICount := 0
 
 	for i := 0; i < len(vmDisks); i++ {
-		ok, err := r.isVMDiskAttachedByELFCSI(ctx, vmDisks[i], currentClusterLabelCreatedByELFCSIMap)
+		ok, err := r.isVMDiskAttachedByELFCSI(ctx, vmDisks[i])
 		if err != nil {
 			return 0, false, err
 		}
@@ -637,8 +618,7 @@ func (r *ElfMachineReconciler) shouldWaitForVMVolumesToBeDetached(ctx *context.M
 }
 
 // isVMDiskAttachedByELFCSI return true if VM Disk attached by ELF CSI.
-func (r *ElfMachineReconciler) isVMDiskAttachedByELFCSI(ctx *context.MachineContext, vmDisk *models.VMDisk,
-	currentClusterLabelCreatedByELFCSIMap map[string]bool) (bool, error) {
+func (r *ElfMachineReconciler) isVMDiskAttachedByELFCSI(ctx *context.MachineContext, vmDisk *models.VMDisk) (bool, error) {
 	// Skip VM Disk which type is CD_ROM.
 	if *vmDisk.Type == models.VMDiskTypeCDROM {
 		return false, nil
@@ -654,11 +634,27 @@ func (r *ElfMachineReconciler) isVMDiskAttachedByELFCSI(ctx *context.MachineCont
 		return true, err
 	}
 
-	// If the volume associated with the VM Disk has a label created by the cluster's ELF CSI,
-	// we can make sure that the volume was created by ELF CSI,
-	// this is means the VM Disk is attached by ELF CSI.
-	for j := 0; j < len(vmVolume.Labels); j++ {
-		if _, ok := currentClusterLabelCreatedByELFCSIMap[*vmVolume.Labels[j].ID]; ok {
+	for i := 0; i < len(vmVolume.Labels); i++ {
+		if vmVolume.Labels[i].ID == nil {
+			ctx.Logger.Info("Volome's label ID is nil, skip to compare label key", "volume", *vmVolume.ID)
+			continue
+		}
+
+		volumeLabel, err := ctx.VMService.GetLabelByID(*vmVolume.Labels[i].ID)
+		if err != nil {
+			return true, errors.Wrapf(err, "failed to get label %s", *vmVolume.Labels[i].ID)
+		}
+
+		if volumeLabel.Key == nil {
+			ctx.Logger.Info("Label's key is nil, skip to compare label key", "label", *volumeLabel.ID)
+			continue
+		}
+
+		// If the volume associated with the VM Disk has a label key
+		// equal with label key of VM Volume which created by ELF CSI in Tower,
+		// we can make sure that the volume was created by ELF CSI,
+		// this is means the VM Disk is attached by ELF CSI.
+		if *volumeLabel.Key == infrav1.DefaultELFCSIVMVolumeClusterLabel {
 			return true, nil
 		}
 	}

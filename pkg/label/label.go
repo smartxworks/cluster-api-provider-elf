@@ -19,8 +19,6 @@ package label
 import (
 	"fmt"
 
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
@@ -51,8 +49,4 @@ func GetVMLabelClusterName() string {
 
 func GetVMLabelVIP() string {
 	return fmt.Sprintf("%s-%s", GetVMLabelPrefix(), VMLabelVIP)
-}
-
-func GetELFCSILabelValueSubstring(cluster *clusterv1.Cluster) string {
-	return fmt.Sprintf(".%s.%s.", cluster.Namespace, cluster.Name)
 }

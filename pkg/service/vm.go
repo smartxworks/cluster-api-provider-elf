@@ -60,7 +60,7 @@ type VMService interface {
 	AddLabelsToVM(vmID string, labels []string) (*models.Task, error)
 	GetVMDisksByVMID(vmID string) ([]*models.VMDisk, error)
 	GetVMVolumeByID(volumeID string) (*models.VMVolume, error)
-	GetLabelsByKeyAndValueContains(key, valueContains string) ([]*models.Label, error)
+	GetLabelByID(labelID string) (*models.Label, error)
 }
 
 type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
@@ -592,12 +592,11 @@ func (svr *TowerVMService) GetVMVolumeByID(volumeID string) (*models.VMVolume, e
 	return getVMVolumeResp.Payload[0], nil
 }
 
-func (svr *TowerVMService) GetLabelsByKeyAndValueContains(key, valueContains string) ([]*models.Label, error) {
+func (svr *TowerVMService) GetLabelByID(labelID string) (*models.Label, error) {
 	getLabelParams := clientlabel.NewGetLabelsParams()
 	getLabelParams.RequestBody = &models.GetLabelsRequestBody{
 		Where: &models.LabelWhereInput{
-			Key:           util.TowerString(key),
-			ValueContains: util.TowerString(valueContains),
+			ID: util.TowerString(labelID),
 		},
 	}
 
@@ -606,5 +605,9 @@ func (svr *TowerVMService) GetLabelsByKeyAndValueContains(key, valueContains str
 		return nil, err
 	}
 
-	return getLabelResp.Payload, nil
+	if len(getLabelResp.Payload) == 0 {
+		return nil, errors.New(LabelNotFound)
+	}
+
+	return getLabelResp.Payload[0], nil
 }
