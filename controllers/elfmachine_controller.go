@@ -636,17 +636,17 @@ func (r *ElfMachineReconciler) isVMDiskAttachedByELFCSI(ctx *context.MachineCont
 
 	for i := 0; i < len(vmVolume.Labels); i++ {
 		if vmVolume.Labels[i].ID == nil {
-			ctx.Logger.Info("Volome's label ID is nil, skip to compare label key", "volume", *vmVolume.ID)
+			ctx.Logger.V(2).Info("Volome's label ID is nil so skip label key check", "volume", *vmVolume.ID)
 			continue
 		}
 
 		volumeLabel, err := ctx.VMService.GetLabelByID(*vmVolume.Labels[i].ID)
 		if err != nil {
-			return true, errors.Wrapf(err, "failed to get label %s", *vmVolume.Labels[i].ID)
+			return true, errors.Wrapf(err, "failed to get VM volume label by id %s", *vmVolume.Labels[i].ID)
 		}
 
 		if volumeLabel.Key == nil {
-			ctx.Logger.Info("Label's key is nil, skip to compare label key", "label", *volumeLabel.ID)
+			ctx.Logger.V(2).Info("VM volume label's key is nil so skip label key check", "label", *volumeLabel.ID)
 			continue
 		}
 
