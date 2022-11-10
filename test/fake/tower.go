@@ -66,3 +66,35 @@ func NewTowerLabel() *models.Label {
 		Value: &value,
 	}
 }
+
+func NewTowerVMDisk(vmID, vmVolumeID string) *models.VMDisk {
+	id := strings.ReplaceAll(uuid.New().String(), "-", "")
+	diskType := models.VMDiskTypeDISK
+	return &models.VMDisk{
+		ID: &id,
+		VM: &models.NestedVM{
+			ID: &vmID,
+		},
+		VMVolume: &models.NestedVMVolume{
+			ID: &vmVolumeID,
+		},
+		Type: &diskType,
+	}
+}
+
+func NewTowerLabelWithKeyValue(key, value string) *models.Label {
+	id := strings.ReplaceAll(uuid.New().String(), "-", "")
+
+	return &models.Label{
+		ID:    &id,
+		Key:   &key,
+		Value: &value,
+	}
+}
+
+func NewTowerVMVolume() *models.VMVolume {
+	id := strings.ReplaceAll(uuid.New().String(), "-", "")
+	return &models.VMVolume{
+		ID: &id,
+	}
+}

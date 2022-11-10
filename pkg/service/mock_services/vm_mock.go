@@ -156,6 +156,21 @@ func (mr *MockVMServiceMockRecorder) GetHost(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHost", reflect.TypeOf((*MockVMService)(nil).GetHost), id)
 }
 
+// GetLabelByID mocks base method.
+func (m *MockVMService) GetLabelByID(labelID string) (*models.Label, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLabelByID", labelID)
+	ret0, _ := ret[0].(*models.Label)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLabelByID indicates an expected call of GetLabelByID.
+func (mr *MockVMServiceMockRecorder) GetLabelByID(labelID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLabelByID", reflect.TypeOf((*MockVMService)(nil).GetLabelByID), labelID)
+}
+
 // GetTask mocks base method.
 func (m *MockVMService) GetTask(id string) (*models.Task, error) {
 	m.ctrl.T.Helper()
@@ -171,6 +186,21 @@ func (mr *MockVMServiceMockRecorder) GetTask(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTask", reflect.TypeOf((*MockVMService)(nil).GetTask), id)
 }
 
+// GetVMDisksByVMID mocks base method.
+func (m *MockVMService) GetVMDisksByVMID(vmID string) ([]*models.VMDisk, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVMDisksByVMID", vmID)
+	ret0, _ := ret[0].([]*models.VMDisk)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetVMDisksByVMID indicates an expected call of GetVMDisksByVMID.
+func (mr *MockVMServiceMockRecorder) GetVMDisksByVMID(vmID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMDisksByVMID", reflect.TypeOf((*MockVMService)(nil).GetVMDisksByVMID), vmID)
+}
+
 // GetVMTemplate mocks base method.
 func (m *MockVMService) GetVMTemplate(id string) (*models.ContentLibraryVMTemplate, error) {
 	m.ctrl.T.Helper()
@@ -184,6 +214,21 @@ func (m *MockVMService) GetVMTemplate(id string) (*models.ContentLibraryVMTempla
 func (mr *MockVMServiceMockRecorder) GetVMTemplate(id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMTemplate", reflect.TypeOf((*MockVMService)(nil).GetVMTemplate), id)
+}
+
+// GetVMVolumeByID mocks base method.
+func (m *MockVMService) GetVMVolumeByID(volumeID string) (*models.VMVolume, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVMVolumeByID", volumeID)
+	ret0, _ := ret[0].(*models.VMVolume)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetVMVolumeByID indicates an expected call of GetVMVolumeByID.
+func (mr *MockVMServiceMockRecorder) GetVMVolumeByID(volumeID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMVolumeByID", reflect.TypeOf((*MockVMService)(nil).GetVMVolumeByID), volumeID)
 }
 
 // GetVlan mocks base method.

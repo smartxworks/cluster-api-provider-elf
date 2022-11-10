@@ -33,6 +33,8 @@ const (
 	LabelCreateFailed  = "LABEL_CREATE_FAILED"
 	LabelAddFailed     = "LABEL_ADD_FAILED"
 	CloudInitError     = "VM_CLOUD_INIT_CONFIG_ERROR"
+	VMVolumeNotFound   = "VM_VOLUME_NOT_FOUND"
+	LabelNotFound      = "LABEL_NOT_FOUND"
 )
 
 func IsVMNotFound(err error) bool {
@@ -53,6 +55,10 @@ func IsTaskNotFound(err error) bool {
 
 func IsCloudInitConfigError(message string) bool {
 	return strings.Contains(message, CloudInitError)
+}
+
+func IsLabelNotFound(err error) bool {
+	return err.Error() == LabelNotFound
 }
 
 // FormatCloudInitError parses useful error message from orignal tower error message.
