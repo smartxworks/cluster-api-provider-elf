@@ -641,6 +641,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
 			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
+			mockVMService.EXPECT().GetVMDisksByVMID(*vm.ID).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -668,6 +669,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
 			mockVMService.EXPECT().Get(*vm.LocalID).Return(vm, nil)
 			mockVMService.EXPECT().ShutDown(*vm.LocalID).Return(task, nil)
+			mockVMService.EXPECT().GetVMDisksByVMID(*vm.LocalID).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
