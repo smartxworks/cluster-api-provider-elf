@@ -19,6 +19,7 @@ package controllers
 import (
 	goctx "context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -401,6 +402,11 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 
 		return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile VM")
 	}
+
+	if ctx.ElfMachine.IsFailed() {
+		return reconcile.Result{}, nil
+	}
+
 	if vm == nil || *vm.Status != models.VMStatusRUNNING || !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
 		ctx.Logger.Info("VM state is not reconciled")
 
@@ -552,6 +558,17 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	// When ELF VM created, set UUID to VMRef
 	if !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
 		ctx.ElfMachine.SetVM(*vm.LocalID)
+	}
+
+	// The VM was moved to the recycle bin
+	if vm.InRecycleBin != nil && *vm.InRecycleBin {
+		message := fmt.Sprintf("The VM %s was moved to the recycle bin.", ctx.ElfMachine.Status.VMRef)
+		ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capierrors.UpdateMachineError)
+		ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(message)
+		ctx.ElfMachine.SetVM("")
+		ctx.Logger.Error(stderrors.New(message), "")
+
+		return vm, nil
 	}
 
 	// The newly created VM may need to powered off
