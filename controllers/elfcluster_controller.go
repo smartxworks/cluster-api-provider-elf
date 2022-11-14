@@ -225,15 +225,19 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 }
 
 func (r *ElfClusterReconciler) reconcileDeleteLabels(ctx *context.ClusterContext) error {
-	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelNamespace(), ctx.ElfCluster.Namespace, true); err != nil {
-		return err
-	}
-
 	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelClusterName(), ctx.ElfCluster.Name, true); err != nil {
 		return err
 	}
 
 	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host, true); err != nil {
+		return err
+	}
+
+	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelNamespace(), ctx.ElfCluster.Namespace, true); err != nil {
+		return err
+	}
+
+	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelManaged(), "true", true); err != nil {
 		return err
 	}
 

@@ -210,9 +210,10 @@ var _ = Describe("ElfClusterReconciler", func() {
 			}
 			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 
-			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelNamespace(), elfCluster.Namespace, true).Return("", nil)
 			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelClusterName(), elfCluster.Name, true).Return("labelid", nil)
 			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelVIP(), elfCluster.Spec.ControlPlaneEndpoint.Host, true).Return("labelid", nil)
+			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelNamespace(), elfCluster.Namespace, true).Return("", nil)
+			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelManaged(), "true", true).Return("", nil)
 
 			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
