@@ -391,20 +391,16 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 	}
 
 	vm, err := r.reconcileVM(ctx)
-	if err != nil {
-		if service.IsVMNotFound(err) {
-			if ctx.ElfMachine.IsFailed() {
-				return reconcile.Result{}, nil
-			}
+	if ctx.ElfMachine.IsFailed() {
+		return reconcile.Result{}, nil
+	} else if err != nil {
+		ctx.Logger.Error(err, "failed to reconcile VM")
 
+		if service.IsVMNotFound(err) {
 			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 		}
 
 		return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile VM")
-	}
-
-	if ctx.ElfMachine.IsFailed() {
-		return reconcile.Result{}, nil
 	}
 
 	if vm == nil || *vm.Status != models.VMStatusRUNNING || !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
