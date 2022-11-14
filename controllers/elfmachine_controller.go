@@ -560,9 +560,9 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		ctx.ElfMachine.SetVM(*vm.LocalID)
 	}
 
-	// The VM was moved to the recycle bin
-	if vm.InRecycleBin != nil && *vm.InRecycleBin {
-		message := fmt.Sprintf("The VM %s was moved to the recycle bin.", ctx.ElfMachine.Status.VMRef)
+	// The VM was moved to the recycle bin. Treat the VM as deleted, and will not reconganize it even if it's moved back from the recycle bin.
+	if util.IsVMInRecycleBin(vm) {
+		message := fmt.Sprintf("The VM %s was moved to the Tower recycle bin by users, so treat it as deleted.", ctx.ElfMachine.Status.VMRef)
 		ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capierrors.UpdateMachineError)
 		ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(message)
 		ctx.ElfMachine.SetVM("")

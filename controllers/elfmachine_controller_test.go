@@ -361,7 +361,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).Should(BeNil())
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(*elfMachine.Status.FailureReason).To(Equal(capierrors.UpdateMachineError))
-			Expect(*elfMachine.Status.FailureMessage).To(Equal(fmt.Sprintf("The VM %s was moved to the recycle bin.", *vm.LocalID)))
+			Expect(*elfMachine.Status.FailureMessage).To(Equal(fmt.Sprintf("The VM %s was moved to the Tower recycle bin by users, so treat it as deleted.", *vm.LocalID)))
 			Expect(elfMachine.HasVM()).To(BeFalse())
 		})
 

@@ -16,6 +16,10 @@ limitations under the License.
 
 package util
 
+import (
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
+)
+
 func TowerInt32(v int) *int32 {
 	val := int32(v)
 
@@ -51,4 +55,8 @@ func TowerDisk(diskGiB int32) *int64 {
 	disk = disk * 1024 * 1024 * 1024
 
 	return &disk
+}
+
+func IsVMInRecycleBin(vm *models.VM) bool {
+	return vm.InRecycleBin != nil && *vm.InRecycleBin
 }
