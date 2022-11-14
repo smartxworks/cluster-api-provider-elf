@@ -38,7 +38,7 @@ const (
 )
 
 func IsVMNotFound(err error) bool {
-	return err.Error() == VMNotFound
+	return strings.Contains(err.Error(), VMNotFound)
 }
 
 func IsVMDuplicate(err error) bool {
@@ -50,7 +50,7 @@ func IsShutDownTimeout(message string) bool {
 }
 
 func IsTaskNotFound(err error) bool {
-	return err.Error() == TaskNotFound
+	return strings.Contains(err.Error(), TaskNotFound)
 }
 
 func IsCloudInitConfigError(message string) bool {
@@ -58,7 +58,7 @@ func IsCloudInitConfigError(message string) bool {
 }
 
 func IsLabelNotFound(err error) bool {
-	return err.Error() == LabelNotFound
+	return strings.Contains(err.Error(), LabelNotFound)
 }
 
 // FormatCloudInitError parses useful error message from orignal tower error message.

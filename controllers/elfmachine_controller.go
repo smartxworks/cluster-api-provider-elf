@@ -19,6 +19,7 @@ package controllers
 import (
 	goctx "context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -390,17 +391,18 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 	}
 
 	vm, err := r.reconcileVM(ctx)
-	if err != nil {
-		if service.IsVMNotFound(err) {
-			if ctx.ElfMachine.IsFailed() {
-				return reconcile.Result{}, nil
-			}
+	if ctx.ElfMachine.IsFailed() {
+		return reconcile.Result{}, nil
+	} else if err != nil {
+		ctx.Logger.Error(err, "failed to reconcile VM")
 
+		if service.IsVMNotFound(err) {
 			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 		}
 
 		return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile VM")
 	}
+
 	if vm == nil || *vm.Status != models.VMStatusRUNNING || !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
 		ctx.Logger.Info("VM state is not reconciled")
 
@@ -552,6 +554,17 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	// When ELF VM created, set UUID to VMRef
 	if !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
 		ctx.ElfMachine.SetVM(*vm.LocalID)
+	}
+
+	// The VM was moved to the recycle bin. Treat the VM as deleted, and will not reconganize it even if it's moved back from the recycle bin.
+	if util.IsVMInRecycleBin(vm) {
+		message := fmt.Sprintf("The VM %s was moved to the Tower recycle bin by users, so treat it as deleted.", ctx.ElfMachine.Status.VMRef)
+		ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capierrors.UpdateMachineError)
+		ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(message)
+		ctx.ElfMachine.SetVM("")
+		ctx.Logger.Error(stderrors.New(message), "")
+
+		return vm, nil
 	}
 
 	// The newly created VM may need to powered off
