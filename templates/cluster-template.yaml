@@ -2,38 +2,38 @@
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
-  name: '${CLUSTER_NAME}'
-  namespace: '${NAMESPACE}'
+  name: "${CLUSTER_NAME}"
+  namespace: "${NAMESPACE}"
   labels:
-    cluster.x-k8s.io/cluster-name: '${CLUSTER_NAME}'
+    cluster.x-k8s.io/cluster-name: "${CLUSTER_NAME}"
 spec:
   clusterNetwork:
     pods:
-      cidrBlocks: ["172.16.0.0/12"]
+      cidrBlocks: ["172.16.0.0/16"]
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
     kind: ElfCluster
-    name: '${CLUSTER_NAME}'
+    name: "${CLUSTER_NAME}"
   controlPlaneRef:
     kind: KubeadmControlPlane
     apiVersion: controlplane.cluster.x-k8s.io/v1beta1
-    name: '${CLUSTER_NAME}-control-plane'
+    name: "${CLUSTER_NAME}-control-plane"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: ElfCluster
 metadata:
-  name: '${CLUSTER_NAME}'
-  namespace: '${NAMESPACE}'
+  name: "${CLUSTER_NAME}"
+  namespace: "${NAMESPACE}"
 spec:
-  cluster: '${ELF_CLUSTER}'
+  cluster: "${ELF_CLUSTER}"
   tower:
-    server: '${TOWER_SERVER}'
-    username: '${TOWER_USERNAME}'
-    password: '${TOWER_PASSWORD}'
-    authMode: '${TOWER_AUTH_MODE:=LOCAL}'
+    server: "${TOWER_SERVER}"
+    username: "${TOWER_USERNAME}"
+    password: "${TOWER_PASSWORD}"
+    authMode: ${TOWER_AUTH_MODE:=LOCAL}
     skipTLSVerify: ${TOWER_SKIP_TLS_VERIFY:=false}
   controlPlaneEndpoint:
-    host: '${CONTROL_PLANE_ENDPOINT_IP}'
+    host: "${CONTROL_PLANE_ENDPOINT_IP}"
     port: 6443
   vmGracefulShutdown: ${VM_GRACEFUL_SHUTDOWN:=false}
 
@@ -41,12 +41,12 @@ spec:
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: ElfMachineTemplate
 metadata:
-  name: '${CLUSTER_NAME}-control-plane'
-  namespace: '${NAMESPACE}'
+  name: "${CLUSTER_NAME}-control-plane"
+  namespace: "${NAMESPACE}"
 spec:
   template:
     spec:
-      template: '${VM_TEMPLATE}'
+      template: "${VM_TEMPLATE}"
       ha: true
       cloneMode: ${ELF_VM_CLONE_MODE:-FastClone}
       numCPUS: ${CONTROL_PLANE_MACHINE_NUM_CPUS:-2}
@@ -56,24 +56,24 @@ spec:
         nameservers: []
         devices:
         - networkType: IPV4_DHCP
-          vlan: '${ELF_VLAN}'
+          vlan: "${ELF_VLAN}"
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: KubeadmControlPlane
 metadata:
-  name: '${CLUSTER_NAME}-control-plane'
-  namespace: '${NAMESPACE}'
+  name: "${CLUSTER_NAME}-control-plane"
+  namespace: "${NAMESPACE}"
 spec:
   replicas: ${CONTROL_PLANE_MACHINE_COUNT}
-  version: '${KUBERNETES_VERSION}'
+  version: "${KUBERNETES_VERSION}"
   machineTemplate:
     infrastructureRef:
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
       kind: ElfMachineTemplate
-      name: '${CLUSTER_NAME}-control-plane'
+      name: "${CLUSTER_NAME}-control-plane"
   kubeadmConfigSpec:
     clusterConfiguration:
-      clusterName: '${CLUSTER_NAME}'
+      clusterName: "${CLUSTER_NAME}"
       imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
       apiServer:
         extraArgs:
@@ -150,13 +150,13 @@ spec:
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: KubeadmConfigTemplate
 metadata:
-  name: '${CLUSTER_NAME}-md-0'
-  namespace: '${NAMESPACE}'
+  name: "${CLUSTER_NAME}-md-0"
+  namespace: "${NAMESPACE}"
 spec:
   template:
     spec:
       clusterConfiguration:
-        clusterName: '${CLUSTER_NAME}'
+        clusterName: "${CLUSTER_NAME}"
         imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
       joinConfiguration:
         nodeRegistration:
@@ -172,12 +172,12 @@ spec:
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: ElfMachineTemplate
 metadata:
-  name: '${CLUSTER_NAME}-worker'
-  namespace: '${NAMESPACE}'
+  name: "${CLUSTER_NAME}-worker"
+  namespace: "${NAMESPACE}"
 spec:
   template:
     spec:
-      template: '${VM_TEMPLATE}'
+      template: "${VM_TEMPLATE}"
       ha: true
       cloneMode: ${ELF_VM_CLONE_MODE:-FastClone}
       numCPUS: ${WORKER_MACHINE_NUM_CPUS:-2}
@@ -187,33 +187,33 @@ spec:
         nameservers: []
         devices:
         - networkType: IPV4_DHCP
-          vlan: '${ELF_VLAN}'
+          vlan: "${ELF_VLAN}"
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineDeployment
 metadata:
-  name: '${CLUSTER_NAME}-md-0'
-  namespace: '${NAMESPACE}'
+  name: "${CLUSTER_NAME}-md-0"
+  namespace: "${NAMESPACE}"
   labels:
-    cluster.x-k8s.io/cluster-name: '${CLUSTER_NAME}'
+    cluster.x-k8s.io/cluster-name: "${CLUSTER_NAME}"
 spec:
-  clusterName: '${CLUSTER_NAME}'
+  clusterName: "${CLUSTER_NAME}"
   replicas: ${WORKER_MACHINE_COUNT}
   selector:
     matchLabels: {}
   template:
     metadata:
       labels:
-        cluster.x-k8s.io/cluster-name: '${CLUSTER_NAME}'
+        cluster.x-k8s.io/cluster-name: "${CLUSTER_NAME}"
     spec:
-      clusterName: '${CLUSTER_NAME}'
-      version: '${KUBERNETES_VERSION}'
+      clusterName: "${CLUSTER_NAME}"
+      version: "${KUBERNETES_VERSION}"
       bootstrap:
         configRef:
           apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
           kind: KubeadmConfigTemplate
-          name: '${CLUSTER_NAME}-md-0'
+          name: "${CLUSTER_NAME}-md-0"
       infrastructureRef:
         apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
         kind: ElfMachineTemplate
-        name: '${CLUSTER_NAME}-worker'
+        name: "${CLUSTER_NAME}-worker"
