@@ -220,7 +220,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("label %s:%s already deleted", label.GetVMLabelClusterName(), elfCluster.Name)))
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Label %s:%s deleted", label.GetVMLabelClusterName(), elfCluster.Name)))
 			Expect(apierrors.IsNotFound(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster))).To(BeTrue())
 		})
 

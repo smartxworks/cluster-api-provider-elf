@@ -250,7 +250,7 @@ func (r *ElfClusterReconciler) reconcileDeleteLabel(ctx *context.ClusterContext,
 		return err
 	}
 	if labelID != "" {
-		ctx.Logger.Info(fmt.Sprintf("label %s:%s already deleted", key, value), "labelId", labelID)
+		ctx.Logger.Info(fmt.Sprintf("Label %s:%s deleted", key, value), "labelId", labelID)
 	}
 
 	return nil
