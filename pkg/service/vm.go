@@ -28,8 +28,6 @@ import (
 	clienttask "github.com/smartxworks/cloudtower-go-sdk/v2/client/task"
 	clientvlan "github.com/smartxworks/cloudtower-go-sdk/v2/client/vlan"
 	clientvm "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm"
-	"github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_disk"
-	"github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_volume"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
@@ -58,9 +56,6 @@ type VMService interface {
 	UpsertLabel(key, value string) (*models.Label, error)
 	DeleteLabel(key, value string, strict bool) (string, error)
 	AddLabelsToVM(vmID string, labels []string) (*models.Task, error)
-	GetVMDisksByVMID(vmID string) ([]*models.VMDisk, error)
-	GetVMVolumeByID(volumeID string) (*models.VMVolume, error)
-	GetLabelByID(labelID string) (*models.Label, error)
 }
 
 type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
@@ -552,62 +547,4 @@ func (svr *TowerVMService) AddLabelsToVM(vmID string, labelIds []string) (*model
 		return nil, errors.New(LabelAddFailed)
 	}
 	return &models.Task{ID: addLabelsResp.Payload[0].TaskID}, nil
-}
-
-func (svr *TowerVMService) GetVMDisksByVMID(vmID string) ([]*models.VMDisk, error) {
-	getVMDiskParams := vm_disk.NewGetVMDisksParams()
-	getVMDiskParams.RequestBody = &models.GetVMDisksRequestBody{
-		Where: &models.VMDiskWhereInput{
-			VM: &models.VMWhereInput{
-				OR: []*models.VMWhereInput{{LocalID: util.TowerString(vmID)}, {ID: util.TowerString(vmID)}},
-			},
-		},
-	}
-
-	getVMDiskResp, err := svr.Session.VMDisk.GetVMDisks(getVMDiskParams)
-	if err != nil {
-		return nil, err
-	}
-
-	return getVMDiskResp.Payload, nil
-}
-
-func (svr *TowerVMService) GetVMVolumeByID(volumeID string) (*models.VMVolume, error) {
-	getVMVolumeParams := vm_volume.NewGetVMVolumesParams()
-	getVMVolumeParams.RequestBody = &models.GetVMVolumesRequestBody{
-		Where: &models.VMVolumeWhereInput{
-			ID: util.TowerString(volumeID),
-		},
-	}
-
-	getVMVolumeResp, err := svr.Session.VMVolume.GetVMVolumes(getVMVolumeParams)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(getVMVolumeResp.Payload) == 0 {
-		return nil, errors.New(VMVolumeNotFound)
-	}
-
-	return getVMVolumeResp.Payload[0], nil
-}
-
-func (svr *TowerVMService) GetLabelByID(labelID string) (*models.Label, error) {
-	getLabelParams := clientlabel.NewGetLabelsParams()
-	getLabelParams.RequestBody = &models.GetLabelsRequestBody{
-		Where: &models.LabelWhereInput{
-			ID: util.TowerString(labelID),
-		},
-	}
-
-	getLabelResp, err := svr.Session.Label.GetLabels(getLabelParams)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(getLabelResp.Payload) == 0 {
-		return nil, errors.New(LabelNotFound)
-	}
-
-	return getLabelResp.Payload[0], nil
 }

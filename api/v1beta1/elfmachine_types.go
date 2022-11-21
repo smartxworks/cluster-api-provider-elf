@@ -32,9 +32,6 @@ const (
 
 	// VMDisconnectionTimestampAnnotation is the annotation identifying the VM of ElfMachine disconnection time.
 	VMDisconnectionTimestampAnnotation = "cape.infrastructure.cluster.x-k8s.io/vm-disconnection-timestamp"
-
-	// DefaultELFCSIVMVolumeClusterLabel is the cluster label key of VM Volume which created by ELF CSI in Tower.
-	DefaultELFCSIVMVolumeClusterLabel = "system.cloudtower/elf-csi.k8s-cluster-id"
 )
 
 // ElfMachineSpec defines the desired state of ElfMachine.
