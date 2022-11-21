@@ -68,3 +68,11 @@ func GetTowerString(ptr *string) string {
 
 	return *ptr
 }
+
+func GetTowerTaskStatus(ptr *models.TaskStatus) string {
+	if ptr == nil {
+		return ""
+	}
+
+	return string(*ptr)
+}

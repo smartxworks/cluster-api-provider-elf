@@ -618,11 +618,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 
 	switch *task.Status {
 	case models.TaskStatusFAILED:
-		errorMessage := ""
-		if task.ErrorMessage != nil {
-			errorMessage = *task.ErrorMessage
-		}
-
+		errorMessage := util.GetTowerString(task.ErrorMessage)
 		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, errorMessage)
 
 		if service.IsCloudInitConfigError(errorMessage) {
@@ -632,22 +628,17 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 
 		ctx.ElfMachine.SetTask("")
 
-		ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "message", errorMessage)
+		ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "taskErrorMessage", errorMessage, "taskErrorCode", util.GetTowerString(task.ErrorCode), "taskDescription", util.GetTowerString(task.Description))
 
 		return true, nil
 	case models.TaskStatusSUCCESSED:
 		ctx.ElfMachine.SetTask("")
 
-		ctx.Logger.Info("VM task successful", "vmRef", vmRef, "taskRef", taskRef)
+		ctx.Logger.Info("VM task successful", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", util.GetTowerString(task.Description))
 
 		return true, nil
 	default:
-		status := ""
-		if task.Status != nil {
-			status = string(*task.Status)
-		}
-
-		ctx.Logger.Info("Waiting for VM task done", "vmRef", vmRef, "taskRef", taskRef, "taskStatus", status)
+		ctx.Logger.Info("Waiting for VM task done", "vmRef", vmRef, "taskRef", taskRef, "taskStatus", util.GetTowerTaskStatus(task.Status), "taskDescription", util.GetTowerString(task.Description))
 	}
 
 	return false, nil
