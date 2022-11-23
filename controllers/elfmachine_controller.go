@@ -319,14 +319,6 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 		}
 	}
 
-	if attachedVolumes, ok, err := r.shouldWaitForVMVolumesToBeDetached(ctx); ok || err != nil {
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		ctx.Logger.Info(fmt.Sprintf("Waiting for %d VM volumes which created by ELF CSI to be detached", attachedVolumes), "elfMachine", ctx.ElfMachine.Name)
-		return ctrl.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
-	}
-
 	err := r.reconcileDeleteVM(ctx)
 	if err != nil {
 		if service.IsVMNotFound(err) {
@@ -585,94 +577,6 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	}
 
 	return vm, nil
-}
-
-// shouldWaitForVMVolumesToBeDetached returns true only if VM still have volumes created by ELF CSI attached and cluster is not being deleted.
-// VM deletion and volume detach happen asynchronously, so VM shutdown or deletion and volume detach may occur at the same time,
-// this could cause issue ELF-4117 for SMTX OS ELF, the volume which has been detached will be deleted together with the VM,
-// so we need to check if all volumes created by ELF CSI are detached before deleting the VM.
-func (r *ElfMachineReconciler) shouldWaitForVMVolumesToBeDetached(ctx *context.MachineContext) (int, bool, error) {
-	// Return early if the cluster is being deleted.
-	if !ctx.Cluster.DeletionTimestamp.IsZero() {
-		return 0, false, nil
-	}
-
-	// Get all VM Disk in this VM.
-	vmDisks, err := ctx.VMService.GetVMDisksByVMID(ctx.ElfMachine.Status.VMRef)
-	if err != nil {
-		return 0, false, err
-	}
-
-	// Return early if the VM disks length is 0.
-	if len(vmDisks) == 0 {
-		return 0, false, nil
-	}
-
-	vmDiskAttachedByELFCSICount := 0
-
-	for i := 0; i < len(vmDisks); i++ {
-		ok, err := r.isVMDiskAttachedByELFCSI(ctx, vmDisks[i])
-		if err != nil {
-			return 0, false, err
-		}
-
-		if ok {
-			vmDiskAttachedByELFCSICount++
-		}
-	}
-
-	// if count for VM Disk attached by ELF CSI is >0,
-	// should wait for VM Disk attached by ELF CSI to be detached.
-	if vmDiskAttachedByELFCSICount > 0 {
-		return vmDiskAttachedByELFCSICount, true, nil
-	}
-
-	return vmDiskAttachedByELFCSICount, false, nil
-}
-
-// isVMDiskAttachedByELFCSI return true if VM Disk attached by ELF CSI.
-func (r *ElfMachineReconciler) isVMDiskAttachedByELFCSI(ctx *context.MachineContext, vmDisk *models.VMDisk) (bool, error) {
-	// Skip VM Disk which type is CD_ROM.
-	if *vmDisk.Type == models.VMDiskTypeCDROM {
-		return false, nil
-	}
-
-	if vmDisk.VMVolume == nil || vmDisk.ID == nil {
-		ctx.Logger.Info(fmt.Sprintf("failed to get VM volume associated with the VM Disk %s, because VM Disk VM Volume is nil, skip this vm disk check", *vmDisk.ID))
-		return false, nil
-	}
-
-	vmVolume, err := ctx.VMService.GetVMVolumeByID(*vmDisk.VMVolume.ID)
-	if err != nil {
-		return true, err
-	}
-
-	for i := 0; i < len(vmVolume.Labels); i++ {
-		if vmVolume.Labels[i].ID == nil {
-			ctx.Logger.V(2).Info("Volome's label ID is nil so skip label key check", "volume", *vmVolume.ID)
-			continue
-		}
-
-		volumeLabel, err := ctx.VMService.GetLabelByID(*vmVolume.Labels[i].ID)
-		if err != nil {
-			return true, errors.Wrapf(err, "failed to get VM volume label by id %s", *vmVolume.Labels[i].ID)
-		}
-
-		if volumeLabel.Key == nil {
-			ctx.Logger.V(2).Info("VM volume label's key is nil so skip label key check", "label", *volumeLabel.ID)
-			continue
-		}
-
-		// If the volume associated with the VM Disk has a label key
-		// equal with label key of VM Volume which created by ELF CSI in Tower,
-		// we can make sure that the volume was created by ELF CSI,
-		// this is means the VM Disk is attached by ELF CSI.
-		if *volumeLabel.Key == infrav1.DefaultELFCSIVMVolumeClusterLabel {
-			return true, nil
-		}
-	}
-
-	return false, nil
 }
 
 func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *models.VM) (bool, error) {
