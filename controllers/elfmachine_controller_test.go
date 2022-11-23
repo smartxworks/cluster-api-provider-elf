@@ -449,6 +449,35 @@ var _ = Describe("ElfMachineReconciler", func() {
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PoweringOnReason}})
 		})
 
+		It("should wait for the ELF virtual machine to be created", func() {
+			vm := fake.NewTowerVM()
+			placeholderID := fmt.Sprintf("placeholder-%s", *vm.LocalID)
+			vm.LocalID = &placeholderID
+			vm.EntityAsyncStatus = nil
+			task := fake.NewTowerTask()
+			taskStatus := models.TaskStatusFAILED
+			task.Status = &taskStatus
+			elfMachine.Status.VMRef = *vm.ID
+			elfMachine.Status.TaskRef = *task.ID
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).Should(BeNil())
+			Expect(logBuffer.String()).To(ContainSubstring("VM state is not reconciled"))
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(elfMachine.Status.VMRef).To(Equal(*vm.ID))
+			Expect(elfMachine.Status.TaskRef).To(Equal(""))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
+		})
+
 		It("should handle power on error", func() {
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
@@ -657,8 +686,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should delete the VM that in creating status and have not been saved to ElfMachine", func() {
-			buf := new(bytes.Buffer)
-			klog.SetOutput(buf)
 			vm := fake.NewTowerVM()
 			vm.LocalID = nil
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
@@ -668,11 +695,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
-			result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(buf.String()).To(ContainSubstring("Waiting for VM task done"))
-			Expect(buf.String()).To(ContainSubstring("Waiting for VM to be deleted"))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM task done"))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be deleted"))
 			elfCluster = &infrav1.ElfCluster{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.ID))
@@ -680,8 +707,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should delete the VM that in created status and have not been saved to ElfMachine", func() {
-			buf := new(bytes.Buffer)
-			klog.SetOutput(buf)
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusRUNNING
@@ -698,7 +723,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).To(BeZero())
-			Expect(buf.String()).To(ContainSubstring("Waiting for VM shut down"))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM shut down"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
