@@ -60,3 +60,11 @@ func TowerDisk(diskGiB int32) *int64 {
 func IsVMInRecycleBin(vm *models.VM) bool {
 	return vm.InRecycleBin != nil && *vm.InRecycleBin
 }
+
+func GetTowerString(ptr *string) string {
+	if ptr == nil {
+		return ""
+	}
+
+	return *ptr
+}

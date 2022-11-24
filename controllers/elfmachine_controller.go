@@ -400,6 +400,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 
 		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 	}
+
 	// Reconcile the ElfMachine's Labels using the cluster info
 	if len(vm.Labels) == 0 {
 		if ok, err := r.reconcileLabels(ctx, vm); !ok {
@@ -543,9 +544,16 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		return vm, nil
 	}
 
+	vmLocalID := util.GetTowerString(vm.LocalID)
+	// Before the ELF VM is created, Tower sets a "placeholder-{UUID}" format string to localId, such as "placeholder-7d8b6df1-c623-4750-a771-3ba6b46995fa".
+	// After the ELF VM is created, Tower sets the VM ID in UUID format to localId.
+	if !util.IsUUID(vmLocalID) {
+		return vm, nil
+	}
+
 	// When ELF VM created, set UUID to VMRef
 	if !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
-		ctx.ElfMachine.SetVM(*vm.LocalID)
+		ctx.ElfMachine.SetVM(vmLocalID)
 	}
 
 	// The VM was moved to the recycle bin. Treat the VM as deleted, and will not reconganize it even if it's moved back from the recycle bin.
