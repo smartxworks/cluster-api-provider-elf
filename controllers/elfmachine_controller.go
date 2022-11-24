@@ -545,7 +545,8 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	}
 
 	vmLocalID := util.GetTowerString(vm.LocalID)
-	// The ELF VM has not been created
+	// Before the ELF VM is created, Tower sets a "placeholder-{UUID}" format string to localId, such as "placeholder-7d8b6df1-c623-4750-a771-3ba6b46995fa".
+	// After the ELF VM is created, Tower sets the VM ID in UUID format to localId.
 	if !util.IsUUID(vmLocalID) {
 		return vm, nil
 	}
