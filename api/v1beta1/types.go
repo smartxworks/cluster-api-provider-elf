@@ -16,10 +16,6 @@ limitations under the License.
 
 package v1beta1
 
-import (
-	"fmt"
-)
-
 // CloneMode is the type of clone operation used to clone a VM from a template.
 type CloneMode string
 
@@ -67,25 +63,6 @@ type Tower struct {
 type ElfMachineTemplateResource struct {
 	// Spec is the specification of the desired behavior of the machine.
 	Spec ElfMachineSpec `json:"spec"`
-}
-
-// APIEndpoint represents a reachable Kubernetes API endpoint.
-type APIEndpoint struct {
-	// The hostname on which the API server is serving.
-	Host string `json:"host"`
-
-	// The port on which the API server is serving.
-	Port int32 `json:"port"`
-}
-
-// IsZero returns true if either the host or the port are zero values.
-func (v APIEndpoint) IsZero() bool {
-	return v.Host == "" || v.Port == 0
-}
-
-// String returns a formatted version HOST:PORT of this APIEndpoint.
-func (v APIEndpoint) String() string {
-	return fmt.Sprintf("%s:%d", v.Host, v.Port)
 }
 
 // NetworkStatus provides information about one of a VM's networks.
