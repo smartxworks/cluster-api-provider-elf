@@ -23,8 +23,6 @@ require (
 	sigs.k8s.io/controller-runtime v0.12.3
 )
 
-require github.com/rogpeppe/go-internal v1.8.1 // indirect
-
 require (
 	github.com/BurntSushi/toml v1.0.0 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
@@ -98,6 +96,7 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
+	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
@@ -133,9 +132,4 @@ require (
 	sigs.k8s.io/kind v0.14.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
-)
-
-replace (
-	github.com/onsi/ginkgo => github.com/onsi/ginkgo v1.16.5
-	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.2.6
 )
