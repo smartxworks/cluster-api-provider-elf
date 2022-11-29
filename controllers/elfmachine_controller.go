@@ -50,6 +50,7 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	capeerrors "github.com/smartxworks/cluster-api-provider-elf/pkg/errors"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/label"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
@@ -511,7 +512,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 			}
 
 			// If the machine was not found by UUID and timed out it means that it got deleted directly
-			ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capierrors.UpdateMachineError)
+			ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.RemovedFromInfrastructureError)
 			ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", ctx.ElfMachine.Status.VMRef))
 			ctx.Logger.Error(err, fmt.Sprintf("failed to get VM by UUID %s in %s", ctx.ElfMachine.Status.VMRef, infrav1.VMDisconnectionTimeout.String()), "message", ctx.ElfMachine.Status.FailureMessage)
 
@@ -559,7 +560,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	// The VM was moved to the recycle bin. Treat the VM as deleted, and will not reconganize it even if it's moved back from the recycle bin.
 	if util.IsVMInRecycleBin(vm) {
 		message := fmt.Sprintf("The VM %s was moved to the Tower recycle bin by users, so treat it as deleted.", ctx.ElfMachine.Status.VMRef)
-		ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capierrors.UpdateMachineError)
+		ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.MovedToRecycleBinError)
 		ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(message)
 		ctx.ElfMachine.SetVM("")
 		ctx.Logger.Error(stderrors.New(message), "")
@@ -622,7 +623,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, errorMessage)
 
 		if service.IsCloudInitConfigError(errorMessage) {
-			ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capierrors.CreateMachineError)
+			ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.CloudInitConfigError)
 			ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(fmt.Sprintf("VM cloud-init config error: %s", service.FormatCloudInitError(errorMessage)))
 		}
 

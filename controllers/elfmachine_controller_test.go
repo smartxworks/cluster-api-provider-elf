@@ -46,6 +46,7 @@ import (
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	capeerrors "github.com/smartxworks/cluster-api-provider-elf/pkg/errors"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service/mock_services"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
@@ -339,7 +340,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
-			Expect(*elfMachine.Status.FailureReason).To(Equal(capierrors.UpdateMachineError))
+			Expect(*elfMachine.Status.FailureReason).To(Equal(capeerrors.RemovedFromInfrastructureError))
 			Expect(*elfMachine.Status.FailureMessage).To(Equal(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", elfMachine.Status.VMRef)))
 		})
 
@@ -359,7 +360,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).To(BeZero())
 			Expect(err).Should(BeNil())
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
-			Expect(*elfMachine.Status.FailureReason).To(Equal(capierrors.UpdateMachineError))
+			Expect(*elfMachine.Status.FailureReason).To(Equal(capeerrors.MovedToRecycleBinError))
 			Expect(*elfMachine.Status.FailureMessage).To(Equal(fmt.Sprintf("The VM %s was moved to the Tower recycle bin by users, so treat it as deleted.", *vm.LocalID)))
 			Expect(elfMachine.HasVM()).To(BeFalse())
 		})
@@ -415,6 +416,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(elfMachine.Status.VMRef).To(Equal(""))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
 			Expect(elfMachine.IsFailed()).To(BeTrue())
+			Expect(*elfMachine.Status.FailureReason).To(Equal(capeerrors.CloudInitConfigError))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
 		})
 
