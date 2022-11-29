@@ -24,9 +24,9 @@ const (
 	// CloudInitConfigError indicates an error occurred while configuring cloud-init.
 	CloudInitConfigError capierrors.MachineStatusError = "CloudInitConfigError"
 
-	// RemoveFromInfrastructureError indicates an error that the VM could not be found from the infrastructure.
-	RemoveFromInfrastructureError capierrors.MachineStatusError = "RemoveFromInfrastructure"
+	// RemovedFromInfrastructureError indicates an error that the VM could not be found from the infrastructure.
+	RemovedFromInfrastructureError capierrors.MachineStatusError = "RemovedFromInfrastructure"
 
-	// InRecycleBinError indicates an error that the VM was moved to the recycle bin.
-	InRecycleBinError capierrors.MachineStatusError = "InRecycleBin"
+	// MovedToRecycleBinError indicates an error that the VM was moved to the recycle bin.
+	MovedToRecycleBinError capierrors.MachineStatusError = "MovedToRecycleBin"
 )
