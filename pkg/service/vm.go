@@ -47,7 +47,7 @@ type VMService interface {
 	PowerOn(uuid string) (*models.Task, error)
 	ShutDown(uuid string) (*models.Task, error)
 	Get(id string) (*models.VM, error)
-	GetByName(name string) (*models.VM, error)
+	FindByName(name string) ([]*models.VM, error)
 	GetVMTemplate(id string) (*models.ContentLibraryVMTemplate, error)
 	GetTask(id string) (*models.Task, error)
 	GetCluster(id string) (*models.Cluster, error)
@@ -339,8 +339,9 @@ func (svr *TowerVMService) Get(id string) (*models.VM, error) {
 	return getVmsResp.Payload[0], nil
 }
 
-// GetByName searches for a virtual machine by name.
-func (svr *TowerVMService) GetByName(name string) (*models.VM, error) {
+// FindByName searches for virtual machines by name.
+// Tower may have multiple virtual machines with the same name.
+func (svr *TowerVMService) FindByName(name string) ([]*models.VM, error) {
 	getVmsParams := clientvm.NewGetVmsParams()
 	getVmsParams.RequestBody = &models.GetVmsRequestBody{
 		Where: &models.VMWhereInput{
@@ -353,11 +354,7 @@ func (svr *TowerVMService) GetByName(name string) (*models.VM, error) {
 		return nil, err
 	}
 
-	if len(getVmsResp.Payload) == 0 {
-		return nil, errors.New(VMNotFound)
-	}
-
-	return getVmsResp.Payload[0], nil
+	return getVmsResp.Payload, nil
 }
 
 // GetCluster searches for a cluster.

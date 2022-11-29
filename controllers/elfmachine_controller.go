@@ -300,23 +300,34 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 
 	if !ctx.ElfMachine.HasVM() {
 		// ElfMachine may not have saved the created virtual machine when deleting ElfMachine
-		vm, err := ctx.VMService.GetByName(ctx.ElfMachine.Name)
+		vms, err := ctx.VMService.FindByName(ctx.ElfMachine.Name)
 		if err != nil {
-			if !service.IsVMNotFound(err) {
-				return reconcile.Result{}, err
-			}
+			return reconcile.Result{}, err
+		}
 
+		switch len(vms) {
+		case 0:
 			ctx.Logger.Info("VM already deleted")
 
 			ctrlutil.RemoveFinalizer(ctx.ElfMachine, infrav1.MachineFinalizer)
 
 			return reconcile.Result{}, nil
-		}
+		case 1:
+			vmRef := util.GetTowerString(vms[0].ID)
+			if util.IsUUID(util.GetTowerString(vms[0].LocalID)) {
+				vmRef = util.GetTowerString(vms[0].LocalID)
+			}
+			ctx.ElfMachine.SetVM(vmRef)
+		default:
+			vm := service.GetActualVM(vms)
+			// Wait for Tower to delete the invalid virtual machines
+			if vm == nil {
+				ctx.Logger.Info(fmt.Sprintf("%d virtual machines with the same name were found, but none of them were valid", len(vms)), "vms", vms)
+				return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+			}
 
-		if vm.LocalID != nil && len(*vm.LocalID) > 0 {
-			ctx.ElfMachine.SetVM(*vm.LocalID)
-		} else {
-			ctx.ElfMachine.SetVM(*vm.ID)
+			ctx.ElfMachine.SetVM(util.GetTowerString(vm.LocalID))
+			ctx.Logger.Info(fmt.Sprintf("%d virtual machines with the same name were found, and %s be selected", len(vms), util.GetTowerString(vm.LocalID)), "vms", vms)
 		}
 	}
 
@@ -446,7 +457,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 //   1. Creating the VM with the bootstrap data if it does not exist, then...
 //   2. Powering on the VM, and finally...
 //   3. Returning the real-time state of the VM to the caller
-func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models.VM, error) {
+func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models.VM, error) { //nolint:gocyclo,maintidx
 	// If there is no vmRef then no VM exists, create one
 	if !ctx.ElfMachine.HasVM() {
 		// We are setting this condition only in case it does not exists so we avoid to get flickering LastConditionTime
@@ -470,12 +481,28 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		withTaskVM, err := ctx.VMService.Clone(ctx.ElfCluster, ctx.Machine, ctx.ElfMachine, bootstrapData)
 		if err != nil {
 			if service.IsVMDuplicate(err) {
-				vm, err := ctx.VMService.GetByName(ctx.ElfMachine.Name)
+				vms, err := ctx.VMService.FindByName(ctx.ElfMachine.Name)
 				if err != nil {
 					return nil, err
 				}
 
-				ctx.ElfMachine.SetVM(*vm.ID)
+				switch len(vms) {
+				case 0:
+					ctx.Logger.Info("Duplicate name error occurred when creating a virtual machine, but the virtual machine not found by name")
+					return nil, nil
+				case 1:
+					ctx.ElfMachine.SetVM(util.GetTowerString(vms[0].ID))
+				default:
+					vm := service.GetActualVM(vms)
+					// Wait for Tower to create a ELF virtual machine
+					if vm == nil {
+						ctx.Logger.Info(fmt.Sprintf("%d virtual machines with the same name were found, but none of them were valid", len(vms)), "vms", vms)
+						return nil, nil
+					}
+
+					ctx.ElfMachine.SetVM(util.GetTowerString(vm.ID))
+					ctx.Logger.Info(fmt.Sprintf("%d virtual machines with the same name were found, and %s be selected", len(vms), util.GetTowerString(vm.ID)), "vms", vms)
+				}
 			} else {
 				ctx.Logger.Error(err, "failed to create VM",
 					"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
@@ -490,7 +517,40 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		}
 	}
 
-	vm, err := ctx.VMService.Get(ctx.ElfMachine.Status.VMRef)
+	var vm *models.VM
+	var err error
+	if !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
+		var vms []*models.VM
+		vmRef := ctx.ElfMachine.Status.VMRef
+		vms, err = ctx.VMService.FindByName(ctx.ElfMachine.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		switch len(vms) {
+		case 0:
+			err = errors.New(service.VMNotFound)
+		case 1:
+			vm = vms[0]
+			if util.GetTowerString(vm.ID) != vmRef {
+				ctx.ElfMachine.SetVM(util.GetTowerString(vm.ID))
+				ctx.Logger.Info("Virtual machine has been replaced from %s to %s", vmRef, ctx.ElfMachine.Status.VMRef)
+			}
+		default:
+			vm = service.GetActualVM(vms)
+			// Wait for Tower to create a ELF virtual machine
+			if vm == nil {
+				ctx.Logger.Info(fmt.Sprintf("%d virtual machines with the same name were found, but none of them were valid", len(vms)), "vmRef", vmRef, "vms", vms)
+				return nil, nil
+			}
+
+			ctx.ElfMachine.SetVM(util.GetTowerString(vm.ID))
+			ctx.Logger.Info(fmt.Sprintf("%d virtual machines with the same name were found, and %s be selected", len(vms), ctx.ElfMachine.Status.VMRef), "vmRef", vmRef, "vms", vms)
+		}
+	} else {
+		vm, err = ctx.VMService.Get(ctx.ElfMachine.Status.VMRef)
+	}
+
 	if err != nil {
 		if !service.IsVMNotFound(err) {
 			return nil, err

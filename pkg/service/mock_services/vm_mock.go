@@ -96,6 +96,21 @@ func (mr *MockVMServiceMockRecorder) DeleteLabel(key, value, strict interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLabel", reflect.TypeOf((*MockVMService)(nil).DeleteLabel), key, value, strict)
 }
 
+// FindByName mocks base method.
+func (m *MockVMService) FindByName(name string) ([]*models.VM, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindByName", name)
+	ret0, _ := ret[0].([]*models.VM)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindByName indicates an expected call of FindByName.
+func (mr *MockVMServiceMockRecorder) FindByName(name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByName", reflect.TypeOf((*MockVMService)(nil).FindByName), name)
+}
+
 // Get mocks base method.
 func (m *MockVMService) Get(id string) (*models.VM, error) {
 	m.ctrl.T.Helper()
@@ -109,21 +124,6 @@ func (m *MockVMService) Get(id string) (*models.VM, error) {
 func (mr *MockVMServiceMockRecorder) Get(id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockVMService)(nil).Get), id)
-}
-
-// GetByName mocks base method.
-func (m *MockVMService) GetByName(name string) (*models.VM, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByName", name)
-	ret0, _ := ret[0].(*models.VM)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetByName indicates an expected call of GetByName.
-func (mr *MockVMServiceMockRecorder) GetByName(name interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByName", reflect.TypeOf((*MockVMService)(nil).GetByName), name)
 }
 
 // GetCluster mocks base method.
