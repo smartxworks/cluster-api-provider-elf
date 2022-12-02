@@ -17,6 +17,8 @@ limitations under the License.
 package util
 
 import (
+	"strings"
+
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 )
 
@@ -75,4 +77,12 @@ func GetTowerTaskStatus(ptr *models.TaskStatus) string {
 	}
 
 	return string(*ptr)
+}
+
+func IsCloneVMTask(task *models.Task) bool {
+	return strings.Contains(GetTowerString(task.Description), "Create a VM")
+}
+
+func IsPowerOnVMTask(task *models.Task) bool {
+	return strings.Contains(GetTowerString(task.Description), "Start VM")
 }

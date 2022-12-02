@@ -25,9 +25,17 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
+func ID() string {
+	return strings.ReplaceAll(uuid.New().String(), "-", "")
+}
+
+func UUID() string {
+	return uuid.New().String()
+}
+
 func NewTowerVM() *models.VM {
-	id := strings.ReplaceAll(uuid.New().String(), "-", "")
-	localID := uuid.New().String()
+	id := ID()
+	localID := UUID()
 	status := models.VMStatusRUNNING
 
 	return &models.VM{

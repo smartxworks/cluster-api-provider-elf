@@ -465,6 +465,15 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 			return nil, errors.New("bootstrapData is empty")
 		}
 
+		if ok, canRetry := isElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster); ok {
+			if !canRetry {
+				ctx.Logger.V(2).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, skip creating VM", ctx.ElfCluster.Spec.Cluster))
+				return nil, nil
+			}
+
+			ctx.Logger.V(2).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, try to create VM", ctx.ElfCluster.Spec.Cluster))
+		}
+
 		ctx.Logger.Info("Create VM for ElfMachine")
 
 		withTaskVM, err := ctx.VMService.Clone(ctx.ElfCluster, ctx.Machine, ctx.ElfMachine, bootstrapData)
@@ -570,6 +579,15 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 
 	// The newly created VM may need to powered off
 	if *vm.Status == models.VMStatusSTOPPED {
+		if ok, canRetry := isElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster); ok {
+			if !canRetry {
+				ctx.Logger.V(2).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, skip powering on VM %s", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
+				return nil, nil
+			}
+
+			ctx.Logger.V(2).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, try to power on VM %s", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
+		}
+
 		task, err := ctx.VMService.PowerOn(ctx.ElfMachine.Status.VMRef)
 		if err != nil {
 			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOnFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
@@ -631,11 +649,23 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 
 		ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "taskErrorMessage", errorMessage, "taskErrorCode", util.GetTowerString(task.ErrorCode), "taskDescription", util.GetTowerString(task.Description))
 
+		if service.IsMemoryInsufficientError(errorMessage) {
+			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, true)
+			message := fmt.Sprintf("Insufficient memory detected for ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
+			ctx.Logger.Info(message)
+
+			return true, errors.New(message)
+		}
+
 		return true, nil
 	case models.TaskStatusSUCCESSED:
 		ctx.ElfMachine.SetTask("")
 
 		ctx.Logger.Info("VM task successful", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", util.GetTowerString(task.Description))
+
+		if util.IsCloneVMTask(task) || util.IsPowerOnVMTask(task) {
+			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, false)
+		}
 
 		return true, nil
 	default:
