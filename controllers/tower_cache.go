@@ -55,8 +55,9 @@ func setElfClusterMemoryInsufficient(clusterID string, isInsufficient bool) {
 	}
 }
 
-// needDetectElfClusterMemoryInsufficient returns whether need to detect if insufficient memory.
-func needDetectElfClusterMemoryInsufficient(clusterID string) bool {
+// canRetryVMOperation returns whether virtual machine operations(Create/PowerOn)
+// can be performed.
+func canRetryVMOperation(clusterID string) bool {
 	lock.Lock()
 	defer lock.Unlock()
 

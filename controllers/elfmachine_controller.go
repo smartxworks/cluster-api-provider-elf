@@ -466,7 +466,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		}
 
 		if ok := isElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster); ok {
-			if needDetect := needDetectElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster); !needDetect {
+			if canRetry := canRetryVMOperation(ctx.ElfCluster.Spec.Cluster); !canRetry {
 				ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, skip creating VM", ctx.ElfCluster.Spec.Cluster))
 				return nil, nil
 			}
@@ -580,7 +580,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	// The newly created VM may need to powered off
 	if *vm.Status == models.VMStatusSTOPPED {
 		if ok := isElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster); ok {
-			if needDetect := needDetectElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster); !needDetect {
+			if canRetry := canRetryVMOperation(ctx.ElfCluster.Spec.Cluster); !canRetry {
 				ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, skip powering on VM %s", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
 				return nil, nil
 			}

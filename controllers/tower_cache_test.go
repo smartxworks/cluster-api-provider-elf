@@ -65,19 +65,19 @@ var _ = Describe("TowerCache", func() {
 		Expect(clusterStatusMap).NotTo(HaveKey(clusterID))
 		Expect(clusterStatusMap[clusterID]).To(BeNil())
 
-		Expect(needDetectElfClusterMemoryInsufficient(clusterID)).To(BeFalse())
+		Expect(canRetryVMOperation(clusterID)).To(BeFalse())
 
 		setElfClusterMemoryInsufficient(clusterID, false)
-		Expect(needDetectElfClusterMemoryInsufficient(clusterID)).To(BeFalse())
+		Expect(canRetryVMOperation(clusterID)).To(BeFalse())
 
 		setElfClusterMemoryInsufficient(clusterID, true)
-		Expect(needDetectElfClusterMemoryInsufficient(clusterID)).To(BeFalse())
+		Expect(canRetryVMOperation(clusterID)).To(BeFalse())
 
 		clusterStatusMap[clusterID].Resources.LastDetected = clusterStatusMap[clusterID].Resources.LastDetected.Add(-silenceTime)
 		clusterStatusMap[clusterID].Resources.LastRetried = clusterStatusMap[clusterID].Resources.LastRetried.Add(-silenceTime)
-		Expect(needDetectElfClusterMemoryInsufficient(clusterID)).To(BeTrue())
+		Expect(canRetryVMOperation(clusterID)).To(BeTrue())
 
-		Expect(needDetectElfClusterMemoryInsufficient(clusterID)).To(BeFalse())
+		Expect(canRetryVMOperation(clusterID)).To(BeFalse())
 	})
 })
 
