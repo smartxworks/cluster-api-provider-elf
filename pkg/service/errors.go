@@ -33,7 +33,7 @@ const (
 	LabelCreateFailed       = "LABEL_CREATE_FAILED"
 	LabelAddFailed          = "LABEL_ADD_FAILED"
 	CloudInitError          = "VM_CLOUD_INIT_CONFIG_ERROR"
-	MemoryInsufficientError = "[VM_SCHEDULE_FAILED]EmptyCandidateHostsException::HostAvailableMemoryFilter"
+	MemoryInsufficientError = "HostAvailableMemoryFilter"
 )
 
 func IsVMNotFound(err error) bool {

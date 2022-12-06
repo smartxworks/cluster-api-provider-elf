@@ -10,7 +10,7 @@ const (
 )
 
 var clusterStatusMap = make(map[string]*clusterStatus)
-var lock sync.Mutex
+var lock sync.RWMutex
 
 type clusterStatus struct {
 	Resources resources
@@ -18,34 +18,22 @@ type clusterStatus struct {
 
 type resources struct {
 	IsMemoryInsufficient bool
-	LastUpdated          time.Time
-	LastRtried           time.Time
+	// LastDetected records the last memory detection time
+	LastDetected time.Time
+	// LastRetried records the time of the last attempt to detect memory
+	LastRetried time.Time
 }
 
-// isElfClusterMemoryInsufficient returns whether the ELF cluster has insufficient memory,
-// and whether to allow retry if insufficient memory.
-func isElfClusterMemoryInsufficient(clusterID string) (bool, bool) {
-	lock.Lock()
-	defer lock.Unlock()
+// isElfClusterMemoryInsufficient returns whether the ELF cluster has insufficient memory.
+func isElfClusterMemoryInsufficient(clusterID string) bool {
+	lock.RLock()
+	defer lock.RUnlock()
 
 	if status, ok := clusterStatusMap[clusterID]; ok {
-		if !status.Resources.IsMemoryInsufficient {
-			return false, false
-		}
-
-		if time.Now().Add(-silenceTime).Before(status.Resources.LastUpdated) {
-			return true, false
-		} else {
-			if time.Now().Add(-silenceTime).After(status.Resources.LastRtried) {
-				status.Resources.LastRtried = time.Now()
-				return true, true
-			} else {
-				return true, false
-			}
-		}
+		return status.Resources.IsMemoryInsufficient
 	}
 
-	return false, false
+	return false
 }
 
 // setElfClusterMemoryInsufficient sets whether the memory is insufficient.
@@ -53,16 +41,41 @@ func setElfClusterMemoryInsufficient(clusterID string, isInsufficient bool) {
 	lock.Lock()
 	defer lock.Unlock()
 
+	now := time.Now()
 	resources := resources{
 		IsMemoryInsufficient: isInsufficient,
-		LastUpdated:          time.Now(),
+		LastDetected:         now,
+		LastRetried:          now,
 	}
 
 	if status, ok := clusterStatusMap[clusterID]; ok {
-		if status.Resources.IsMemoryInsufficient != isInsufficient {
-			status.Resources = resources
-		}
+		status.Resources = resources
 	} else {
 		clusterStatusMap[clusterID] = &clusterStatus{Resources: resources}
 	}
+}
+
+// needDetectElfClusterMemoryInsufficient returns whether need to detect if insufficient memory.
+func needDetectElfClusterMemoryInsufficient(clusterID string) bool {
+	lock.Lock()
+	defer lock.Unlock()
+
+	if status, ok := clusterStatusMap[clusterID]; ok {
+		if !status.Resources.IsMemoryInsufficient {
+			return false
+		}
+
+		if time.Now().Before(status.Resources.LastDetected.Add(silenceTime)) {
+			return false
+		} else {
+			if time.Now().Before(status.Resources.LastRetried.Add(silenceTime)) {
+				return false
+			} else {
+				status.Resources.LastRetried = time.Now()
+				return true
+			}
+		}
+	}
+
+	return false
 }
