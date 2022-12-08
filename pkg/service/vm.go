@@ -107,7 +107,7 @@ func (svr *TowerVMService) Clone(
 
 	var mountDisks []*models.MountNewCreateDisksParams
 	if elfMachine.Spec.DiskGiB > 0 {
-		storagePolicy := models.VMVolumeElfStoragePolicyTypeREPLICA3THICKPROVISION
+		storagePolicy := models.VMVolumeElfStoragePolicyTypeREPLICA2THINPROVISION
 		bus := models.BusVIRTIO
 		mountDisks = append(mountDisks, &models.MountNewCreateDisksParams{
 			Boot: util.TowerInt32(0),
