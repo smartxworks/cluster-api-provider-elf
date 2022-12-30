@@ -474,7 +474,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 			ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, try to create VM", ctx.ElfCluster.Spec.Cluster))
 		}
 
-		if ok := canCreateVM(ctx.ElfMachine.Name); !ok {
+		if ok := acquireTicketForCreateVM(ctx.ElfMachine.Name); !ok {
 			ctx.Logger.V(1).Info(fmt.Sprintf("The number of concurrently created VMs has reached the limit, skip creating VM %s", ctx.ElfMachine.Name))
 			return nil, nil
 		}
@@ -483,7 +483,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 
 		withTaskVM, err := ctx.VMService.Clone(ctx.ElfCluster, ctx.Machine, ctx.ElfMachine, bootstrapData)
 		if err != nil {
-			releaseVM(ctx.ElfMachine.Name)
+			releaseTicketForCreateVM(ctx.ElfMachine.Name)
 
 			if service.IsVMDuplicate(err) {
 				vm, err := ctx.VMService.GetByName(ctx.ElfMachine.Name)
@@ -657,7 +657,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "taskErrorMessage", errorMessage, "taskErrorCode", util.GetTowerString(task.ErrorCode), "taskDescription", util.GetTowerString(task.Description))
 
 		if util.IsCloneVMTask(task) {
-			releaseVM(ctx.ElfMachine.Name)
+			releaseTicketForCreateVM(ctx.ElfMachine.Name)
 		}
 
 		if service.IsMemoryInsufficientError(errorMessage) {
@@ -676,7 +676,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 
 		if util.IsCloneVMTask(task) || util.IsPowerOnVMTask(task) {
 			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, false)
-			releaseVM(ctx.ElfMachine.Name)
+			releaseTicketForCreateVM(ctx.ElfMachine.Name)
 		}
 
 		return true, nil

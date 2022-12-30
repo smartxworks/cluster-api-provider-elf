@@ -30,4 +30,5 @@ const (
 	VMDiskName = "disk"
 )
 
+// MaxConcurrentVMCreations is the maximum number of concurrent virtual machine creations.
 var MaxConcurrentVMCreations = 20

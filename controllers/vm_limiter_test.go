@@ -34,29 +34,29 @@ var _ = Describe("VMLimiter", func() {
 		resetVMStatusMap()
 	})
 
-	It("canCreateVM", func() {
-		Expect(canCreateVM(vmName)).To(BeTrue())
+	It("acquireTicketForCreateVM", func() {
+		Expect(acquireTicketForCreateVM(vmName)).To(BeTrue())
 		Expect(vmStatusMap).To(HaveKey(vmName))
 
 		for i := 0; i < config.MaxConcurrentVMCreations-1; i++ {
 			vmStatusMap[fake.UUID()] = time.Now()
 		}
-		Expect(canCreateVM(vmName)).To(BeFalse())
+		Expect(acquireTicketForCreateVM(vmName)).To(BeFalse())
 
 		resetVMStatusMap()
 		for i := 0; i < config.MaxConcurrentVMCreations; i++ {
 			vmStatusMap[fake.UUID()] = time.Now().Add(-creationTimeout)
 		}
-		Expect(canCreateVM(vmName)).To(BeTrue())
+		Expect(acquireTicketForCreateVM(vmName)).To(BeTrue())
 		Expect(vmStatusMap).To(HaveKey(vmName))
 		Expect(len(vmStatusMap)).To(Equal(1))
 	})
 
-	It("releaseVM", func() {
+	It("releaseTicketForCreateVM", func() {
 		Expect(vmStatusMap).NotTo(HaveKey(vmName))
-		Expect(canCreateVM(vmName)).To(BeTrue())
+		Expect(acquireTicketForCreateVM(vmName)).To(BeTrue())
 		Expect(vmStatusMap).To(HaveKey(vmName))
-		releaseVM(vmName)
+		releaseTicketForCreateVM(vmName)
 		Expect(vmStatusMap).NotTo(HaveKey(vmName))
 	})
 })

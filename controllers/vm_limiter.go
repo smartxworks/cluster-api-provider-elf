@@ -30,9 +30,9 @@ const (
 var vmStatusMap = make(map[string]time.Time)
 var limiterLock sync.Mutex
 
-// canCreateVM returns whether virtual machine create operation
+// acquireTicketForCreateVM returns whether virtual machine create operation
 // can be performed.
-func canCreateVM(vmName string) bool {
+func acquireTicketForCreateVM(vmName string) bool {
 	limiterLock.Lock()
 	defer limiterLock.Unlock()
 
@@ -53,8 +53,8 @@ func canCreateVM(vmName string) bool {
 	return true
 }
 
-// releaseVM releases the virtual machine being created.
-func releaseVM(vmName string) {
+// releaseTicketForCreateVM releases the virtual machine being created.
+func releaseTicketForCreateVM(vmName string) {
 	limiterLock.Lock()
 	defer limiterLock.Unlock()
 

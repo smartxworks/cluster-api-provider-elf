@@ -20,6 +20,7 @@ spec:
         - --leader-elect
         - --logtostderr
         - --v=4
+        - --max-concurrent-vm-creations=20
         image: docker.io/smartxworks/cape-manager:latest
         imagePullPolicy: IfNotPresent
         name: manager
