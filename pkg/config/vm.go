@@ -29,3 +29,5 @@ const (
 	// VMDiskName is the default disk name in a VM.
 	VMDiskName = "disk"
 )
+
+var MaxConcurrentVMCreations = 20
