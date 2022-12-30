@@ -30,6 +30,7 @@ import (
 	ctrlsig "sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	"github.com/smartxworks/cluster-api-provider-elf/controllers"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/manager"
 	"github.com/smartxworks/cluster-api-provider-elf/version"
@@ -96,6 +97,11 @@ func main() {
 		":9440",
 		"The address the health endpoint binds to.",
 	)
+	flag.IntVar(
+		&config.MaxConcurrentVMCreations,
+		"max-concurrent-vm-creations",
+		config.MaxConcurrentVMCreations,
+		"The maximum number of concurrent virtual machine creations.")
 
 	flag.Parse()
 
