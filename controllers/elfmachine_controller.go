@@ -474,9 +474,12 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 			ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, try to create VM", ctx.ElfCluster.Spec.Cluster))
 		}
 
-		if ok := acquireTicketForCreateVM(ctx.ElfMachine.Name); !ok {
-			ctx.Logger.V(1).Info(fmt.Sprintf("The number of concurrently created VMs has reached the limit, skip creating VM %s", ctx.ElfMachine.Name))
-			return nil, nil
+		// Only limit the virtual machines of the worker nodes
+		if !util.IsControlPlaneMachine(ctx.ElfMachine) {
+			if ok := acquireTicketForCreateVM(ctx.ElfMachine.Name); !ok {
+				ctx.Logger.V(1).Info(fmt.Sprintf("The number of concurrently created VMs has reached the limit, skip creating VM %s", ctx.ElfMachine.Name))
+				return nil, nil
+			}
 		}
 
 		ctx.Logger.Info("Create VM for ElfMachine")
