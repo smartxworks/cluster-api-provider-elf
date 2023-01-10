@@ -24,7 +24,7 @@ import (
 func TestMod_FindDependencyVersion(t *testing.T) {
 	goModData := `module sigs.k8s.io/dummy-project
 
-go 1.18
+go 1.19
 
 require (
 	github.com/foo/bar v1.0.0

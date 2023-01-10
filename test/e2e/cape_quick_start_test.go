@@ -19,12 +19,11 @@ package e2e
 import (
 	"context"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	capie2e "sigs.k8s.io/cluster-api/test/e2e"
 )
 
 var _ = Describe("Cluster Creation using Cluster API quick-start test", func() {
-	Byf("Creating single-node control plane with one worker node")
 	capie2e.QuickStartSpec(context.TODO(), func() capie2e.QuickStartSpecInput {
 		return capie2e.QuickStartSpecInput{
 			E2EConfig:             e2eConfig,
