@@ -37,7 +37,7 @@
 执行以下命令运行 E2E 测试：
 
 ```shell
-make e2e
+make test-e2e
 ```
 
 以上命令会构建 CAPE 本地镜像并使用该镜像进行 E2E 测试。

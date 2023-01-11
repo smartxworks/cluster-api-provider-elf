@@ -50,10 +50,27 @@ TOOLS_DIR := $(ROOT_DIR)/hack/tools
 TOOLS_BIN_DIR := $(TOOLS_DIR)/bin
 export PATH := $(abspath $(TOOLS_BIN_DIR)):$(PATH)
 
+# E2E
+
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 ARTIFACTS ?= ${REPO_ROOT}/_artifacts
-E2E_CONF_FILE  ?= "$(abspath test/e2e/config/elf-dev.yaml)"
+E2E_CONF_FILE ?= "$(abspath test/e2e/config/elf-dev.yaml)"
 E2E_TEMPLATE_DIR := "$(abspath test/e2e/data/infrastructure-elf/)"
+
+GINKGO_FOCUS ?=
+GINKGO_SKIP ?=
+GINKGO_NODES ?= 1
+GINKGO_TIMEOUT ?= 2h
+GINKGO_POLL_PROGRESS_AFTER ?= 10m
+GINKGO_POLL_PROGRESS_INTERVAL ?= 1m
+SKIP_RESOURCE_CLEANUP ?= false
+USE_EXISTING_CLUSTER ?= false
+GINKGO_NOCOLOR ?= false
+
+# to set multiple ginkgo skip flags, if any
+ifneq ($(strip $(GINKGO_SKIP)),)
+_SKIP_ARGS := $(foreach arg,$(strip $(GINKGO_SKIP)),-skip="$(arg)")
+endif
 
 # Allow overriding manifest generation destination directory
 MANIFEST_ROOT ?= ./config
@@ -112,10 +129,16 @@ test: generate ## Run tests.
 e2e-image: docker-pull-prerequisites ## Build the e2e manager image. Docker ignores docker.io causing CAPI to fail to load local e2e image.
 	docker build --tag="k8s.gcr.io/smartxworks/cape-manager:e2e" .
 
-.PHONY: e2e
-e2e: e2e-image e2e-templates
-e2e: ginkgo kustomize kind ## Run e2e tests
-	time $(GINKGO) -v ./test/e2e -- -e2e.config="$(E2E_CONF_FILE)" -e2e.artifacts-folder="$(ARTIFACTS)"
+.PHONY: test-e2e
+test-e2e: e2e-templates
+test-e2e: ginkgo kustomize kind ## Run e2e tests
+	$(GINKGO) -v --trace -poll-progress-after=$(GINKGO_POLL_PROGRESS_AFTER) \
+		-poll-progress-interval=$(GINKGO_POLL_PROGRESS_INTERVAL) --tags=e2e --focus="$(GINKGO_FOCUS)" \
+		$(_SKIP_ARGS) --nodes=$(GINKGO_NODES) --timeout=$(GINKGO_TIMEOUT) --no-color=$(GINKGO_NOCOLOR) \
+		--output-dir="$(ARTIFACTS)" --junit-report="junit.e2e_suite.1.xml" $(GINKGO_ARGS) ./test/e2e -- \
+		-e2e.artifacts-folder="$(ARTIFACTS)" \
+		-e2e.config="$(E2E_CONF_FILE)" \
+		-e2e.skip-resource-cleanup=$(SKIP_RESOURCE_CLEANUP) -e2e.use-existing-cluster=$(USE_EXISTING_CLUSTER)
 
 ## --------------------------------------
 ## Tooling Binaries
@@ -123,23 +146,23 @@ e2e: ginkgo kustomize kind ## Run e2e tests
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
-	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.5.2)
+	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.5.7)
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.8.0)
+	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.10.0)
 
 GINKGO := $(shell pwd)/bin/ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
-	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/ginkgo@v1.16.5)
+	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo@v2.6.0)
 
 KIND := $(shell pwd)/bin/kind
 kind: ## Download kind locally if necessary.
-	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@v0.11.1)
+	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@v0.17.0)
 
 GOLANGCI_LINT := $(shell pwd)/bin/golangci-lint
 golangci-lint: ## Download golangci-lint locally if necessary.
-	$(call go-get-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.0)
+	$(call go-get-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.1)
 
 ## --------------------------------------
 ## Linting and fixing linter errors
