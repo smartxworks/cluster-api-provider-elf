@@ -56,7 +56,7 @@ const (
 	// retry the operation, but a user intervention might be required to fix the problem.
 	TaskFailureReason = "TaskFailure"
 
-	// WaitingForNetworkAddressesReason (Severity=Info) documents a ElfMachine waiting for the the machine network
+	// WaitingForNetworkAddressesReason (Severity=Info) documents a ElfMachine waiting for the machine network
 	// settings to be reported after machine being powered on.
 	WaitingForNetworkAddressesReason = "WaitingForNetworkAddresses"
 )
