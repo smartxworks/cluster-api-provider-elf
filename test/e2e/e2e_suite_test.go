@@ -18,15 +18,12 @@ package e2e
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/cluster-api/test/framework"
@@ -61,7 +58,7 @@ var (
 	// with the providers specified in the configPath.
 	clusterctlConfigPath string
 
-	// bootstrapClusterProvider manages provisioning of the the bootstrap cluster to be used for the e2e tests.
+	// bootstrapClusterProvider manages provisioning of the bootstrap cluster to be used for the e2e tests.
 	// Please note that provisioning will be skipped if e2e.use-existing-cluster is provided.
 	bootstrapClusterProvider bootstrap.ClusterProvider
 
@@ -83,9 +80,7 @@ func TestE2E(t *testing.T) {
 	}
 
 	RegisterFailHandler(Fail)
-	junitPath := filepath.Join(artifactFolder, fmt.Sprintf("junit.e2e_suite.%d.xml", config.GinkgoConfig.ParallelNode))
-	junitReporter := reporters.NewJUnitReporter(junitPath)
-	RunSpecsWithDefaultAndCustomReporters(t, "cape-e2e", []Reporter{junitReporter})
+	RunSpecs(t, "cape-e2e")
 }
 
 // Using a SynchronizedBeforeSuite for controlling how to create resources shared across ParallelNodes (~ginkgo threads).
