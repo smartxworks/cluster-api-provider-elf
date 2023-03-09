@@ -28,6 +28,7 @@ import (
 	clienttask "github.com/smartxworks/cloudtower-go-sdk/v2/client/task"
 	clientvlan "github.com/smartxworks/cloudtower-go-sdk/v2/client/vlan"
 	clientvm "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm"
+	clientvmplacementgroup "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_placement_group"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
@@ -42,12 +43,14 @@ type VMService interface {
 		machine *clusterv1.Machine,
 		elfMachine *infrav1.ElfMachine,
 		bootstrapData string) (*models.WithTaskVM, error)
+	Migrate(vmID, hostID string) (*models.WithTaskVM, error)
 	Delete(uuid string) (*models.Task, error)
 	PowerOff(uuid string) (*models.Task, error)
 	PowerOn(uuid string) (*models.Task, error)
 	ShutDown(uuid string) (*models.Task, error)
 	Get(id string) (*models.VM, error)
 	GetByName(name string) (*models.VM, error)
+	FindByIDs(ids []string) ([]*models.VM, error)
 	GetVMTemplate(id string) (*models.ContentLibraryVMTemplate, error)
 	GetTask(id string) (*models.Task, error)
 	GetCluster(id string) (*models.Cluster, error)
@@ -56,6 +59,10 @@ type VMService interface {
 	UpsertLabel(key, value string) (*models.Label, error)
 	DeleteLabel(key, value string, strict bool) (string, error)
 	AddLabelsToVM(vmID string, labels []string) (*models.Task, error)
+	CreateVMPlacementGroup(name, clusterID string, vmPolicy models.VMVMPolicy) (*models.WithTaskVMPlacementGroup, error)
+	GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error)
+	AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error)
+	DeleteVMPlacementGroupsByName(placementGroupName string) (*models.Task, error)
 }
 
 type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
@@ -206,7 +213,7 @@ func (svr *TowerVMService) Clone(
 		CPUSockets:  util.TowerCPU(numCPUSockets),
 		Memory:      util.TowerMemory(memoryMiB),
 		Firmware:    models.NewVMFirmware(models.VMFirmwareBIOS),
-		Status:      models.NewVMStatus(models.VMStatusRUNNING),
+		Status:      models.NewVMStatus(models.VMStatusSTOPPED),
 		Ha:          util.TowerBool(elfMachine.Spec.HA),
 		IsFullCopy:  util.TowerBool(isFullCopy),
 		TemplateID:  template.ID,
@@ -232,6 +239,25 @@ func (svr *TowerVMService) Clone(
 	}
 
 	return createVMFromTemplateResp.Payload[0], nil
+}
+
+func (svr *TowerVMService) Migrate(vmID, hostID string) (*models.WithTaskVM, error) {
+	migrateVMParams := clientvm.NewMigrateVMParams()
+	migrateVMParams.RequestBody = &models.VMMigrateParams{
+		Data: &models.VMMigrateParamsData{
+			HostID: util.TowerString(hostID),
+		},
+		Where: &models.VMWhereInput{
+			OR: []*models.VMWhereInput{{LocalID: util.TowerString(vmID)}, {ID: util.TowerString(vmID)}},
+		},
+	}
+
+	migrateVMResp, err := svr.Session.VM.MigrateVM(migrateVMParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return migrateVMResp.Payload[0], nil
 }
 
 // Delete destroys a virtual machine.
@@ -358,6 +384,27 @@ func (svr *TowerVMService) GetByName(name string) (*models.VM, error) {
 	}
 
 	return getVmsResp.Payload[0], nil
+}
+
+// FindByIDs searches for virtual machines by ids.
+func (svr *TowerVMService) FindByIDs(ids []string) ([]*models.VM, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	getVmsParams := clientvm.NewGetVmsParams()
+	getVmsParams.RequestBody = &models.GetVmsRequestBody{
+		Where: &models.VMWhereInput{
+			OR: []*models.VMWhereInput{{LocalIDIn: ids}, {IDIn: ids}},
+		},
+	}
+
+	getVmsResp, err := svr.Session.VM.GetVms(getVmsParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return getVmsResp.Payload, nil
 }
 
 // GetCluster searches for a cluster.
@@ -547,4 +594,96 @@ func (svr *TowerVMService) AddLabelsToVM(vmID string, labelIds []string) (*model
 		return nil, errors.New(LabelAddFailed)
 	}
 	return &models.Task{ID: addLabelsResp.Payload[0].TaskID}, nil
+}
+
+// CreateVMPlacementGroup creates a new vm placement group.
+func (svr *TowerVMService) CreateVMPlacementGroup(name, clusterID string, vmPolicy models.VMVMPolicy) (*models.WithTaskVMPlacementGroup, error) {
+	createVMPlacementGroupParams := clientvmplacementgroup.NewCreateVMPlacementGroupParams()
+	createVMPlacementGroupParams.RequestBody = []*models.VMPlacementGroupCreationParams{{
+		Name:                util.TowerString(name),
+		ClusterID:           util.TowerString(clusterID),
+		Enabled:             util.TowerBool(true),
+		Description:         util.TowerString(VMPlacementGroupDescription),
+		VMHostMustEnabled:   util.TowerBool(false),
+		VMHostMustPolicy:    util.TowerBool(true),
+		VMHostPreferEnabled: util.TowerBool(false),
+		VMHostPreferPolicy:  util.TowerBool(true),
+		VMVMPolicyEnabled:   util.TowerBool(true),
+		VMVMPolicy:          &vmPolicy,
+	}}
+	createVMPlacementGroupResp, err := svr.Session.VMPlacementGroup.CreateVMPlacementGroup(createVMPlacementGroupParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return createVMPlacementGroupResp.Payload[0], nil
+}
+
+// GetVMPlacementGroup searches for a vm placement group by name.
+func (svr *TowerVMService) GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error) {
+	getVMPlacementGroupsParams := clientvmplacementgroup.NewGetVMPlacementGroupsParams()
+	getVMPlacementGroupsParams.RequestBody = &models.GetVMPlacementGroupsRequestBody{
+		Where: &models.VMPlacementGroupWhereInput{
+			Name: util.TowerString(name),
+		},
+	}
+
+	getVMPlacementGroupsResp, err := svr.Session.VMPlacementGroup.GetVMPlacementGroups(getVMPlacementGroupsParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(getVMPlacementGroupsResp.Payload) == 0 {
+		return nil, errors.New(VMPlacementGroupNotFound)
+	}
+
+	return getVMPlacementGroupsResp.Payload[0], nil
+}
+
+func (svr *TowerVMService) AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error) {
+	updateVMPlacementGroupParams := clientvmplacementgroup.NewUpdateVMPlacementGroupParams()
+	updateVMPlacementGroupParams.RequestBody = &models.VMPlacementGroupUpdationParams{
+		Data: &models.VMPlacementGroupUpdationParamsData{
+			Enabled:             placementGroup.Enabled,
+			Description:         placementGroup.Description,
+			VMHostMustEnabled:   placementGroup.VMHostMustEnabled,
+			VMHostMustPolicy:    placementGroup.VMHostMustPolicy,
+			VMHostPreferEnabled: placementGroup.VMHostPreferEnabled,
+			VMHostPreferPolicy:  placementGroup.VMHostPreferPolicy,
+			VMVMPolicyEnabled:   placementGroup.VMVMPolicyEnabled,
+			VMVMPolicy:          placementGroup.VMVMPolicy,
+			Vms:                 &models.VMWhereInput{IDIn: vmIDs},
+		},
+		Where: &models.VMPlacementGroupWhereInput{
+			ID: util.TowerString(*placementGroup.ID),
+		},
+	}
+
+	updateVMPlacementGroupResp, err := svr.Session.VMPlacementGroup.UpdateVMPlacementGroup(updateVMPlacementGroupParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.Task{ID: updateVMPlacementGroupResp.Payload[0].TaskID}, nil
+}
+
+// DeleteVMPlacementGroupsByName deletes placement groups by name.
+func (svr *TowerVMService) DeleteVMPlacementGroupsByName(placementGroupName string) (*models.Task, error) {
+	deleteVMPlacementGroupParams := clientvmplacementgroup.NewDeleteVMPlacementGroupParams()
+	deleteVMPlacementGroupParams.RequestBody = &models.VMPlacementGroupDeletionParams{
+		Where: &models.VMPlacementGroupWhereInput{
+			NameStartsWith: util.TowerString(placementGroupName),
+		},
+	}
+
+	deleteVMPlacementGroupResp, err := svr.Session.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(deleteVMPlacementGroupResp.Payload) == 0 {
+		return nil, nil
+	}
+
+	return &models.Task{ID: deleteVMPlacementGroupResp.Payload[0].TaskID}, nil
 }

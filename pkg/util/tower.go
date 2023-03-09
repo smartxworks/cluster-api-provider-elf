@@ -17,9 +17,13 @@ limitations under the License.
 package util
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+
+	labelsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
 )
 
 func TowerInt32(v int) *int32 {
@@ -71,6 +75,14 @@ func GetTowerString(ptr *string) string {
 	return *ptr
 }
 
+func GetTowerInt32(ptr *int32) int32 {
+	if ptr == nil {
+		return 0
+	}
+
+	return *ptr
+}
+
 func GetTowerTaskStatus(ptr *models.TaskStatus) string {
 	if ptr == nil {
 		return ""
@@ -85,4 +97,35 @@ func IsCloneVMTask(task *models.Task) bool {
 
 func IsPowerOnVMTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "Start VM")
+}
+
+func IsVMMigrationTask(task *models.Task) bool {
+	return strings.Contains(GetTowerString(task.Description), "performing a live migration")
+}
+
+func IsPlacementGroupTask(task *models.Task) bool {
+	return strings.Contains(GetTowerString(task.Description), "VM placement group") // Update VM placement group
+}
+
+func GetVMPlacementGroupName(machine *clusterv1.Machine) string {
+	groupName := ""
+	if IsControlPlaneMachine(machine) {
+		groupName = labelsutil.GetControlPlaneLabel(machine)
+	} else {
+		groupName = labelsutil.GetDeploymentNameLabel(machine)
+	}
+
+	if groupName == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("cape-cluster-%s-group", groupName)
+}
+
+func GetVMPlacementGroupPolicy(machine *clusterv1.Machine) models.VMVMPolicy {
+	if IsControlPlaneMachine(machine) {
+		return models.VMVMPolicyMUSTDIFFERENT
+	}
+
+	return models.VMVMPolicyPREFERDIFFERENT
 }

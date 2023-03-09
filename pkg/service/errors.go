@@ -23,17 +23,18 @@ import (
 
 // error codes.
 const (
-	ClusterNotFound         = "CLUSTER_NOT_FOUND"
-	HostNotFound            = "HOST_NOT_FOUND"
-	VMTemplateNotFound      = "VM_TEMPLATE_NOT_FOUND"
-	VMNotFound              = "VM_NOT_FOUND"
-	VMDuplicate             = "VM_DUPLICATE"
-	TaskNotFound            = "TASK_NOT_FOUND"
-	VlanNotFound            = "VLAN_NOT_FOUND"
-	LabelCreateFailed       = "LABEL_CREATE_FAILED"
-	LabelAddFailed          = "LABEL_ADD_FAILED"
-	CloudInitError          = "VM_CLOUD_INIT_CONFIG_ERROR"
-	MemoryInsufficientError = "HostAvailableMemoryFilter"
+	ClusterNotFound          = "CLUSTER_NOT_FOUND"
+	HostNotFound             = "HOST_NOT_FOUND"
+	VMTemplateNotFound       = "VM_TEMPLATE_NOT_FOUND"
+	VMNotFound               = "VM_NOT_FOUND"
+	VMDuplicate              = "VM_DUPLICATE"
+	TaskNotFound             = "TASK_NOT_FOUND"
+	VlanNotFound             = "VLAN_NOT_FOUND"
+	VMPlacementGroupNotFound = "VM_PLACEMENT_GROUP_NOT_FOUND"
+	LabelCreateFailed        = "LABEL_CREATE_FAILED"
+	LabelAddFailed           = "LABEL_ADD_FAILED"
+	CloudInitError           = "VM_CLOUD_INIT_CONFIG_ERROR"
+	MemoryInsufficientError  = "HostAvailableMemoryFilter"
 )
 
 func IsVMNotFound(err error) bool {
@@ -50,6 +51,10 @@ func IsShutDownTimeout(message string) bool {
 
 func IsTaskNotFound(err error) bool {
 	return strings.Contains(err.Error(), TaskNotFound)
+}
+
+func IsVMPlacementGroupNotFound(err error) bool {
+	return strings.Contains(err.Error(), VMPlacementGroupNotFound)
 }
 
 func IsCloudInitConfigError(message string) bool {

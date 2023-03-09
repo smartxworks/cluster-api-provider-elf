@@ -33,6 +33,16 @@ func UUID() string {
 	return uuid.New().String()
 }
 
+func NewTowerCluster() *models.Cluster {
+	id := ID()
+	localID := UUID()
+
+	return &models.Cluster{
+		ID:      &id,
+		LocalID: &localID,
+	}
+}
+
 func NewTowerVM() *models.VM {
 	id := ID()
 	localID := UUID()
@@ -72,5 +82,28 @@ func NewTowerLabel() *models.Label {
 		ID:    &id,
 		Key:   &key,
 		Value: &value,
+	}
+}
+
+func NewVMPlacementGroup(vmIDs []string) *models.VMPlacementGroup {
+	id := ID()
+	localID := UUID()
+	vms := make([]*models.NestedVM, 0, len(vmIDs))
+	for i := 0; i < len(vmIDs); i++ {
+		vms = append(vms, &models.NestedVM{ID: util.TowerString(vmIDs[i])})
+	}
+
+	return &models.VMPlacementGroup{
+		ID:      &id,
+		Name:    &id,
+		LocalID: &localID,
+		Vms:     vms,
+	}
+}
+
+func NewWithTaskVMPlacementGroup(placementGroup *models.VMPlacementGroup, task *models.Task) *models.WithTaskVMPlacementGroup {
+	return &models.WithTaskVMPlacementGroup{
+		Data:   placementGroup,
+		TaskID: task.ID,
 	}
 }

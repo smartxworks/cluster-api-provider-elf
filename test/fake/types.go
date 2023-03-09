@@ -22,7 +22,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/storage/names"
+	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/patch"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
@@ -58,7 +60,7 @@ func NewClusterObjects() (*infrav1.ElfCluster, *clusterv1.Cluster) {
 
 	cluster := &clusterv1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      names.SimpleNameGenerator.GenerateName("cluster-"),
+			Name:      elfCluster.Name,
 			Namespace: Namespace,
 		},
 		Spec: clusterv1.ClusterSpec{
@@ -82,6 +84,7 @@ func NewMachineObjects(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluste
 			Labels: map[string]string{
 				clusterv1.ClusterLabelName: elfCluster.Name,
 			},
+			CreationTimestamp: metav1.Now(),
 		},
 		Spec: infrav1.ElfMachineSpec{
 			Network: infrav1.NetworkSpec{
@@ -99,9 +102,11 @@ func NewMachineObjects(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluste
 			Labels: map[string]string{
 				clusterv1.ClusterLabelName: cluster.Name,
 			},
+			CreationTimestamp: metav1.Now(),
 		},
 		Spec: clusterv1.MachineSpec{
 			ClusterName: cluster.Name,
+			Version:     pointer.StringPtr("1.26.0"),
 			InfrastructureRef: corev1.ObjectReference{
 				APIVersion: infrav1.GroupVersion.String(),
 				Kind:       ElfMachineKind,
@@ -128,6 +133,17 @@ func NewClusterAndMachineObjects() (*infrav1.ElfCluster, *clusterv1.Cluster, *in
 	}
 
 	return elfCluster, cluster, elfMachine, machine, secret
+}
+
+func NewKCP() *controlplanev1.KubeadmControlPlane {
+	return &controlplanev1.KubeadmControlPlane{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      names.SimpleNameGenerator.GenerateName("kcp-"),
+			Namespace: Namespace,
+		},
+		Spec:   controlplanev1.KubeadmControlPlaneSpec{},
+		Status: controlplanev1.KubeadmControlPlaneStatus{},
+	}
 }
 
 func InitClusterOwnerReferences(ctrlContext *context.ControllerContext,
@@ -159,4 +175,18 @@ func InitOwnerReferences(
 	if elfMachine != nil {
 		InitMachineOwnerReferences(ctrlContext, elfMachine, machine)
 	}
+}
+
+func ToControlPlaneMachine(machine metav1.Object, kcp *controlplanev1.KubeadmControlPlane) {
+	labels := machine.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
+	labels[clusterv1.MachineControlPlaneLabelName] = ""
+	if kcp != nil {
+		labels[clusterv1.MachineControlPlaneNameLabel] = kcp.Name
+	}
+
+	machine.SetLabels(labels)
 }

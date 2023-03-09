@@ -17,7 +17,7 @@ limitations under the License.
 package util
 
 import (
-	"context"
+	goctx "context"
 	"regexp"
 	"strings"
 
@@ -48,7 +48,7 @@ var ErrNoMachineIPAddr = errors.New("no IP addresses found for machine")
 
 // GetElfMachinesInCluster gets a cluster's ElfMachine resources.
 func GetElfMachinesInCluster(
-	ctx context.Context,
+	ctx goctx.Context,
 	controllerClient client.Client,
 	namespace, clusterName string) ([]*infrav1.ElfMachine, error) {
 	labels := map[string]string{clusterv1.ClusterLabelName: clusterName}
@@ -58,6 +58,26 @@ func GetElfMachinesInCluster(
 		ctx, &machineList,
 		client.InNamespace(namespace),
 		client.MatchingLabels(labels)); err != nil {
+		return nil, err
+	}
+
+	machines := make([]*infrav1.ElfMachine, len(machineList.Items))
+	for i := range machineList.Items {
+		machines[i] = &machineList.Items[i]
+	}
+
+	return machines, nil
+}
+
+// GetControlPlaneElfMachinesInCluster gets a cluster's Control Plane ElfMachine resources.
+func GetControlPlaneElfMachinesInCluster(ctx goctx.Context, ctrlClient client.Client, namespace, clusterName string) ([]*infrav1.ElfMachine, error) {
+	var machineList infrav1.ElfMachineList
+	labels := map[string]string{
+		clusterv1.ClusterLabelName:             clusterName,
+		clusterv1.MachineControlPlaneLabelName: "",
+	}
+
+	if err := ctrlClient.List(ctx, &machineList, client.InNamespace(namespace), client.MatchingLabels(labels)); err != nil {
 		return nil, err
 	}
 

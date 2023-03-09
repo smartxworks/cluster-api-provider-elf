@@ -23,6 +23,7 @@ import (
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
+	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
@@ -46,6 +47,7 @@ func New(opts Options) (Manager, error) {
 	_ = clusterv1.AddToScheme(opts.Scheme)
 	_ = infrav1.AddToScheme(opts.Scheme)
 	_ = bootstrapv1.AddToScheme(opts.Scheme)
+	_ = controlplanev1.AddToScheme(opts.Scheme)
 	// +kubebuilder:scaffold:scheme
 
 	// Build the controller manager.

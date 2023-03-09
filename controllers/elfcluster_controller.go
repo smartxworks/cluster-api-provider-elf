@@ -213,6 +213,10 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 
 	// if cluster need to force delete, skipping infra resource deletion and remove the finalizer.
 	if !ctx.ElfCluster.HasForceDeleteCluster() {
+		if err := r.reconcileDeleteVMPlacementGroups(ctx); err != nil {
+			return reconcile.Result{}, errors.Wrapf(err, "failed to delete vm placement groups")
+		}
+
 		if err := r.reconcileDeleteLabels(ctx); err != nil {
 			return reconcile.Result{}, errors.Wrapf(err, "failed to delete labels")
 		}
@@ -222,6 +226,14 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 	ctrlutil.RemoveFinalizer(ctx.ElfCluster, infrav1.ClusterFinalizer)
 
 	return reconcile.Result{}, nil
+}
+
+func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) error {
+	if _, err := ctx.VMService.DeleteVMPlacementGroupsByName(fmt.Sprintf("cape-cluster-%s", ctx.Cluster.Name)); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *ElfClusterReconciler) reconcileDeleteLabels(ctx *context.ClusterContext) error {

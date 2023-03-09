@@ -61,6 +61,97 @@ var _ = Describe("VMLimiter", func() {
 	})
 })
 
+var _ = Describe("VM Operation Limiter", func() {
+	var vmName string
+
+	BeforeEach(func() {
+		vmName = fake.UUID()
+	})
+
+	It("acquireTicketForUpdateVM", func() {
+		Expect(acquireTicketForUpdateVM(vmName)).To(BeTrue())
+		Expect(vmOperationMap).To(HaveKey(vmName))
+
+		Expect(acquireTicketForUpdateVM(vmName)).To(BeFalse())
+		acquireTicketForUpdateVM(vmName)
+		resetVMOperationMap()
+
+		vmOperationMap[vmName] = time.Now().Add(-vmOperationRateLimit)
+		Expect(acquireTicketForUpdateVM(vmName)).To(BeTrue())
+		Expect(vmOperationMap).To(HaveKey(vmName))
+		Expect(len(vmOperationMap)).To(Equal(1))
+		resetVMOperationMap()
+	})
+})
+
+var _ = Describe("Placement Group VM Migration Limiter", func() {
+	var groupName string
+
+	BeforeEach(func() {
+		groupName = fake.UUID()
+	})
+
+	It("acquireTicketForPlacementGroupVMMigration", func() {
+		Expect(acquireTicketForPlacementGroupVMMigration(groupName)).To(BeTrue())
+		Expect(placementGroupVMMigrationMap).To(HaveKey(groupName))
+
+		Expect(acquireTicketForPlacementGroupVMMigration(groupName)).To(BeFalse())
+		releaseTicketForPlacementGroupVMMigration(groupName)
+		Expect(placementGroupVMMigrationMap).NotTo(HaveKey(groupName))
+
+		placementGroupVMMigrationMap[groupName] = time.Now().Add(-vmMigrationTimeout)
+		Expect(acquireTicketForPlacementGroupVMMigration(groupName)).To(BeTrue())
+		Expect(placementGroupVMMigrationMap).To(HaveKey(groupName))
+	})
+})
+
+var _ = Describe("Placement Group Update Limiter", func() {
+	var groupName string
+
+	BeforeEach(func() {
+		groupName = fake.UUID()
+	})
+
+	It("acquireTicketForUpdatePlacementGroup", func() {
+		Expect(acquireTicketForUpdatePlacementGroup(groupName)).To(BeTrue())
+		Expect(placementGroupStatusMap).To(HaveKey(groupName))
+		releaseTicketForUpdatePlacementGroup(groupName)
+
+		placementGroupStatusMap[groupName] = time.Now()
+		Expect(acquireTicketForUpdatePlacementGroup(groupName)).To(BeFalse())
+		releaseTicketForUpdatePlacementGroup(groupName)
+
+		placementGroupStatusMap[groupName] = time.Now().Add(-placementGroupOperationTimeout)
+		Expect(acquireTicketForUpdatePlacementGroup(groupName)).To(BeTrue())
+		Expect(placementGroupStatusMap).To(HaveKey(groupName))
+		Expect(len(placementGroupStatusMap)).To(Equal(1))
+		releaseTicketForUpdatePlacementGroup(groupName)
+	})
+})
+
+var _ = Describe("Placement Group Operation Limiter", func() {
+	var groupName string
+
+	BeforeEach(func() {
+		groupName = fake.UUID()
+	})
+
+	It("acquireTicketForPlacementGroupOperation", func() {
+		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
+		Expect(placementGroupOperationMap).To(HaveKey(groupName))
+
+		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeFalse())
+		releaseTicketForPlacementGroupOperation(groupName)
+
+		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
+		Expect(placementGroupOperationMap).To(HaveKey(groupName))
+	})
+})
+
 func resetVMStatusMap() {
 	vmStatusMap = make(map[string]time.Time)
+}
+
+func resetVMOperationMap() {
+	vmOperationMap = make(map[string]time.Time)
 }

@@ -138,13 +138,23 @@ type ElfMachineStatus struct {
 	// +optional
 	FailureMessage *string `json:"failureMessage,omitempty"`
 
+	// VMRef is used to lookup the VM.
 	// This value is set automatically at runtime and should not be set or
 	// modified by users.
-	// VMRef is used to lookup the VM.
 	// +optional
 	VMRef string `json:"vmRef,omitempty"`
 
+	// TaskRef is a managed object reference to a Task related to the machine.
+	// This value is set automatically at runtime and should not be set or
+	// modified by users.
+	// +optional
 	TaskRef string `json:"taskRef,omitempty"`
+
+	// HostRef is used to lookup the host of the virtual machine.
+	// This value is set automatically at runtime and should not be set or
+	// modified by users.
+	// +optional
+	HostRef string `json:"hostRef,omitempty"`
 }
 
 //+kubebuilder:object:root=true
