@@ -525,7 +525,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.PoweringOnFailedReason}})
 		})
 
-		It("should handle power on task failed", func() {
+		It(" handle power on task failure", func() {
 			towerCluster := fake.NewTowerCluster()
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
@@ -602,7 +602,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.JoiningPlacementGroupReason}})
 		})
 
-		It("should wait placement group task done", func() {
+		It("should wait for placement group task done", func() {
 			towerCluster := fake.NewTowerCluster()
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
@@ -781,7 +781,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(logBuffer.String()).To(ContainSubstring("KCP rolling update in progress, skip migrate VM"))
 			})
 
-			It("should migrate VM when VM is running and host where VM in is not in unused hosts", func() {
+			It("should migrate VM to another host when the VM is running and the host of VM is not in unused hosts", func() {
 				towerCluster := fake.NewTowerCluster()
 				towerCluster.HostNum = util.TowerInt32(2)
 				hostID1 := fake.UUID()
@@ -841,7 +841,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-			err := reconciler.reconcileVMHost(machineContext)
+			err := reconciler.reconcileVMHostForRollingUpdate(machineContext)
 			Expect(err).To(BeZero())
 			Expect(elfMachine.Spec.Host).To(BeEmpty())
 		})
@@ -856,7 +856,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(util.GetVMPlacementGroupName(machine)).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-			err := reconciler.reconcileVMHost(machineContext)
+			err := reconciler.reconcileVMHostForRollingUpdate(machineContext)
 			Expect(err).To(BeZero())
 			Expect(elfMachine.Spec.Host).To(BeEmpty())
 		})
@@ -875,7 +875,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(util.GetVMPlacementGroupName(machine)).Return(placementGroup, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-			err := reconciler.reconcileVMHost(machineContext)
+			err := reconciler.reconcileVMHostForRollingUpdate(machineContext)
 			Expect(err).To(BeZero())
 			Expect(elfMachine.Spec.Host).To(BeEmpty())
 		})
@@ -921,7 +921,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(util.GetVMPlacementGroupName(machine)).Return(placementGroup, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-			err := reconciler.reconcileVMHost(machineContext)
+			err := reconciler.reconcileVMHostForRollingUpdate(machineContext)
 			Expect(err).To(BeZero())
 			Expect(elfMachine.Spec.Host).To(Equal(hostID))
 		})

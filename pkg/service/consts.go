@@ -18,5 +18,5 @@ package service
 
 const (
 	// VMPlacementGroupDescription is the description of vm placement group.
-	VMPlacementGroupDescription = "This is vm placement group create by CAPE, don't delete it!"
+	VMPlacementGroupDescription = "This is VM placement group created by CAPE, don't delete it!"
 )

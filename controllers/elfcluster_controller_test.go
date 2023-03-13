@@ -210,7 +210,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			}
 			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(fmt.Sprintf("cape-cluster-%s", cluster.Name)).Return(nil, nil)
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(fmt.Sprintf("cape-%s-cluster-%s", cluster.Namespace, cluster.Name)).Return(nil, nil)
 			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelClusterName(), elfCluster.Name, true).Return("labelid", nil)
 			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelVIP(), elfCluster.Spec.ControlPlaneEndpoint.Host, true).Return("labelid", nil)
 			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelNamespace(), elfCluster.Namespace, true).Return("", nil)

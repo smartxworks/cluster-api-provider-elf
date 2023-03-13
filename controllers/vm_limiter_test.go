@@ -68,16 +68,16 @@ var _ = Describe("VM Operation Limiter", func() {
 		vmName = fake.UUID()
 	})
 
-	It("acquireTicketForUpdateVM", func() {
-		Expect(acquireTicketForUpdateVM(vmName)).To(BeTrue())
+	It("acquireTicketForUpdatingVM", func() {
+		Expect(acquireTicketForUpdatingVM(vmName)).To(BeTrue())
 		Expect(vmOperationMap).To(HaveKey(vmName))
 
-		Expect(acquireTicketForUpdateVM(vmName)).To(BeFalse())
-		acquireTicketForUpdateVM(vmName)
+		Expect(acquireTicketForUpdatingVM(vmName)).To(BeFalse())
+		acquireTicketForUpdatingVM(vmName)
 		resetVMOperationMap()
 
 		vmOperationMap[vmName] = time.Now().Add(-vmOperationRateLimit)
-		Expect(acquireTicketForUpdateVM(vmName)).To(BeTrue())
+		Expect(acquireTicketForUpdatingVM(vmName)).To(BeTrue())
 		Expect(vmOperationMap).To(HaveKey(vmName))
 		Expect(len(vmOperationMap)).To(Equal(1))
 		resetVMOperationMap()

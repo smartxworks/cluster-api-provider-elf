@@ -605,9 +605,7 @@ func (svr *TowerVMService) CreateVMPlacementGroup(name, clusterID string, vmPoli
 		Enabled:             util.TowerBool(true),
 		Description:         util.TowerString(VMPlacementGroupDescription),
 		VMHostMustEnabled:   util.TowerBool(false),
-		VMHostMustPolicy:    util.TowerBool(true),
 		VMHostPreferEnabled: util.TowerBool(false),
-		VMHostPreferPolicy:  util.TowerBool(true),
 		VMVMPolicyEnabled:   util.TowerBool(true),
 		VMVMPolicy:          &vmPolicy,
 	}}

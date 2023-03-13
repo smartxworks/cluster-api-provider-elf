@@ -150,11 +150,17 @@ type ElfMachineStatus struct {
 	// +optional
 	TaskRef string `json:"taskRef,omitempty"`
 
-	// HostRef is used to lookup the host of the virtual machine.
+	// HostServerRef is used to lookup the host of the virtual machine.
 	// This value is set automatically at runtime and should not be set or
 	// modified by users.
 	// +optional
-	HostRef string `json:"hostRef,omitempty"`
+	HostServerRef string `json:"hostServerRef,omitempty"`
+
+	// HostServerName is the name of host where the virtual machine on.
+	// This value is set automatically at runtime and should not be set or
+	// modified by users.
+	// +optional
+	HostServerName string `json:"hostServerName,omitempty"`
 }
 
 //+kubebuilder:object:root=true

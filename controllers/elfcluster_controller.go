@@ -229,7 +229,7 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 }
 
 func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) error {
-	if _, err := ctx.VMService.DeleteVMPlacementGroupsByName(fmt.Sprintf("cape-cluster-%s", ctx.Cluster.Name)); err != nil {
+	if _, err := ctx.VMService.DeleteVMPlacementGroupsByName(fmt.Sprintf("cape-%s-cluster-%s", ctx.Cluster.Namespace, ctx.Cluster.Name)); err != nil {
 		return err
 	}
 

@@ -268,10 +268,15 @@ spec:
                   during the reconciliation of Machines can be added as events to
                   the Machine object and/or logged in the controller's output."
                 type: string
-              hostRef:
-                description: HostRef is used to lookup the host of the virtual machine.
-                  This value is set automatically at runtime and should not be set
-                  or modified by users.
+              hostServerName:
+                description: HostServerName is the name of host where the virtual
+                  machine on. This value is set automatically at runtime and should
+                  not be set or modified by users.
+                type: string
+              hostServerRef:
+                description: HostServerRef is used to lookup the host of the virtual
+                  machine. This value is set automatically at runtime and should not
+                  be set or modified by users.
                 type: string
               network:
                 description: Network returns the network status for each of the machine's

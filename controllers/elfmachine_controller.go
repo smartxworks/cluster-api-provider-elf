@@ -485,7 +485,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 			}
 		}
 
-		if err := r.reconcileVMHost(ctx); err != nil {
+		if err := r.reconcileVMHostForRollingUpdate(ctx); err != nil {
 			return nil, err
 		}
 
@@ -536,10 +536,11 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	}
 
 	// The host of the virtual machine may change, such as rescheduling caused by HA.
-	if vm.Host != nil && ctx.ElfMachine.Status.HostRef != util.GetTowerString(vm.Host.ID) {
-		hostRef := ctx.ElfMachine.Status.HostRef
-		ctx.ElfMachine.Status.HostRef = util.GetTowerString(vm.Host.ID)
-		ctx.Logger.V(1).Info(fmt.Sprintf("Updated VM hostRef from %s to %s", hostRef, ctx.ElfMachine.Status.VMRef))
+	if vm.Host != nil && ctx.ElfMachine.Status.HostServerName != *vm.Host.Name {
+		hostName := ctx.ElfMachine.Status.HostServerName
+		ctx.ElfMachine.Status.HostServerRef = *vm.Host.ID
+		ctx.ElfMachine.Status.HostServerName = *vm.Host.Name
+		ctx.Logger.V(1).Info(fmt.Sprintf("Updated VM hostServerName from %s to %s", hostName, *vm.Host.Name))
 	}
 
 	vmLocalID := util.GetTowerString(vm.LocalID)
@@ -617,7 +618,7 @@ func (r *ElfMachineReconciler) getVM(ctx *context.MachineContext) (*models.VM, e
 		return nil, err
 	}
 
-	// If create VM failed, tower deletes the VM
+	// If Tower fails to create VM, the temporary DB record for this VM will be deleted.
 	ctx.ElfMachine.SetVM("")
 
 	return nil, errors.Wrapf(err, "failed to create VM for ElfMachine %s/%s", ctx.ElfMachine.Namespace, ctx.ElfMachine.Name)
@@ -635,11 +636,10 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 			return false, nil
 		}
 
-		ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, try to power on VM %s", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
+		ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for the ELF cluster %s was detected previously, try to power on VM %s to check if the ELF cluster has sufficient memory now", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
 	}
 
-	// Tower API currently does not have a concurrency limit for operations on the same virtual machine, which may cause task to fail.
-	if ok := acquireTicketForUpdateVM(ctx.ElfMachine.Name); !ok {
+	if ok := acquireTicketForUpdatingVM(ctx.ElfMachine.Name); !ok {
 		ctx.Logger.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip power on VM %s", ctx.ElfMachine.Status.VMRef))
 
 		return false, nil
@@ -704,19 +704,14 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 
 		ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "taskErrorMessage", errorMessage, "taskErrorCode", util.GetTowerString(task.ErrorCode), "taskDescription", util.GetTowerString(task.Description))
 
-		if util.IsCloneVMTask(task) {
+		switch {
+		case util.IsCloneVMTask(task):
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
-		}
-
-		if util.IsVMMigrationTask(task) {
+		case util.IsVMMigrationTask(task):
 			releaseTicketForPlacementGroupVMMigration(util.GetVMPlacementGroupName(ctx.Machine))
-		}
-
-		if util.IsPlacementGroupTask(task) {
+		case util.IsPlacementGroupTask(task):
 			releaseTicketForUpdatePlacementGroup(util.GetVMPlacementGroupName(ctx.Machine))
-		}
-
-		if service.IsMemoryInsufficientError(errorMessage) {
+		case service.IsMemoryInsufficientError(errorMessage):
 			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, true)
 			message := fmt.Sprintf("Insufficient memory detected for ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
 			ctx.Logger.Info(message)
@@ -730,16 +725,13 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 
 		ctx.Logger.Info("VM task successful", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", util.GetTowerString(task.Description))
 
-		if util.IsCloneVMTask(task) || util.IsPowerOnVMTask(task) {
+		switch {
+		case util.IsCloneVMTask(task) || util.IsPowerOnVMTask(task):
 			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, false)
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
-		}
-
-		if util.IsVMMigrationTask(task) {
+		case util.IsVMMigrationTask(task):
 			releaseTicketForPlacementGroupVMMigration(util.GetVMPlacementGroupName(ctx.Machine))
-		}
-
-		if util.IsPlacementGroupTask(task) {
+		case util.IsPlacementGroupTask(task):
 			releaseTicketForUpdatePlacementGroup(util.GetVMPlacementGroupName(ctx.Machine))
 		}
 
@@ -751,7 +743,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 	return false, nil
 }
 
-// reconcilePlacementGroup put the virtual machines into the placement group.
+// reconcilePlacementGroup puts the virtual machine into the placement group.
 func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
 	defer func() {
 		if reterr != nil {
@@ -761,7 +753,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 		}
 	}()
 
-	cluster, err := ctx.VMService.GetCluster(ctx.ElfCluster.Spec.Cluster)
+	towerCluster, err := ctx.VMService.GetCluster(ctx.ElfCluster.Spec.Cluster)
 	if err != nil {
 		return false, err
 	}
@@ -780,13 +772,13 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 		}
 
 		if ok := acquireTicketForUpdatePlacementGroup(util.GetVMPlacementGroupName(ctx.Machine)); !ok {
-			ctx.Logger.V(1).Info(fmt.Sprintf("The placement group is performing another operation, skip create placement group %s", util.GetTowerString(placementGroup.Name)))
+			ctx.Logger.V(1).Info(fmt.Sprintf("The placement group is performing create operation, skip create placement group %s", util.GetTowerString(placementGroup.Name)))
 
 			return false, nil
 		}
 
 		placementGroupPolicy := util.GetVMPlacementGroupPolicy(ctx.Machine)
-		withTaskVMPlacementGroup, err := ctx.VMService.CreateVMPlacementGroup(placementGroupName, *cluster.ID, placementGroupPolicy)
+		withTaskVMPlacementGroup, err := ctx.VMService.CreateVMPlacementGroup(placementGroupName, *towerCluster.ID, placementGroupPolicy)
 		if err != nil {
 			return false, err
 		}
@@ -815,8 +807,8 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 	}
 
 	if util.IsControlPlaneMachine(ctx.Machine) {
-		if len(placementGroup.Vms) >= int(*cluster.HostNum) {
-			ctx.Logger.Info("The placement group is full, skip adding VM to the placement group", "placementGroup", *placementGroup.Name, "placementGroupCapacity", *cluster.HostNum, "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+		if len(placementGroup.Vms) >= int(*towerCluster.HostNum) {
+			ctx.Logger.Info("The placement group is full, skip adding VM to the placement group", "placementGroup", *placementGroup.Name, "placementGroupCapacity", *towerCluster.HostNum, "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
 			return true, nil
 		}
@@ -832,13 +824,13 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 		}
 
 		clusterHostSet := sets.NewString()
-		for i := 0; i < len(cluster.Hosts); i++ {
-			clusterHostSet.Insert(*cluster.Hosts[i].ID)
+		for i := 0; i < len(towerCluster.Hosts); i++ {
+			clusterHostSet.Insert(*towerCluster.Hosts[i].ID)
 		}
 
 		unusedHostSet := clusterHostSet.Difference(vmHostSet)
 		if unusedHostSet.Len() == 0 {
-			ctx.Logger.Info("The placement group still has capacity, but all hosts are already used", "placementGroup", *placementGroup.Name, "placementGroupCapacity", *cluster.HostNum, "usedHosts", vmHostSet.List())
+			ctx.Logger.Info("The placement group still has capacity, but all hosts are already used", "placementGroup", *placementGroup.Name, "placementGroupCapacity", *towerCluster.HostNum, "usedHosts", vmHostSet.List())
 
 			return false, nil
 		}
@@ -900,13 +892,12 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 	return true, nil
 }
 
-// reconcileVMHost sets host for virtual machine.
-// Currently only supports setting the host for the virtual machine of the CP node.
+// reconcileVMHostForRollingUpdate sets the host server for a virtual machine during rolling update.
 // During KCP rolling update, machines will be deleted in the order of creation.
 // Find the latest created machine in the placement group,
 // and set the host where the machine is located to the first machine created by KCP rolling update.
 // This prevents migration of virtual machine during KCP rolling update when using a placement group.
-func (r *ElfMachineReconciler) reconcileVMHost(ctx *context.MachineContext) error {
+func (r *ElfMachineReconciler) reconcileVMHostForRollingUpdate(ctx *context.MachineContext) error {
 	if !util.IsControlPlaneMachine(ctx.Machine) {
 		return nil
 	}
@@ -916,7 +907,7 @@ func (r *ElfMachineReconciler) reconcileVMHost(ctx *context.MachineContext) erro
 		return err
 	}
 
-	// Check if it is a rolling update.
+	// *kcp.Spec.Replicas > kcp.Status.Replicas means KCP is rolling update.
 	if *kcp.Spec.Replicas > kcp.Status.Replicas {
 		return nil
 	}
@@ -931,13 +922,13 @@ func (r *ElfMachineReconciler) reconcileVMHost(ctx *context.MachineContext) erro
 		return err
 	}
 
-	cluster, err := ctx.VMService.GetCluster(ctx.ElfCluster.Spec.Cluster)
+	towerCluster, err := ctx.VMService.GetCluster(ctx.ElfCluster.Spec.Cluster)
 	if err != nil {
 		return err
 	}
 
-	// Check if the placement group is full.
-	if len(placementGroup.Vms) < int(*cluster.HostNum) {
+	// Only when the placement group is full does it need to get the latest created machine.
+	if len(placementGroup.Vms) < int(*towerCluster.HostNum) {
 		return nil
 	}
 
@@ -973,7 +964,7 @@ func (r *ElfMachineReconciler) reconcileVMHost(ctx *context.MachineContext) erro
 			return err
 		} else {
 			ctx.ElfMachine.Spec.Host = *vm.Host.ID
-			ctx.Logger.Info("Set host for VM", "hostID", *vm.Host.ID)
+			ctx.Logger.Info("Set the host server for VM since the placement group is full", "hostID", *vm.Host.ID)
 
 			return nil
 		}

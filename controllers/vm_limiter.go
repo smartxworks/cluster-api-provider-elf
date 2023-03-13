@@ -72,9 +72,11 @@ func releaseTicketForCreateVM(vmName string) {
 	delete(vmStatusMap, vmName)
 }
 
-// acquireTicketForUpdateVM returns whether virtual machine update operation
+// acquireTicketForUpdatingVM returns whether virtual machine update operation
 // can be performed.
-func acquireTicketForUpdateVM(vmName string) bool {
+// Tower API currently does not have a concurrency limit for operations on the same virtual machine,
+// which may cause task to fail.
+func acquireTicketForUpdatingVM(vmName string) bool {
 	vmOperationLock.Lock()
 	defer vmOperationLock.Unlock()
 

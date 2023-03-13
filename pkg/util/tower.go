@@ -119,7 +119,7 @@ func GetVMPlacementGroupName(machine *clusterv1.Machine) string {
 		return ""
 	}
 
-	return fmt.Sprintf("cape-cluster-%s-group", groupName)
+	return fmt.Sprintf("cape-%s-cluster-%s-group", machine.Namespace, groupName)
 }
 
 func GetVMPlacementGroupPolicy(machine *clusterv1.Machine) models.VMVMPolicy {
