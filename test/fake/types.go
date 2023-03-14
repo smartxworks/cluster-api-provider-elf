@@ -146,6 +146,17 @@ func NewKCP() *controlplanev1.KubeadmControlPlane {
 	}
 }
 
+func NewMD() *clusterv1.MachineDeployment {
+	return &clusterv1.MachineDeployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      names.SimpleNameGenerator.GenerateName("md-"),
+			Namespace: Namespace,
+		},
+		Spec:   clusterv1.MachineDeploymentSpec{},
+		Status: clusterv1.MachineDeploymentStatus{},
+	}
+}
+
 func InitClusterOwnerReferences(ctrlContext *context.ControllerContext,
 	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster) {
 	By("setting the OwnerRef on the ElfCluster")
@@ -186,6 +197,20 @@ func ToControlPlaneMachine(machine metav1.Object, kcp *controlplanev1.KubeadmCon
 	labels[clusterv1.MachineControlPlaneLabelName] = ""
 	if kcp != nil {
 		labels[clusterv1.MachineControlPlaneNameLabel] = kcp.Name
+	}
+
+	machine.SetLabels(labels)
+}
+
+func ToWorkerMachine(machine metav1.Object, md *clusterv1.MachineDeployment) {
+	labels := machine.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
+	labels[clusterv1.MachineDeploymentLabelName] = ""
+	if md != nil {
+		labels[clusterv1.MachineDeploymentLabelName] = md.Name
 	}
 
 	machine.SetLabels(labels)

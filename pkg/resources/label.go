@@ -14,17 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package label
+package resources
 
 import (
 	"fmt"
-
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
 // Tower labels for VMs created by CAPE.
 const (
-	VMLabelPrefix      = "VM_LABEL_PREFIX"
 	VMLabelManaged     = "managed"
 	VMLabelNamespace   = "namespace"
 	VMLabelClusterName = "cluster-name"
@@ -32,21 +29,17 @@ const (
 )
 
 func GetVMLabelManaged() string {
-	return fmt.Sprintf("%s-%s", GetVMLabelPrefix(), VMLabelManaged)
-}
-
-func GetVMLabelPrefix() string {
-	return util.GetEnv(VMLabelPrefix, "cape")
+	return fmt.Sprintf("%s-%s", GetResourcePrefix(), VMLabelManaged)
 }
 
 func GetVMLabelNamespace() string {
-	return fmt.Sprintf("%s-%s", GetVMLabelPrefix(), VMLabelNamespace)
+	return fmt.Sprintf("%s-%s", GetResourcePrefix(), VMLabelNamespace)
 }
 
 func GetVMLabelClusterName() string {
-	return fmt.Sprintf("%s-%s", GetVMLabelPrefix(), VMLabelClusterName)
+	return fmt.Sprintf("%s-%s", GetResourcePrefix(), VMLabelClusterName)
 }
 
 func GetVMLabelVIP() string {
-	return fmt.Sprintf("%s-%s", GetVMLabelPrefix(), VMLabelVIP)
+	return fmt.Sprintf("%s-%s", GetResourcePrefix(), VMLabelVIP)
 }

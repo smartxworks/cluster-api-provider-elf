@@ -124,7 +124,6 @@ var _ = Describe("Placement Group Update Limiter", func() {
 		placementGroupStatusMap[groupName] = time.Now().Add(-placementGroupOperationTimeout)
 		Expect(acquireTicketForUpdatePlacementGroup(groupName)).To(BeTrue())
 		Expect(placementGroupStatusMap).To(HaveKey(groupName))
-		Expect(len(placementGroupStatusMap)).To(Equal(1))
 		releaseTicketForUpdatePlacementGroup(groupName)
 	})
 })

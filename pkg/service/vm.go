@@ -42,7 +42,7 @@ type VMService interface {
 	Clone(elfCluster *infrav1.ElfCluster,
 		machine *clusterv1.Machine,
 		elfMachine *infrav1.ElfMachine,
-		bootstrapData string) (*models.WithTaskVM, error)
+		bootstrapData, host string) (*models.WithTaskVM, error)
 	Migrate(vmID, hostID string) (*models.WithTaskVM, error)
 	Delete(uuid string) (*models.Task, error)
 	PowerOff(uuid string) (*models.Task, error)
@@ -86,7 +86,7 @@ func (svr *TowerVMService) Clone(
 	elfCluster *infrav1.ElfCluster,
 	machine *clusterv1.Machine,
 	elfMachine *infrav1.ElfMachine,
-	bootstrapData string) (*models.WithTaskVM, error) {
+	bootstrapData, host string) (*models.WithTaskVM, error) {
 	cluster, err := svr.GetCluster(elfCluster.Spec.Cluster)
 	if err != nil {
 		return nil, err
@@ -194,7 +194,9 @@ func (svr *TowerVMService) Clone(
 	}
 
 	hostID := "AUTO_SCHEDULE"
-	if elfMachine.Spec.Host != "" {
+	if host != "" {
+		hostID = host
+	} else if elfMachine.Spec.Host != "" {
 		host, err := svr.GetHost(elfMachine.Spec.Host)
 		if err != nil {
 			return nil, err

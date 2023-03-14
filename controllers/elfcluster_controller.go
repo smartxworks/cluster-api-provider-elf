@@ -42,7 +42,7 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/label"
+	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
@@ -237,19 +237,19 @@ func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.Clu
 }
 
 func (r *ElfClusterReconciler) reconcileDeleteLabels(ctx *context.ClusterContext) error {
-	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelClusterName(), ctx.ElfCluster.Name, true); err != nil {
+	if err := r.reconcileDeleteLabel(ctx, towerresources.GetVMLabelClusterName(), ctx.ElfCluster.Name, true); err != nil {
 		return err
 	}
 
-	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host, true); err != nil {
+	if err := r.reconcileDeleteLabel(ctx, towerresources.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host, true); err != nil {
 		return err
 	}
 
-	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelNamespace(), ctx.ElfCluster.Namespace, true); err != nil {
+	if err := r.reconcileDeleteLabel(ctx, towerresources.GetVMLabelNamespace(), ctx.ElfCluster.Namespace, true); err != nil {
 		return err
 	}
 
-	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelManaged(), "true", true); err != nil {
+	if err := r.reconcileDeleteLabel(ctx, towerresources.GetVMLabelManaged(), "true", true); err != nil {
 		return err
 	}
 

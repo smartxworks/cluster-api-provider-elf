@@ -1,5 +1,5 @@
 /*
-Copyright 2022.
+Copyright 2023.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,20 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package resources
 
-import (
-	"time"
-)
+import "github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 
+// Tower resources.
 const (
-	// VMDisconnectionTimeout is the time allowed for the virtual machine to be disconnected.
-	// The virtual machine will be marked as deleted after the timeout.
-	VMDisconnectionTimeout = 1 * time.Minute
+	TowerResourcePrefix = "TOWER_RESOURCE_PREFIX"
 )
 
-// Annotations.
-const (
-	// PlacementGroupNameAnnotation is the annotation identifying the name of placement group.
-	PlacementGroupNameAnnotation = "cape.infrastructure.cluster.x-k8s.io/placement-group-name"
-)
+func GetResourcePrefix() string {
+	return util.GetEnv(TowerResourcePrefix, "cape")
+}

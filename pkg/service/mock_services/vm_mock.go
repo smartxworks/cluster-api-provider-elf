@@ -67,18 +67,18 @@ func (mr *MockVMServiceMockRecorder) AddVMsToPlacementGroup(placementGroup, vmID
 }
 
 // Clone mocks base method.
-func (m *MockVMService) Clone(elfCluster *v1beta1.ElfCluster, machine *v1beta10.Machine, elfMachine *v1beta1.ElfMachine, bootstrapData string) (*models.WithTaskVM, error) {
+func (m *MockVMService) Clone(elfCluster *v1beta1.ElfCluster, machine *v1beta10.Machine, elfMachine *v1beta1.ElfMachine, bootstrapData, host string) (*models.WithTaskVM, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Clone", elfCluster, machine, elfMachine, bootstrapData)
+	ret := m.ctrl.Call(m, "Clone", elfCluster, machine, elfMachine, bootstrapData, host)
 	ret0, _ := ret[0].(*models.WithTaskVM)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Clone indicates an expected call of Clone.
-func (mr *MockVMServiceMockRecorder) Clone(elfCluster, machine, elfMachine, bootstrapData interface{}) *gomock.Call {
+func (mr *MockVMServiceMockRecorder) Clone(elfCluster, machine, elfMachine, bootstrapData, host interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockVMService)(nil).Clone), elfCluster, machine, elfMachine, bootstrapData)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockVMService)(nil).Clone), elfCluster, machine, elfMachine, bootstrapData, host)
 }
 
 // CreateVMPlacementGroup mocks base method.

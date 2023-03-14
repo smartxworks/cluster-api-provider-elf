@@ -40,7 +40,7 @@ import (
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/label"
+	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service/mock_services"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
@@ -211,17 +211,17 @@ var _ = Describe("ElfClusterReconciler", func() {
 			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 
 			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(fmt.Sprintf("cape-%s-cluster-%s", cluster.Namespace, cluster.Name)).Return(nil, nil)
-			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelClusterName(), elfCluster.Name, true).Return("labelid", nil)
-			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelVIP(), elfCluster.Spec.ControlPlaneEndpoint.Host, true).Return("labelid", nil)
-			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelNamespace(), elfCluster.Namespace, true).Return("", nil)
-			mockVMService.EXPECT().DeleteLabel(label.GetVMLabelManaged(), "true", true).Return("", nil)
+			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelClusterName(), elfCluster.Name, true).Return("labelid", nil)
+			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelVIP(), elfCluster.Spec.ControlPlaneEndpoint.Host, true).Return("labelid", nil)
+			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelNamespace(), elfCluster.Namespace, true).Return("", nil)
+			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelManaged(), "true", true).Return("", nil)
 
 			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Label %s:%s deleted", label.GetVMLabelClusterName(), elfCluster.Name)))
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Label %s:%s deleted", towerresources.GetVMLabelClusterName(), elfCluster.Name)))
 			Expect(apierrors.IsNotFound(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster))).To(BeTrue())
 		})
 

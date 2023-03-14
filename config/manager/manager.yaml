@@ -25,7 +25,7 @@ spec:
         imagePullPolicy: IfNotPresent
         name: manager
         env:
-        - name: VM_LABEL_PREFIX
+        - name: TOWER_RESOURCE_PREFIX
           value: cape
         ports:
         - containerPort: 9440
