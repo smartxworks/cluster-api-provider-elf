@@ -53,6 +53,7 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service/mock_services"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
 
@@ -948,7 +949,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).To(BeZero())
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
-			Expect(*elfMachine.Spec.ProviderID).Should(Equal(util.ConvertUUIDToProviderID(*vm.LocalID)))
+			Expect(*elfMachine.Spec.ProviderID).Should(Equal(machineutil.ConvertUUIDToProviderID(*vm.LocalID)))
 		})
 	})
 

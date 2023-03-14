@@ -45,6 +45,7 @@ import (
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 )
 
 var (
@@ -199,7 +200,7 @@ func (r *ElfClusterReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (reconcile.Result, error) {
 	ctx.Logger.Info("Reconciling ElfCluster delete")
 
-	elfMachines, err := util.GetElfMachinesInCluster(ctx, ctx.Client, ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
+	elfMachines, err := machineutil.GetElfMachinesInCluster(ctx, ctx.Client, ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
 	if err != nil {
 		return reconcile.Result{}, errors.Wrapf(err,
 			"Unable to list ElfMachines part of ElfCluster %s/%s", ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)

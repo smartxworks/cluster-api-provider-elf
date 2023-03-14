@@ -56,6 +56,7 @@ import (
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 )
 
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines,verbs=get;list;watch;create;update;patch;delete
@@ -367,7 +368,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 
 	// Make sure bootstrap data is available and populated.
 	if ctx.Machine.Spec.Bootstrap.DataSecretName == nil {
-		if !util.IsControlPlaneMachine(ctx.ElfMachine) && !conditions.IsTrue(ctx.Cluster, clusterv1.ControlPlaneInitializedCondition) {
+		if !machineutil.IsControlPlaneMachine(ctx.ElfMachine) && !conditions.IsTrue(ctx.Cluster, clusterv1.ControlPlaneInitializedCondition) {
 			ctx.Logger.Info("Waiting for the control plane to be initialized")
 
 			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.WaitingForControlPlaneAvailableReason, clusterv1.ConditionSeverityInfo, "")
@@ -402,7 +403,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 	}
 
 	if vm == nil || vm.EntityAsyncStatus != nil || *vm.Status != models.VMStatusRUNNING ||
-		!util.IsUUID(ctx.ElfMachine.Status.VMRef) || ctx.ElfMachine.HasTask() {
+		!machineutil.IsUUID(ctx.ElfMachine.Status.VMRef) || ctx.ElfMachine.HasTask() {
 		ctx.Logger.Info("VM state is not reconciled")
 
 		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
@@ -481,7 +482,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		}
 
 		// Only limit the virtual machines of the worker nodes
-		if !util.IsControlPlaneMachine(ctx.ElfMachine) {
+		if !machineutil.IsControlPlaneMachine(ctx.ElfMachine) {
 			if ok := acquireTicketForCreateVM(ctx.ElfMachine.Name); !ok {
 				ctx.Logger.V(1).Info(fmt.Sprintf("The number of concurrently created VMs has reached the limit, skip creating VM %s", ctx.ElfMachine.Name))
 				return nil, nil
@@ -550,12 +551,12 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	vmLocalID := util.GetTowerString(vm.LocalID)
 	// Before the ELF VM is created, Tower sets a "placeholder-{UUID}" format string to localId, such as "placeholder-7d8b6df1-c623-4750-a771-3ba6b46995fa".
 	// After the ELF VM is created, Tower sets the VM ID in UUID format to localId.
-	if !util.IsUUID(vmLocalID) {
+	if !machineutil.IsUUID(vmLocalID) {
 		return vm, nil
 	}
 
 	// When ELF VM created, set UUID to VMRef
-	if !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
+	if !machineutil.IsUUID(ctx.ElfMachine.Status.VMRef) {
 		ctx.ElfMachine.SetVM(vmLocalID)
 	}
 
@@ -593,7 +594,7 @@ func (r *ElfMachineReconciler) getVM(ctx *context.MachineContext) (*models.VM, e
 		return nil, err
 	}
 
-	if util.IsUUID(ctx.ElfMachine.Status.VMRef) {
+	if machineutil.IsUUID(ctx.ElfMachine.Status.VMRef) {
 		vmDisconnectionTimestamp := ctx.ElfMachine.GetVMDisconnectionTimestamp()
 		if vmDisconnectionTimestamp == nil {
 			now := metav1.Now()
@@ -815,7 +816,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 	}
 
 	// Placement group is performing an operation
-	if !util.IsUUID(*placementGroup.LocalID) || placementGroup.EntityAsyncStatus != nil {
+	if !machineutil.IsUUID(*placementGroup.LocalID) || placementGroup.EntityAsyncStatus != nil {
 		ctx.Logger.Info("Waiting for placement group task done", "placementGroup", *placementGroup.Name)
 
 		return false, nil
@@ -830,7 +831,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 		return true, nil
 	}
 
-	if util.IsControlPlaneMachine(ctx.Machine) {
+	if machineutil.IsControlPlaneMachine(ctx.Machine) {
 		if len(placementGroup.Vms) >= int(*towerCluster.HostNum) {
 			ctx.Logger.Info("The placement group is full, skip adding VM to the placement group", "placementGroup", *placementGroup.Name, "placementGroupCapacity", *towerCluster.HostNum, "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
@@ -861,7 +862,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 
 		if !unusedHostSet.Has(*vm.Host.ID) {
 			if *vm.Status != models.VMStatusSTOPPED {
-				kcp, err := util.GetKCPByMachine(ctx, ctx.Client, ctx.Machine)
+				kcp, err := machineutil.GetKCPByMachine(ctx, ctx.Client, ctx.Machine)
 				if err != nil {
 					return false, err
 				}
@@ -922,11 +923,11 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 // and set the host where the machine is located to the first machine created by KCP rolling update.
 // This prevents migration of virtual machine during KCP rolling update when using a placement group.
 func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx *context.MachineContext) (string, error) {
-	if !util.IsControlPlaneMachine(ctx.Machine) {
+	if !machineutil.IsControlPlaneMachine(ctx.Machine) {
 		return "", nil
 	}
 
-	kcp, err := util.GetKCPByMachine(ctx, ctx.Client, ctx.Machine)
+	kcp, err := machineutil.GetKCPByMachine(ctx, ctx.Client, ctx.Machine)
 	if err != nil {
 		return "", err
 	}
@@ -959,14 +960,14 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx *context.MachineCon
 		return "", nil
 	}
 
-	elfMachines, err := util.GetControlPlaneElfMachinesInCluster(ctx, ctx.Client, ctx.Cluster.Namespace, ctx.Cluster.Name)
+	elfMachines, err := machineutil.GetControlPlaneElfMachinesInCluster(ctx, ctx.Client, ctx.Cluster.Namespace, ctx.Cluster.Name)
 	if err != nil {
 		return "", err
 	}
 
 	elfMachineMap := make(map[string]*infrav1.ElfMachine)
 	for i := 0; i < len(elfMachines); i++ {
-		if util.IsUUID(elfMachines[i].Status.VMRef) {
+		if machineutil.IsUUID(elfMachines[i].Status.VMRef) {
 			elfMachineMap[elfMachines[i].Name] = elfMachines[i]
 		}
 	}
@@ -1000,7 +1001,7 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx *context.MachineCon
 }
 
 func (r *ElfMachineReconciler) reconcileProviderID(ctx *context.MachineContext, vm *models.VM) error {
-	providerID := util.ConvertUUIDToProviderID(*vm.LocalID)
+	providerID := machineutil.ConvertUUIDToProviderID(*vm.LocalID)
 	if providerID == "" {
 		return errors.Errorf("invalid VM UUID %s from %s %s/%s for %s",
 			*vm.LocalID,
@@ -1021,7 +1022,7 @@ func (r *ElfMachineReconciler) reconcileProviderID(ctx *context.MachineContext, 
 
 // ELF without cloud provider.
 func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineContext, vm *models.VM) (bool, error) {
-	providerID := util.ConvertUUIDToProviderID(*vm.LocalID)
+	providerID := machineutil.ConvertUUIDToProviderID(*vm.LocalID)
 	if providerID == "" {
 		return false, errors.Errorf("invalid VM UUID %s from %s %s/%s for %s",
 			*vm.LocalID,
@@ -1083,7 +1084,7 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 		return false
 	}
 
-	network := util.GetNetworkStatus(*vm.Ips)
+	network := machineutil.GetNetworkStatus(*vm.Ips)
 	if len(network) == 0 {
 		return false
 	}
@@ -1137,7 +1138,7 @@ func (r *ElfMachineReconciler) reconcileLabels(ctx *context.MachineContext, vm *
 	}
 
 	var vipLabel *models.Label
-	if util.IsControlPlaneMachine(ctx.ElfMachine) {
+	if machineutil.IsControlPlaneMachine(ctx.ElfMachine) {
 		vipLabel, err = ctx.VMService.UpsertLabel(towerresources.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host)
 		if err != nil {
 			return false, errors.Wrapf(err, "failed to upsert label "+towerresources.GetVMLabelVIP())
@@ -1145,7 +1146,7 @@ func (r *ElfMachineReconciler) reconcileLabels(ctx *context.MachineContext, vm *
 	}
 
 	labelIDs := []string{*namespaceLabel.ID, *clusterNameLabel.ID, *creatorLabel.ID}
-	if util.IsControlPlaneMachine(ctx.ElfMachine) {
+	if machineutil.IsControlPlaneMachine(ctx.ElfMachine) {
 		labelIDs = append(labelIDs, *vipLabel.ID)
 	}
 	r.Logger.V(3).Info("Upsert labels", "labelIds", labelIDs)

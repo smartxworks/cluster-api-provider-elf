@@ -22,7 +22,12 @@ import (
 )
 
 func GetControlPlaneLabel(o metav1.Object) string {
-	val, ok := o.GetLabels()[clusterv1.MachineControlPlaneNameLabel]
+	labels := o.GetLabels()
+	if labels == nil {
+		return ""
+	}
+
+	val, ok := labels[clusterv1.MachineControlPlaneNameLabel]
 	if !ok {
 		return ""
 	}
@@ -31,7 +36,12 @@ func GetControlPlaneLabel(o metav1.Object) string {
 }
 
 func GetDeploymentNameLabel(o metav1.Object) string {
-	val, ok := o.GetLabels()[clusterv1.MachineDeploymentLabelName]
+	labels := o.GetLabels()
+	if labels == nil {
+		return ""
+	}
+
+	val, ok := labels[clusterv1.MachineDeploymentLabelName]
 	if !ok {
 		return ""
 	}

@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	capiutil "sigs.k8s.io/cluster-api/util"
 
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 )
 
 var _ = Describe("CAPE HA e2e test", func() {
@@ -88,7 +88,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 
 		Logf("Shut down VM")
 		ShutDownVM(ctx, ShutDownVMInput{
-			UUID:               util.ConvertProviderIDToUUID(machines[0].Spec.ProviderID),
+			UUID:               machineutil.ConvertProviderIDToUUID(machines[0].Spec.ProviderID),
 			VMService:          vmService,
 			WaitVMJobIntervals: e2eConfig.GetIntervals(specName, "wait-vm-job"),
 		})
@@ -107,7 +107,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 		Byf("Wait for control plane nodes ready")
 		Logf("Powering on VM")
 		PowerOnVM(ctx, PowerOnVMInput{
-			UUID:               util.ConvertProviderIDToUUID(machines[0].Spec.ProviderID),
+			UUID:               machineutil.ConvertProviderIDToUUID(machines[0].Spec.ProviderID),
 			VMService:          vmService,
 			WaitVMJobIntervals: e2eConfig.GetIntervals(specName, "wait-vm-job"),
 		})

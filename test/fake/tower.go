@@ -21,8 +21,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
-
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	"k8s.io/utils/pointer"
 )
 
 func ID() string {
@@ -52,7 +51,7 @@ func NewTowerVM() *models.VM {
 		ID:                &id,
 		LocalID:           &localID,
 		Status:            &status,
-		EntityAsyncStatus: (*models.EntityAsyncStatus)(util.TowerString("CREATING")),
+		EntityAsyncStatus: (*models.EntityAsyncStatus)(pointer.StringPtr("CREATING")),
 	}
 }
 
@@ -90,7 +89,7 @@ func NewVMPlacementGroup(vmIDs []string) *models.VMPlacementGroup {
 	localID := UUID()
 	vms := make([]*models.NestedVM, 0, len(vmIDs))
 	for i := 0; i < len(vmIDs); i++ {
-		vms = append(vms, &models.NestedVM{ID: util.TowerString(vmIDs[i])})
+		vms = append(vms, &models.NestedVM{ID: &vmIDs[i]})
 	}
 
 	return &models.VMPlacementGroup{

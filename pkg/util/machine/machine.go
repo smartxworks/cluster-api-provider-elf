@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package util
+package machine
 
 import (
 	goctx "context"
@@ -23,12 +23,10 @@ import (
 
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	apitypes "k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
-	labelutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
 )
 
 const (
@@ -47,15 +45,6 @@ const (
 
 // ErrNoMachineIPAddr indicates that no valid IP addresses were found in a machine context.
 var ErrNoMachineIPAddr = errors.New("no IP addresses found for machine")
-
-func GetMDByMachine(ctx goctx.Context, ctrlClient client.Client, machine *clusterv1.Machine) (*clusterv1.MachineDeployment, error) {
-	var md clusterv1.MachineDeployment
-	if err := ctrlClient.Get(ctx, apitypes.NamespacedName{Namespace: machine.Namespace, Name: labelutil.GetDeploymentNameLabel(machine)}, &md); err != nil {
-		return nil, err
-	}
-
-	return &md, nil
-}
 
 // GetElfMachinesInCluster gets a cluster's ElfMachine resources.
 func GetElfMachinesInCluster(
@@ -103,7 +92,12 @@ func GetControlPlaneElfMachinesInCluster(ctx goctx.Context, ctrlClient client.Cl
 // IsControlPlaneMachine returns true if the provided resource is
 // a member of the control plane.
 func IsControlPlaneMachine(machine metav1.Object) bool {
-	_, ok := machine.GetLabels()[clusterv1.MachineControlPlaneLabelName]
+	labels := machine.GetLabels()
+	if labels == nil {
+		return false
+	}
+
+	_, ok := labels[clusterv1.MachineControlPlaneLabelName]
 	return ok
 }
 

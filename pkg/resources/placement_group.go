@@ -24,15 +24,15 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 	labelsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
+	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 )
 
 func GetVMPlacementGroupName(ctx goctx.Context, ctrlClient client.Client, machine *clusterv1.Machine) (string, error) {
 	groupName := ""
-	if util.IsControlPlaneMachine(machine) {
-		kcp, err := util.GetKCPByMachine(ctx, ctrlClient, machine)
+	if machineutil.IsControlPlaneMachine(machine) {
+		kcp, err := machineutil.GetKCPByMachine(ctx, ctrlClient, machine)
 		if err != nil {
 			return "", err
 		}
@@ -44,7 +44,7 @@ func GetVMPlacementGroupName(ctx goctx.Context, ctrlClient client.Client, machin
 
 		groupName = labelsutil.GetControlPlaneLabel(machine)
 	} else {
-		md, err := util.GetMDByMachine(ctx, ctrlClient, machine)
+		md, err := machineutil.GetMDByMachine(ctx, ctrlClient, machine)
 		if err != nil {
 			return "", err
 		}
@@ -65,7 +65,7 @@ func GetVMPlacementGroupName(ctx goctx.Context, ctrlClient client.Client, machin
 }
 
 func GetVMPlacementGroupPolicy(machine *clusterv1.Machine) models.VMVMPolicy {
-	if util.IsControlPlaneMachine(machine) {
+	if machineutil.IsControlPlaneMachine(machine) {
 		return models.VMVMPolicyMUSTDIFFERENT
 	}
 
