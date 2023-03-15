@@ -61,7 +61,7 @@ func GetVMPlacementGroupName(ctx goctx.Context, ctrlClient client.Client, machin
 		return "", nil
 	}
 
-	return fmt.Sprintf("%s-managed-%s-cluster-%s-group", GetResourcePrefix(), machine.Namespace, groupName), nil
+	return fmt.Sprintf("%s-managed-%s-%s", GetResourcePrefix(), machine.Namespace, groupName), nil
 }
 
 func GetVMPlacementGroupPolicy(machine *clusterv1.Machine) models.VMVMPolicy {

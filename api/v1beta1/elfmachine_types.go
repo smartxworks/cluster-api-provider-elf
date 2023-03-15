@@ -150,13 +150,13 @@ type ElfMachineStatus struct {
 	// +optional
 	TaskRef string `json:"taskRef,omitempty"`
 
-	// HostServerRef is used to lookup the host of the virtual machine.
+	// HostServerRef is the Tower ID of host server where the virtual machine runs on.
 	// This value is set automatically at runtime and should not be set or
 	// modified by users.
 	// +optional
 	HostServerRef string `json:"hostServerRef,omitempty"`
 
-	// HostServerName is the name of host where the virtual machine on.
+	// HostServerName is the name of host server where the virtual machine runs on.
 	// This value is set automatically at runtime and should not be set or
 	// modified by users.
 	// +optional

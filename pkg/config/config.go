@@ -19,6 +19,8 @@ package config
 import "time"
 
 var (
+	ProviderNameShort = "cape"
+
 	// DefaultRequeueTimeout is the default time for how long to wait when
 	// requeueing a CAPE operation.
 	DefaultRequeueTimeout = 20 * time.Second

@@ -917,7 +917,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 	return true, nil
 }
 
-// getVMHostForRollingUpdate returns the host server for a virtual machine during rolling update.
+// getVMHostForRollingUpdate returns the target host server id for a virtual machine during rolling update.
 // During KCP rolling update, machines will be deleted in the order of creation.
 // Find the latest created machine in the placement group,
 // and set the host where the machine is located to the first machine created by KCP rolling update.
@@ -932,8 +932,8 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx *context.MachineCon
 		return "", err
 	}
 
-	// *kcp.Spec.Replicas > kcp.Status.Replicas means KCP is rolling update.
 	if *kcp.Spec.Replicas > kcp.Status.Replicas {
+		// It means KCP is not in rolling update, but scaling out or being created. Then simply return.
 		return "", nil
 	}
 
