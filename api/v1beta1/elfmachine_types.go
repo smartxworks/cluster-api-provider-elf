@@ -168,6 +168,7 @@ type ElfMachineStatus struct {
 //+kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="ElfMachine ready status"
 //+kubebuilder:printcolumn:name="ProviderID",type="string",JSONPath=".spec.providerID",description="ElfMachine instance ID"
 //+kubebuilder:printcolumn:name="IP",type="string",JSONPath=".status.addresses[0].address",description="IP address of the first network device of the virtual machine"
+//+kubebuilder:printcolumn:name="HOST",type="string",JSONPath=".status.hostServerName",description="Name of host server where the virtual machine runs on"
 //+kubebuilder:printcolumn:name="Machine",type="string",JSONPath=".metadata.ownerReferences[?(@.kind==\"Machine\")].name",description="Machine object which owns with this ElfMachine"
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of ElfMachine"
 
