@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package util
+package machine
 
 import (
-	"context"
+	goctx "context"
 	"regexp"
 	"strings"
 
@@ -48,7 +48,7 @@ var ErrNoMachineIPAddr = errors.New("no IP addresses found for machine")
 
 // GetElfMachinesInCluster gets a cluster's ElfMachine resources.
 func GetElfMachinesInCluster(
-	ctx context.Context,
+	ctx goctx.Context,
 	controllerClient client.Client,
 	namespace, clusterName string) ([]*infrav1.ElfMachine, error) {
 	labels := map[string]string{clusterv1.ClusterLabelName: clusterName}
@@ -69,10 +69,35 @@ func GetElfMachinesInCluster(
 	return machines, nil
 }
 
+// GetControlPlaneElfMachinesInCluster gets a cluster's Control Plane ElfMachine resources.
+func GetControlPlaneElfMachinesInCluster(ctx goctx.Context, ctrlClient client.Client, namespace, clusterName string) ([]*infrav1.ElfMachine, error) {
+	var machineList infrav1.ElfMachineList
+	labels := map[string]string{
+		clusterv1.ClusterLabelName:             clusterName,
+		clusterv1.MachineControlPlaneLabelName: "",
+	}
+
+	if err := ctrlClient.List(ctx, &machineList, client.InNamespace(namespace), client.MatchingLabels(labels)); err != nil {
+		return nil, err
+	}
+
+	machines := make([]*infrav1.ElfMachine, len(machineList.Items))
+	for i := range machineList.Items {
+		machines[i] = &machineList.Items[i]
+	}
+
+	return machines, nil
+}
+
 // IsControlPlaneMachine returns true if the provided resource is
 // a member of the control plane.
 func IsControlPlaneMachine(machine metav1.Object) bool {
-	_, ok := machine.GetLabels()[clusterv1.MachineControlPlaneLabelName]
+	labels := machine.GetLabels()
+	if labels == nil {
+		return false
+	}
+
+	_, ok := labels[clusterv1.MachineControlPlaneLabelName]
 	return ok
 }
 

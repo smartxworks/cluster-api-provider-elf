@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package util
+package machine
 
 import (
 	"testing"
@@ -22,7 +22,51 @@ import (
 	"github.com/onsi/gomega"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
+
+func TestGetElfMachinesInCluster(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	elfCluster, cluster := fake.NewClusterObjects()
+	elfMachine, _ := fake.NewMachineObjects(elfCluster, cluster)
+	ctx := fake.NewControllerManagerContext(elfMachine)
+
+	t.Run("should return ElfMachines", func(t *testing.T) {
+		elfMachines, err := GetElfMachinesInCluster(ctx, ctx.Client, cluster.Namespace, cluster.Name)
+		g.Expect(err).To(gomega.BeNil())
+		g.Expect(len(elfMachines)).To(gomega.Equal(1))
+	})
+}
+
+func TestGetControlPlaneElfMachinesInCluster(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	elfCluster, cluster := fake.NewClusterObjects()
+	elfMachine1, _ := fake.NewMachineObjects(elfCluster, cluster)
+	elfMachine2, _ := fake.NewMachineObjects(elfCluster, cluster)
+	fake.ToControlPlaneMachine(elfMachine1, fake.NewKCP())
+	ctx := fake.NewControllerManagerContext(elfMachine1, elfMachine2)
+
+	t.Run("should return Control Plane ElfMachines", func(t *testing.T) {
+		elfMachines, err := GetControlPlaneElfMachinesInCluster(ctx, ctx.Client, cluster.Namespace, cluster.Name)
+		g.Expect(err).To(gomega.BeNil())
+		g.Expect(len(elfMachines)).To(gomega.Equal(1))
+		g.Expect(elfMachines[0].Name).To(gomega.Equal(elfMachine1.Name))
+	})
+}
+
+func TestIsControlPlaneMachine(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	elfCluster, cluster := fake.NewClusterObjects()
+	_, machine1 := fake.NewMachineObjects(elfCluster, cluster)
+	_, machine2 := fake.NewMachineObjects(elfCluster, cluster)
+	fake.ToControlPlaneMachine(machine1, fake.NewKCP())
+	fake.ToWorkerMachine(machine2, fake.NewMD())
+
+	t.Run("CP Machine returns true, Worker node returns false", func(t *testing.T) {
+		g.Expect(IsControlPlaneMachine(machine1)).To(gomega.BeTrue())
+		g.Expect(IsControlPlaneMachine(machine2)).To(gomega.BeFalse())
+	})
+}
 
 func TestConvertProviderIDToUUID(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)

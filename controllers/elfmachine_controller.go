@@ -31,11 +31,13 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/collections"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -51,14 +53,18 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	capeerrors "github.com/smartxworks/cluster-api-provider-elf/pkg/errors"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/label"
+	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 )
 
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines/finalizers,verbs=update
+//+kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=*,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machinedeployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machinedeployments;machinedeployments/status,verbs=get;list;watch
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch;create;update;patch
 
@@ -362,7 +368,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 
 	// Make sure bootstrap data is available and populated.
 	if ctx.Machine.Spec.Bootstrap.DataSecretName == nil {
-		if !util.IsControlPlaneMachine(ctx.ElfMachine) && !conditions.IsTrue(ctx.Cluster, clusterv1.ControlPlaneInitializedCondition) {
+		if !machineutil.IsControlPlaneMachine(ctx.ElfMachine) && !conditions.IsTrue(ctx.Cluster, clusterv1.ControlPlaneInitializedCondition) {
 			ctx.Logger.Info("Waiting for the control plane to be initialized")
 
 			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.WaitingForControlPlaneAvailableReason, clusterv1.ConditionSeverityInfo, "")
@@ -396,7 +402,8 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 		return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile VM")
 	}
 
-	if vm == nil || *vm.Status != models.VMStatusRUNNING || !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
+	if vm == nil || vm.EntityAsyncStatus != nil || *vm.Status != models.VMStatusRUNNING ||
+		!machineutil.IsUUID(ctx.ElfMachine.Status.VMRef) || ctx.ElfMachine.HasTask() {
 		ctx.Logger.Info("VM state is not reconciled")
 
 		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
@@ -475,16 +482,21 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		}
 
 		// Only limit the virtual machines of the worker nodes
-		if !util.IsControlPlaneMachine(ctx.ElfMachine) {
+		if !machineutil.IsControlPlaneMachine(ctx.ElfMachine) {
 			if ok := acquireTicketForCreateVM(ctx.ElfMachine.Name); !ok {
 				ctx.Logger.V(1).Info(fmt.Sprintf("The number of concurrently created VMs has reached the limit, skip creating VM %s", ctx.ElfMachine.Name))
 				return nil, nil
 			}
 		}
 
+		hostID, err := r.getVMHostForRollingUpdate(ctx)
+		if err != nil {
+			return nil, err
+		}
+
 		ctx.Logger.Info("Create VM for ElfMachine")
 
-		withTaskVM, err := ctx.VMService.Clone(ctx.ElfCluster, ctx.Machine, ctx.ElfMachine, bootstrapData)
+		withTaskVM, err := ctx.VMService.Clone(ctx.ElfCluster, ctx.Machine, ctx.ElfMachine, bootstrapData, hostID)
 		if err != nil {
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
 
@@ -509,45 +521,9 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		}
 	}
 
-	vm, err := ctx.VMService.Get(ctx.ElfMachine.Status.VMRef)
+	vm, err := r.getVM(ctx)
 	if err != nil {
-		if !service.IsVMNotFound(err) {
-			return nil, err
-		}
-
-		if util.IsUUID(ctx.ElfMachine.Status.VMRef) {
-			vmDisconnectionTimestamp := ctx.ElfMachine.GetVMDisconnectionTimestamp()
-			if vmDisconnectionTimestamp == nil {
-				now := metav1.Now()
-				vmDisconnectionTimestamp = &now
-				ctx.ElfMachine.SetVMDisconnectionTimestamp(vmDisconnectionTimestamp)
-			}
-
-			// The machine may only be temporarily disconnected before timeout
-			if !vmDisconnectionTimestamp.Add(infrav1.VMDisconnectionTimeout).Before(time.Now()) {
-				ctx.Logger.Error(err, "the VM has been disconnected, will try to reconnect", "vmRef", ctx.ElfMachine.Status.VMRef, "disconnectionTimestamp", vmDisconnectionTimestamp.Format(time.RFC3339))
-
-				return nil, err
-			}
-
-			// If the machine was not found by UUID and timed out it means that it got deleted directly
-			ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.RemovedFromInfrastructureError)
-			ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", ctx.ElfMachine.Status.VMRef))
-			ctx.Logger.Error(err, fmt.Sprintf("failed to get VM by UUID %s in %s", ctx.ElfMachine.Status.VMRef, infrav1.VMDisconnectionTimeout.String()), "message", ctx.ElfMachine.Status.FailureMessage)
-
-			return nil, err
-		}
-
-		// Create VM failed
-
-		if _, err := r.reconcileVMTask(ctx, nil); err != nil {
-			return nil, err
-		}
-
-		// If create VM failed, tower deletes the VM
-		ctx.ElfMachine.SetVM("")
-
-		return nil, errors.Wrapf(err, "failed to create VM for ElfMachine %s/%s", ctx.ElfMachine.Namespace, ctx.ElfMachine.Name)
+		return nil, err
 	}
 
 	// Remove VM disconnection timestamp
@@ -564,15 +540,23 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		return vm, nil
 	}
 
+	// The host of the virtual machine may change, such as rescheduling caused by HA.
+	if vm.Host != nil && ctx.ElfMachine.Status.HostServerName != *vm.Host.Name {
+		hostName := ctx.ElfMachine.Status.HostServerName
+		ctx.ElfMachine.Status.HostServerRef = *vm.Host.ID
+		ctx.ElfMachine.Status.HostServerName = *vm.Host.Name
+		ctx.Logger.V(1).Info(fmt.Sprintf("Updated VM hostServerName from %s to %s", hostName, *vm.Host.Name))
+	}
+
 	vmLocalID := util.GetTowerString(vm.LocalID)
 	// Before the ELF VM is created, Tower sets a "placeholder-{UUID}" format string to localId, such as "placeholder-7d8b6df1-c623-4750-a771-3ba6b46995fa".
 	// After the ELF VM is created, Tower sets the VM ID in UUID format to localId.
-	if !util.IsUUID(vmLocalID) {
+	if !machineutil.IsUUID(vmLocalID) {
 		return vm, nil
 	}
 
 	// When ELF VM created, set UUID to VMRef
-	if !util.IsUUID(ctx.ElfMachine.Status.VMRef) {
+	if !machineutil.IsUUID(ctx.ElfMachine.Status.VMRef) {
 		ctx.ElfMachine.SetVM(vmLocalID)
 	}
 
@@ -587,33 +571,99 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		return vm, nil
 	}
 
-	// The newly created VM may need to powered off
-	if *vm.Status == models.VMStatusSTOPPED {
-		if ok := isElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster); ok {
-			if canRetry := canRetryVMOperation(ctx.ElfCluster.Spec.Cluster); !canRetry {
-				ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, skip powering on VM %s", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
-				return nil, nil
-			}
+	// Before the virtual machine is powered on, put the virtual machine into the specified placement group.
+	if ok, err := r.reconcilePlacementGroup(ctx, vm); err != nil || !ok {
+		return nil, err
+	}
 
-			ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, try to power on VM %s", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
-		}
-
-		task, err := ctx.VMService.PowerOn(ctx.ElfMachine.Status.VMRef)
-		if err != nil {
-			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOnFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
-
-			return nil, errors.Wrapf(err, "failed to trigger power on for VM %s", ctx)
-		}
-
-		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOnReason, clusterv1.ConditionSeverityInfo, "")
-
-		ctx.ElfMachine.SetTask(*task.ID)
-
-		ctx.Logger.Info("Waiting for VM to be powered on",
-			"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
+	// The VM may need to powered off
+	if ok, err := r.reconcileVMStatus(ctx, vm); err != nil || !ok {
+		return nil, err
 	}
 
 	return vm, nil
+}
+
+func (r *ElfMachineReconciler) getVM(ctx *context.MachineContext) (*models.VM, error) {
+	vm, err := ctx.VMService.Get(ctx.ElfMachine.Status.VMRef)
+	if err == nil {
+		return vm, nil
+	}
+
+	if !service.IsVMNotFound(err) {
+		return nil, err
+	}
+
+	if machineutil.IsUUID(ctx.ElfMachine.Status.VMRef) {
+		vmDisconnectionTimestamp := ctx.ElfMachine.GetVMDisconnectionTimestamp()
+		if vmDisconnectionTimestamp == nil {
+			now := metav1.Now()
+			vmDisconnectionTimestamp = &now
+			ctx.ElfMachine.SetVMDisconnectionTimestamp(vmDisconnectionTimestamp)
+		}
+
+		// The machine may only be temporarily disconnected before timeout
+		if !vmDisconnectionTimestamp.Add(infrav1.VMDisconnectionTimeout).Before(time.Now()) {
+			ctx.Logger.Error(err, "the VM has been disconnected, will try to reconnect", "vmRef", ctx.ElfMachine.Status.VMRef, "disconnectionTimestamp", vmDisconnectionTimestamp.Format(time.RFC3339))
+
+			return nil, err
+		}
+
+		// If the machine was not found by UUID and timed out it means that it got deleted directly
+		ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.RemovedFromInfrastructureError)
+		ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", ctx.ElfMachine.Status.VMRef))
+		ctx.Logger.Error(err, fmt.Sprintf("failed to get VM by UUID %s in %s", ctx.ElfMachine.Status.VMRef, infrav1.VMDisconnectionTimeout.String()), "message", ctx.ElfMachine.Status.FailureMessage)
+
+		return nil, err
+	}
+
+	// Create VM failed
+
+	if _, err := r.reconcileVMTask(ctx, nil); err != nil {
+		return nil, err
+	}
+
+	// If Tower fails to create VM, the temporary DB record for this VM will be deleted.
+	ctx.ElfMachine.SetVM("")
+
+	return nil, errors.Wrapf(err, "failed to create VM for ElfMachine %s/%s", ctx.ElfMachine.Namespace, ctx.ElfMachine.Name)
+}
+
+func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm *models.VM) (bool, error) {
+	if *vm.Status != models.VMStatusSTOPPED {
+		return true, nil
+	}
+
+	if ok := isElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster); ok {
+		if canRetry := canRetryVMOperation(ctx.ElfCluster.Spec.Cluster); !canRetry {
+			ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, skip powering on VM %s", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
+
+			return false, nil
+		}
+
+		ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for the ELF cluster %s was detected previously, try to power on VM %s to check if the ELF cluster has sufficient memory now", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
+	}
+
+	if ok := acquireTicketForUpdatingVM(ctx.ElfMachine.Name); !ok {
+		ctx.Logger.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip power on VM %s", ctx.ElfMachine.Status.VMRef))
+
+		return false, nil
+	}
+
+	task, err := ctx.VMService.PowerOn(ctx.ElfMachine.Status.VMRef)
+	if err != nil {
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOnFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+
+		return false, errors.Wrapf(err, "failed to trigger power on for VM %s", ctx)
+	}
+
+	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOnReason, clusterv1.ConditionSeverityInfo, "")
+
+	ctx.ElfMachine.SetTask(*task.ID)
+
+	ctx.Logger.Info("Waiting for VM to be powered on", "vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
+
+	return false, nil
 }
 
 func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *models.VM) (bool, error) {
@@ -659,11 +709,22 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 
 		ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "taskErrorMessage", errorMessage, "taskErrorCode", util.GetTowerString(task.ErrorCode), "taskDescription", util.GetTowerString(task.Description))
 
-		if util.IsCloneVMTask(task) {
+		switch {
+		case util.IsCloneVMTask(task):
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
-		}
-
-		if service.IsMemoryInsufficientError(errorMessage) {
+		case util.IsVMMigrationTask(task):
+			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine)
+			if err != nil {
+				return false, err
+			}
+			releaseTicketForPlacementGroupVMMigration(placementGroupName)
+		case util.IsPlacementGroupTask(task):
+			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine)
+			if err != nil {
+				return false, err
+			}
+			releaseTicketForUpdatePlacementGroup(placementGroupName)
+		case service.IsMemoryInsufficientError(errorMessage):
 			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, true)
 			message := fmt.Sprintf("Insufficient memory detected for ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
 			ctx.Logger.Info(message)
@@ -677,9 +738,22 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 
 		ctx.Logger.Info("VM task successful", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", util.GetTowerString(task.Description))
 
-		if util.IsCloneVMTask(task) || util.IsPowerOnVMTask(task) {
+		switch {
+		case util.IsCloneVMTask(task) || util.IsPowerOnVMTask(task):
 			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, false)
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
+		case util.IsVMMigrationTask(task):
+			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine)
+			if err != nil {
+				return false, err
+			}
+			releaseTicketForPlacementGroupVMMigration(placementGroupName)
+		case util.IsPlacementGroupTask(task):
+			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine)
+			if err != nil {
+				return false, err
+			}
+			releaseTicketForUpdatePlacementGroup(placementGroupName)
 		}
 
 		return true, nil
@@ -690,8 +764,244 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 	return false, nil
 }
 
+// reconcilePlacementGroup puts the virtual machine into the placement group.
+func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
+	defer func() {
+		if reterr != nil {
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.JoiningPlacementGroupFailedReason, clusterv1.ConditionSeverityWarning, reterr.Error())
+		} else if !ret {
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.JoiningPlacementGroupReason, clusterv1.ConditionSeverityInfo, "")
+		}
+	}()
+
+	towerCluster, err := ctx.VMService.GetCluster(ctx.ElfCluster.Spec.Cluster)
+	if err != nil {
+		return false, err
+	}
+
+	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine)
+	if err != nil {
+		return false, err
+	}
+
+	if ok := acquireTicketForPlacementGroupOperation(placementGroupName); ok {
+		defer releaseTicketForPlacementGroupOperation(placementGroupName)
+	} else {
+		return false, nil
+	}
+
+	placementGroup, err := ctx.VMService.GetVMPlacementGroup(placementGroupName)
+	if err != nil {
+		if !service.IsVMPlacementGroupNotFound(err) {
+			return false, err
+		}
+
+		if ok := acquireTicketForUpdatePlacementGroup(placementGroupName); !ok {
+			ctx.Logger.V(1).Info(fmt.Sprintf("The placement group is performing create operation, skip create placement group %s", util.GetTowerString(placementGroup.Name)))
+
+			return false, nil
+		}
+
+		placementGroupPolicy := towerresources.GetVMPlacementGroupPolicy(ctx.Machine)
+		withTaskVMPlacementGroup, err := ctx.VMService.CreateVMPlacementGroup(placementGroupName, *towerCluster.ID, placementGroupPolicy)
+		if err != nil {
+			return false, err
+		}
+
+		ctx.ElfMachine.SetTask(*withTaskVMPlacementGroup.TaskID)
+
+		ctx.Logger.Info("Waiting for the placement group to be created", "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID, "taskRef", ctx.ElfMachine.Status.TaskRef, "placementGroup", placementGroupName)
+
+		return false, nil
+	}
+
+	// Placement group is performing an operation
+	if !machineutil.IsUUID(*placementGroup.LocalID) || placementGroup.EntityAsyncStatus != nil {
+		ctx.Logger.Info("Waiting for placement group task done", "placementGroup", *placementGroup.Name)
+
+		return false, nil
+	}
+
+	placementGroupVMSet := sets.NewString()
+	for i := 0; i < len(placementGroup.Vms); i++ {
+		placementGroupVMSet.Insert(*placementGroup.Vms[i].ID)
+	}
+
+	if placementGroupVMSet.Has(*vm.ID) {
+		return true, nil
+	}
+
+	if machineutil.IsControlPlaneMachine(ctx.Machine) {
+		if len(placementGroup.Vms) >= int(*towerCluster.HostNum) {
+			ctx.Logger.Info("The placement group is full, skip adding VM to the placement group", "placementGroup", *placementGroup.Name, "placementGroupCapacity", *towerCluster.HostNum, "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+
+			return true, nil
+		}
+
+		vms, err := ctx.VMService.FindByIDs(placementGroupVMSet.List())
+		if err != nil {
+			return false, nil
+		}
+
+		vmHostSet := sets.NewString()
+		for i := 0; i < len(vms); i++ {
+			vmHostSet.Insert(*vms[i].Host.ID)
+		}
+
+		clusterHostSet := sets.NewString()
+		for i := 0; i < len(towerCluster.Hosts); i++ {
+			clusterHostSet.Insert(*towerCluster.Hosts[i].ID)
+		}
+
+		unusedHostSet := clusterHostSet.Difference(vmHostSet)
+		if unusedHostSet.Len() == 0 {
+			ctx.Logger.Info("The placement group still has capacity, but all hosts are already used", "placementGroup", *placementGroup.Name, "placementGroupCapacity", *towerCluster.HostNum, "usedHosts", vmHostSet.List())
+
+			return false, nil
+		}
+
+		if !unusedHostSet.Has(*vm.Host.ID) {
+			if *vm.Status != models.VMStatusSTOPPED {
+				kcp, err := machineutil.GetKCPByMachine(ctx, ctx.Client, ctx.Machine)
+				if err != nil {
+					return false, err
+				}
+
+				if *kcp.Spec.Replicas != kcp.Status.UpdatedReplicas {
+					ctx.Logger.Info("KCP rolling update in progress, skip migrate VM", "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+
+					return true, nil
+				}
+
+				if ok := acquireTicketForPlacementGroupVMMigration(placementGroupName); !ok {
+					ctx.Logger.V(1).Info("The placement group is performing another VM migration, skip migrate VM", "placementGroup", util.GetTowerString(placementGroup.Name), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+
+					return false, nil
+				}
+
+				targetHost := unusedHostSet.List()[0]
+				withTaskVM, err := ctx.VMService.Migrate(util.GetTowerString(vm.ID), targetHost)
+				if err != nil {
+					return false, err
+				}
+
+				ctx.ElfMachine.SetTask(*withTaskVM.TaskID)
+
+				ctx.Logger.Info(fmt.Sprintf("Waiting for the VM to be migrated from %s to %s", *vm.Host.ID, targetHost), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID, "taskRef", ctx.ElfMachine.Status.TaskRef)
+
+				return false, nil
+			}
+		}
+	}
+
+	if !placementGroupVMSet.Has(*vm.ID) {
+		if ok := acquireTicketForUpdatePlacementGroup(placementGroupName); !ok {
+			ctx.Logger.V(1).Info(fmt.Sprintf("The placement group is performing another operation, skip update placement group %s", util.GetTowerString(placementGroup.Name)))
+
+			return false, nil
+		}
+
+		placementGroupVMSet.Insert(*vm.ID)
+		task, err := ctx.VMService.AddVMsToPlacementGroup(placementGroup, placementGroupVMSet.List())
+		if err != nil {
+			return false, err
+		} else {
+			ctx.ElfMachine.SetTask(*task.ID)
+
+			ctx.Logger.Info("Waiting for the VM to be added to the placement group", "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID, "taskRef", ctx.ElfMachine.Status.TaskRef, "placementGroup", placementGroup.Name)
+
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+// getVMHostForRollingUpdate returns the target host server id for a virtual machine during rolling update.
+// During KCP rolling update, machines will be deleted in the order of creation.
+// Find the latest created machine in the placement group,
+// and set the host where the machine is located to the first machine created by KCP rolling update.
+// This prevents migration of virtual machine during KCP rolling update when using a placement group.
+func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx *context.MachineContext) (string, error) {
+	if !machineutil.IsControlPlaneMachine(ctx.Machine) {
+		return "", nil
+	}
+
+	kcp, err := machineutil.GetKCPByMachine(ctx, ctx.Client, ctx.Machine)
+	if err != nil {
+		return "", err
+	}
+
+	if *kcp.Spec.Replicas > kcp.Status.Replicas {
+		// It means KCP is not in rolling update, but scaling out or being created. Then simply return.
+		return "", nil
+	}
+
+	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine)
+	if err != nil {
+		return "", err
+	}
+	placementGroup, err := ctx.VMService.GetVMPlacementGroup(placementGroupName)
+	if err != nil {
+		if service.IsVMPlacementGroupNotFound(err) {
+			return "", nil
+		}
+
+		return "", err
+	}
+
+	towerCluster, err := ctx.VMService.GetCluster(ctx.ElfCluster.Spec.Cluster)
+	if err != nil {
+		return "", err
+	}
+
+	// Only when the placement group is full does it need to get the latest created machine.
+	if len(placementGroup.Vms) < int(*towerCluster.HostNum) {
+		return "", nil
+	}
+
+	elfMachines, err := machineutil.GetControlPlaneElfMachinesInCluster(ctx, ctx.Client, ctx.Cluster.Namespace, ctx.Cluster.Name)
+	if err != nil {
+		return "", err
+	}
+
+	elfMachineMap := make(map[string]*infrav1.ElfMachine)
+	for i := 0; i < len(elfMachines); i++ {
+		if machineutil.IsUUID(elfMachines[i].Status.VMRef) {
+			elfMachineMap[elfMachines[i].Name] = elfMachines[i]
+		}
+	}
+
+	placementGroupMachines := make([]*clusterv1.Machine, 0, len(placementGroup.Vms))
+	vmMap := make(map[string]string)
+	for i := 0; i < len(placementGroup.Vms); i++ {
+		if elfMachine, ok := elfMachineMap[*placementGroup.Vms[i].Name]; ok {
+			machine, err := capiutil.GetOwnerMachine(r, r.Client, elfMachine.ObjectMeta)
+			if err != nil {
+				return "", err
+			}
+
+			placementGroupMachines = append(placementGroupMachines, machine)
+			vmMap[machine.Name] = *(placementGroup.Vms[i].ID)
+		}
+	}
+
+	machines := collections.FromMachines(placementGroupMachines...)
+	if machine := machines.Newest(); machine != nil {
+		if vm, err := ctx.VMService.Get(vmMap[machine.Name]); err != nil {
+			return "", err
+		} else {
+			ctx.Logger.Info("Set the host server for VM since the placement group is full", "hostID", *vm.Host.ID)
+
+			return *vm.Host.ID, nil
+		}
+	}
+
+	return "", nil
+}
+
 func (r *ElfMachineReconciler) reconcileProviderID(ctx *context.MachineContext, vm *models.VM) error {
-	providerID := util.ConvertUUIDToProviderID(*vm.LocalID)
+	providerID := machineutil.ConvertUUIDToProviderID(*vm.LocalID)
 	if providerID == "" {
 		return errors.Errorf("invalid VM UUID %s from %s %s/%s for %s",
 			*vm.LocalID,
@@ -712,7 +1022,7 @@ func (r *ElfMachineReconciler) reconcileProviderID(ctx *context.MachineContext, 
 
 // ELF without cloud provider.
 func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineContext, vm *models.VM) (bool, error) {
-	providerID := util.ConvertUUIDToProviderID(*vm.LocalID)
+	providerID := machineutil.ConvertUUIDToProviderID(*vm.LocalID)
 	if providerID == "" {
 		return false, errors.Errorf("invalid VM UUID %s from %s %s/%s for %s",
 			*vm.LocalID,
@@ -774,7 +1084,7 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 		return false
 	}
 
-	network := util.GetNetworkStatus(*vm.Ips)
+	network := machineutil.GetNetworkStatus(*vm.Ips)
 	if len(network) == 0 {
 		return false
 	}
@@ -814,29 +1124,29 @@ func (r *ElfMachineReconciler) getBootstrapData(ctx *context.MachineContext) (st
 }
 
 func (r *ElfMachineReconciler) reconcileLabels(ctx *context.MachineContext, vm *models.VM) (bool, error) {
-	creatorLabel, err := ctx.VMService.UpsertLabel(label.GetVMLabelManaged(), "true")
+	creatorLabel, err := ctx.VMService.UpsertLabel(towerresources.GetVMLabelManaged(), "true")
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to upsert label "+label.GetVMLabelManaged())
+		return false, errors.Wrapf(err, "failed to upsert label "+towerresources.GetVMLabelManaged())
 	}
-	namespaceLabel, err := ctx.VMService.UpsertLabel(label.GetVMLabelNamespace(), ctx.ElfMachine.Namespace)
+	namespaceLabel, err := ctx.VMService.UpsertLabel(towerresources.GetVMLabelNamespace(), ctx.ElfMachine.Namespace)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to upsert label "+label.GetVMLabelNamespace())
+		return false, errors.Wrapf(err, "failed to upsert label "+towerresources.GetVMLabelNamespace())
 	}
-	clusterNameLabel, err := ctx.VMService.UpsertLabel(label.GetVMLabelClusterName(), ctx.ElfCluster.Name)
+	clusterNameLabel, err := ctx.VMService.UpsertLabel(towerresources.GetVMLabelClusterName(), ctx.ElfCluster.Name)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to upsert label "+label.GetVMLabelClusterName())
+		return false, errors.Wrapf(err, "failed to upsert label "+towerresources.GetVMLabelClusterName())
 	}
 
 	var vipLabel *models.Label
-	if util.IsControlPlaneMachine(ctx.ElfMachine) {
-		vipLabel, err = ctx.VMService.UpsertLabel(label.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host)
+	if machineutil.IsControlPlaneMachine(ctx.ElfMachine) {
+		vipLabel, err = ctx.VMService.UpsertLabel(towerresources.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host)
 		if err != nil {
-			return false, errors.Wrapf(err, "failed to upsert label "+label.GetVMLabelVIP())
+			return false, errors.Wrapf(err, "failed to upsert label "+towerresources.GetVMLabelVIP())
 		}
 	}
 
 	labelIDs := []string{*namespaceLabel.ID, *clusterNameLabel.ID, *creatorLabel.ID}
-	if util.IsControlPlaneMachine(ctx.ElfMachine) {
+	if machineutil.IsControlPlaneMachine(ctx.ElfMachine) {
 		labelIDs = append(labelIDs, *vipLabel.ID)
 	}
 	r.Logger.V(3).Info("Upsert labels", "labelIds", labelIDs)

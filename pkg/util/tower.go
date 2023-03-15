@@ -71,6 +71,14 @@ func GetTowerString(ptr *string) string {
 	return *ptr
 }
 
+func GetTowerInt32(ptr *int32) int32 {
+	if ptr == nil {
+		return 0
+	}
+
+	return *ptr
+}
+
 func GetTowerTaskStatus(ptr *models.TaskStatus) string {
 	if ptr == nil {
 		return ""
@@ -85,4 +93,12 @@ func IsCloneVMTask(task *models.Task) bool {
 
 func IsPowerOnVMTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "Start VM")
+}
+
+func IsVMMigrationTask(task *models.Task) bool {
+	return strings.Contains(GetTowerString(task.Description), "performing a live migration")
+}
+
+func IsPlacementGroupTask(task *models.Task) bool {
+	return strings.Contains(GetTowerString(task.Description), "VM placement group") // Update VM placement group
 }

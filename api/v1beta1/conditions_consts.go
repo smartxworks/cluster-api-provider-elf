@@ -59,6 +59,14 @@ const (
 	// WaitingForNetworkAddressesReason (Severity=Info) documents a ElfMachine waiting for the machine network
 	// settings to be reported after machine being powered on.
 	WaitingForNetworkAddressesReason = "WaitingForNetworkAddresses"
+
+	// JoiningPlacementGroupReason documents (Severity=Info) a ElfMachine currently executing the join placement group operation.
+	JoiningPlacementGroupReason = "JoiningPlacementGroup"
+
+	// JoiningPlacementGroupFailedReason (Severity=Warning) documents a ElfMachine controller detecting
+	// an error while joining placement group; those kind of errors are usually transient and failed provisioning
+	// are automatically re-tried by the controller.
+	JoiningPlacementGroupFailedReason = "JoiningPlacementGroupFailed"
 )
 
 // Conditions and Reasons related to make connections to a Tower. Can currently be used by ElfCluster and ElfMachine

@@ -51,19 +51,49 @@ func (mr *MockVMServiceMockRecorder) AddLabelsToVM(vmID, labels interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddLabelsToVM", reflect.TypeOf((*MockVMService)(nil).AddLabelsToVM), vmID, labels)
 }
 
-// Clone mocks base method.
-func (m *MockVMService) Clone(elfCluster *v1beta1.ElfCluster, machine *v1beta10.Machine, elfMachine *v1beta1.ElfMachine, bootstrapData string) (*models.WithTaskVM, error) {
+// AddVMsToPlacementGroup mocks base method.
+func (m *MockVMService) AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Clone", elfCluster, machine, elfMachine, bootstrapData)
+	ret := m.ctrl.Call(m, "AddVMsToPlacementGroup", placementGroup, vmIDs)
+	ret0, _ := ret[0].(*models.Task)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddVMsToPlacementGroup indicates an expected call of AddVMsToPlacementGroup.
+func (mr *MockVMServiceMockRecorder) AddVMsToPlacementGroup(placementGroup, vmIDs interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddVMsToPlacementGroup", reflect.TypeOf((*MockVMService)(nil).AddVMsToPlacementGroup), placementGroup, vmIDs)
+}
+
+// Clone mocks base method.
+func (m *MockVMService) Clone(elfCluster *v1beta1.ElfCluster, machine *v1beta10.Machine, elfMachine *v1beta1.ElfMachine, bootstrapData, host string) (*models.WithTaskVM, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Clone", elfCluster, machine, elfMachine, bootstrapData, host)
 	ret0, _ := ret[0].(*models.WithTaskVM)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Clone indicates an expected call of Clone.
-func (mr *MockVMServiceMockRecorder) Clone(elfCluster, machine, elfMachine, bootstrapData interface{}) *gomock.Call {
+func (mr *MockVMServiceMockRecorder) Clone(elfCluster, machine, elfMachine, bootstrapData, host interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockVMService)(nil).Clone), elfCluster, machine, elfMachine, bootstrapData)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockVMService)(nil).Clone), elfCluster, machine, elfMachine, bootstrapData, host)
+}
+
+// CreateVMPlacementGroup mocks base method.
+func (m *MockVMService) CreateVMPlacementGroup(name, clusterID string, vmPolicy models.VMVMPolicy) (*models.WithTaskVMPlacementGroup, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateVMPlacementGroup", name, clusterID, vmPolicy)
+	ret0, _ := ret[0].(*models.WithTaskVMPlacementGroup)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateVMPlacementGroup indicates an expected call of CreateVMPlacementGroup.
+func (mr *MockVMServiceMockRecorder) CreateVMPlacementGroup(name, clusterID, vmPolicy interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVMPlacementGroup", reflect.TypeOf((*MockVMService)(nil).CreateVMPlacementGroup), name, clusterID, vmPolicy)
 }
 
 // Delete mocks base method.
@@ -94,6 +124,36 @@ func (m *MockVMService) DeleteLabel(key, value string, strict bool) (string, err
 func (mr *MockVMServiceMockRecorder) DeleteLabel(key, value, strict interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLabel", reflect.TypeOf((*MockVMService)(nil).DeleteLabel), key, value, strict)
+}
+
+// DeleteVMPlacementGroupsByName mocks base method.
+func (m *MockVMService) DeleteVMPlacementGroupsByName(placementGroupName string) (*models.Task, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteVMPlacementGroupsByName", placementGroupName)
+	ret0, _ := ret[0].(*models.Task)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteVMPlacementGroupsByName indicates an expected call of DeleteVMPlacementGroupsByName.
+func (mr *MockVMServiceMockRecorder) DeleteVMPlacementGroupsByName(placementGroupName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVMPlacementGroupsByName", reflect.TypeOf((*MockVMService)(nil).DeleteVMPlacementGroupsByName), placementGroupName)
+}
+
+// FindByIDs mocks base method.
+func (m *MockVMService) FindByIDs(ids []string) ([]*models.VM, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindByIDs", ids)
+	ret0, _ := ret[0].([]*models.VM)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindByIDs indicates an expected call of FindByIDs.
+func (mr *MockVMServiceMockRecorder) FindByIDs(ids interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByIDs", reflect.TypeOf((*MockVMService)(nil).FindByIDs), ids)
 }
 
 // Get mocks base method.
@@ -171,6 +231,21 @@ func (mr *MockVMServiceMockRecorder) GetTask(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTask", reflect.TypeOf((*MockVMService)(nil).GetTask), id)
 }
 
+// GetVMPlacementGroup mocks base method.
+func (m *MockVMService) GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVMPlacementGroup", name)
+	ret0, _ := ret[0].(*models.VMPlacementGroup)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetVMPlacementGroup indicates an expected call of GetVMPlacementGroup.
+func (mr *MockVMServiceMockRecorder) GetVMPlacementGroup(name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMPlacementGroup", reflect.TypeOf((*MockVMService)(nil).GetVMPlacementGroup), name)
+}
+
 // GetVMTemplate mocks base method.
 func (m *MockVMService) GetVMTemplate(id string) (*models.ContentLibraryVMTemplate, error) {
 	m.ctrl.T.Helper()
@@ -199,6 +274,21 @@ func (m *MockVMService) GetVlan(id string) (*models.Vlan, error) {
 func (mr *MockVMServiceMockRecorder) GetVlan(id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVlan", reflect.TypeOf((*MockVMService)(nil).GetVlan), id)
+}
+
+// Migrate mocks base method.
+func (m *MockVMService) Migrate(vmID, hostID string) (*models.WithTaskVM, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Migrate", vmID, hostID)
+	ret0, _ := ret[0].(*models.WithTaskVM)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Migrate indicates an expected call of Migrate.
+func (mr *MockVMServiceMockRecorder) Migrate(vmID, hostID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Migrate", reflect.TypeOf((*MockVMService)(nil).Migrate), vmID, hostID)
 }
 
 // PowerOff mocks base method.

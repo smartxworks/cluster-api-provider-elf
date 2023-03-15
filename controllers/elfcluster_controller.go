@@ -42,9 +42,10 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/label"
+	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 )
 
 var (
@@ -199,7 +200,7 @@ func (r *ElfClusterReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (reconcile.Result, error) {
 	ctx.Logger.Info("Reconciling ElfCluster delete")
 
-	elfMachines, err := util.GetElfMachinesInCluster(ctx, ctx.Client, ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
+	elfMachines, err := machineutil.GetElfMachinesInCluster(ctx, ctx.Client, ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
 	if err != nil {
 		return reconcile.Result{}, errors.Wrapf(err,
 			"Unable to list ElfMachines part of ElfCluster %s/%s", ctx.ElfCluster.Namespace, ctx.ElfCluster.Name)
@@ -213,6 +214,10 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 
 	// if cluster need to force delete, skipping infra resource deletion and remove the finalizer.
 	if !ctx.ElfCluster.HasForceDeleteCluster() {
+		if err := r.reconcileDeleteVMPlacementGroups(ctx); err != nil {
+			return reconcile.Result{}, errors.Wrapf(err, "failed to delete vm placement groups")
+		}
+
 		if err := r.reconcileDeleteLabels(ctx); err != nil {
 			return reconcile.Result{}, errors.Wrapf(err, "failed to delete labels")
 		}
@@ -224,20 +229,28 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 	return reconcile.Result{}, nil
 }
 
+func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) error {
+	if _, err := ctx.VMService.DeleteVMPlacementGroupsByName(fmt.Sprintf("%s-managed-%s-%s", towerresources.GetResourcePrefix(), ctx.Cluster.Namespace, ctx.Cluster.Name)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *ElfClusterReconciler) reconcileDeleteLabels(ctx *context.ClusterContext) error {
-	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelClusterName(), ctx.ElfCluster.Name, true); err != nil {
+	if err := r.reconcileDeleteLabel(ctx, towerresources.GetVMLabelClusterName(), ctx.ElfCluster.Name, true); err != nil {
 		return err
 	}
 
-	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host, true); err != nil {
+	if err := r.reconcileDeleteLabel(ctx, towerresources.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host, true); err != nil {
 		return err
 	}
 
-	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelNamespace(), ctx.ElfCluster.Namespace, true); err != nil {
+	if err := r.reconcileDeleteLabel(ctx, towerresources.GetVMLabelNamespace(), ctx.ElfCluster.Namespace, true); err != nil {
 		return err
 	}
 
-	if err := r.reconcileDeleteLabel(ctx, label.GetVMLabelManaged(), "true", true); err != nil {
+	if err := r.reconcileDeleteLabel(ctx, towerresources.GetVMLabelManaged(), "true", true); err != nil {
 		return err
 	}
 

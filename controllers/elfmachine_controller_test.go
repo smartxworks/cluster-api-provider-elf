@@ -33,9 +33,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -47,9 +49,11 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	capeerrors "github.com/smartxworks/cluster-api-provider-elf/pkg/errors"
+	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service/mock_services"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
 
@@ -59,6 +63,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 		cluster          *clusterv1.Cluster
 		elfMachine       *infrav1.ElfMachine
 		machine          *clusterv1.Machine
+		kcp              *controlplanev1.KubeadmControlPlane
+		md               *clusterv1.MachineDeployment
 		secret           *corev1.Secret
 		logBuffer        *bytes.Buffer
 		mockCtrl         *gomock.Controller
@@ -80,6 +86,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 		klog.SetOutput(logBuffer)
 
 		elfCluster, cluster, elfMachine, machine, secret = fake.NewClusterAndMachineObjects()
+		kcp = fake.NewKCP()
+		md = fake.NewMD()
+		fake.ToWorkerMachine(machine, md)
+		fake.ToWorkerMachine(elfMachine, md)
 
 		// mock
 		mockCtrl = gomock.NewController(GinkgoT())
@@ -95,7 +105,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 	Context("Reconcile an ElfMachine", func() {
 		It("should not error and not requeue the request without machine", func() {
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext}
 
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: capiutil.ObjectKey(elfMachine)})
@@ -106,7 +116,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should not error and not requeue the request when Cluster is paused", func() {
 			cluster.Spec.Paused = true
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext}
@@ -120,7 +130,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			createMachineError := capierrors.CreateMachineError
 			elfMachine.Status.FailureReason = &createMachineError
 			elfMachine.Status.FailureMessage = pointer.StringPtr("Couldn't create machine")
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -131,7 +141,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should add our finalizer to the machine", func() {
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -144,7 +154,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should exit immediately if cluster infra isn't ready", func() {
 			cluster.Status.InfrastructureReady = false
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -160,7 +170,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should exit immediately if bootstrap data secret reference isn't available", func() {
 			cluster.Status.InfrastructureReady = true
 			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -175,7 +185,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should wait cluster ControlPlaneInitialized true when create worker machine", func() {
 			cluster.Status.InfrastructureReady = true
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -191,7 +201,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should not wait cluster ControlPlaneInitialized true when create master machine", func() {
 			cluster.Status.InfrastructureReady = true
 			elfMachine.Labels[clusterv1.MachineControlPlaneLabelName] = ""
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -214,7 +224,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should set CloningFailedReason condition when failed to retrieve bootstrap data", func() {
 			machine.Spec.Bootstrap.DataSecretName = pointer.String("notfound")
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -232,10 +242,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.Name = &elfMachine.Name
 			task := fake.NewTowerTask()
 			withTaskVM := fake.NewWithTaskVM(vm, task)
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(withTaskVM, nil)
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(withTaskVM, nil)
 			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
 			mockVMService.EXPECT().GetTask(*task.ID).Return(task, nil)
 
@@ -254,10 +264,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should recover from lost task", func() {
 			vm := fake.NewTowerVM()
 			vm.Name = &elfMachine.Name
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New(service.VMDuplicate))
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New(service.VMDuplicate))
 			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
 			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
 
@@ -274,10 +284,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle clone error", func() {
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("some error"))
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("some error"))
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -291,6 +301,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should allow VM to be temporarily disconnected", func() {
+			towerCluster := fake.NewTowerCluster()
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusRUNNING
@@ -298,10 +309,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.LocalID
 			now := metav1.NewTime(time.Now().Add(-infrav1.VMDisconnectionTimeout))
 			elfMachine.SetVMDisconnectionTimestamp(&now)
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(3).Return(fake.NewTowerLabel(), nil)
 			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(1)
 
@@ -316,7 +330,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
 			elfMachine.Status.VMRef = *vm.LocalID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Times(2).Return(nil, errors.New(service.VMNotFound))
@@ -349,7 +363,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.EntityAsyncStatus = nil
 			vm.InRecycleBin = pointer.Bool(true)
 			elfMachine.Status.VMRef = *vm.LocalID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
@@ -372,7 +386,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task.Status = &status
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(nil, errors.New(service.VMNotFound))
@@ -400,7 +414,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task.ErrorMessage = util.TowerString("Cannot unwrap Ok value of Result.Err.\r\ncode: CREATE_VM_FORM_TEMPLATE_FAILED\r\nmessage: {\"data\":{},\"ec\":\"VM_CLOUD_INIT_CONFIG_ERROR\",\"error\":{\"msg\":\"[VM_CLOUD_INIT_CONFIG_ERROR]The gateway [192.168.31.215] is unreachable. \"}}")
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(nil, errors.New(service.VMNotFound))
@@ -421,6 +435,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should power on the VM after it is created", func() {
+			towerCluster := fake.NewTowerCluster()
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
@@ -431,10 +446,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task2 := fake.NewTowerTask()
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task1.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task1, nil)
 			mockVMService.EXPECT().PowerOn(*vm.LocalID).Return(task2, nil)
 
@@ -461,7 +479,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task.Status = &taskStatus
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
@@ -481,6 +499,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle power on error", func() {
+			towerCluster := fake.NewTowerCluster()
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
@@ -490,10 +509,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task1.Status = &taskStatus
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task1.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task1, nil)
 			mockVMService.EXPECT().PowerOn(*vm.LocalID).Return(nil, errors.New("some error"))
 
@@ -509,7 +531,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.PoweringOnFailedReason}})
 		})
 
-		It("should handle power on task failed", func() {
+		It(" handle power on task failure", func() {
+			towerCluster := fake.NewTowerCluster()
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
@@ -520,10 +543,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task2 := fake.NewTowerTask()
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task1.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task1, nil)
 			mockVMService.EXPECT().PowerOn(*vm.LocalID).Return(task2, nil)
 
@@ -542,6 +568,359 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 	})
 
+	Context("Reconcile Placement Group", func() {
+		BeforeEach(func() {
+			cluster.Status.InfrastructureReady = true
+			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
+			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
+		})
+
+		It("should create a new placement group", func() {
+			towerCluster := fake.NewTowerCluster()
+			vm := fake.NewTowerVM()
+			vm.EntityAsyncStatus = nil
+			status := models.VMStatusSTOPPED
+			vm.Status = &status
+			task := fake.NewTowerTask()
+			withTaskVMPlacementGroup := fake.NewWithTaskVMPlacementGroup(nil, task)
+			elfMachine.Status.VMRef = *vm.LocalID
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
+			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).To(BeZero())
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(elfMachine.Status.TaskRef).To(Equal(*withTaskVMPlacementGroup.TaskID))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the placement group to be created"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.JoiningPlacementGroupReason}})
+		})
+
+		It("should wait for placement group task done", func() {
+			towerCluster := fake.NewTowerCluster()
+			vm := fake.NewTowerVM()
+			vm.EntityAsyncStatus = nil
+			elfMachine.Status.VMRef = *vm.LocalID
+			placementGroup := fake.NewVMPlacementGroup(nil)
+			placementGroup.EntityAsyncStatus = models.EntityAsyncStatusUPDATING.Pointer()
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).To(BeZero())
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for placement group task done"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.JoiningPlacementGroupReason}})
+		})
+
+		It("should add worker vm to the placement group", func() {
+			towerCluster := fake.NewTowerCluster()
+			vm := fake.NewTowerVM()
+			vm.EntityAsyncStatus = nil
+			status := models.VMStatusSTOPPED
+			vm.Status = &status
+			elfMachine.Status.VMRef = *vm.LocalID
+			task := fake.NewTowerTask()
+			placementGroup := fake.NewVMPlacementGroup(nil)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+			mockVMService.EXPECT().AddVMsToPlacementGroup(placementGroup, []string{*vm.ID}).Return(task, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).To(BeZero())
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be added to the placement group"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.JoiningPlacementGroupReason}})
+		})
+
+		It("should handle placement group error", func() {
+			towerCluster := fake.NewTowerCluster()
+			vm := fake.NewTowerVM()
+			vm.EntityAsyncStatus = nil
+			status := models.VMStatusSTOPPED
+			vm.Status = &status
+			elfMachine.Status.VMRef = *vm.LocalID
+			placementGroup := fake.NewVMPlacementGroup(nil)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+			mockVMService.EXPECT().AddVMsToPlacementGroup(placementGroup, []string{*vm.ID}).Return(nil, errors.New("some error"))
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).To(BeZero())
+			Expect(err).To(HaveOccurred())
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.JoiningPlacementGroupFailedReason}})
+			Expect(conditions.GetMessage(elfMachine, infrav1.VMProvisionedCondition)).To(Equal("some error"))
+		})
+
+		Context("Reconcile Placement Group - Control Plane", func() {
+			BeforeEach(func() {
+				cluster.Status.InfrastructureReady = true
+				conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
+				machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
+				fake.ToControlPlaneMachine(machine, kcp)
+				fake.ToControlPlaneMachine(elfMachine, kcp)
+			})
+
+			It("should not be added when placement group is full", func() {
+				towerCluster := fake.NewTowerCluster()
+				towerCluster.HostNum = util.TowerInt32(1)
+				vm := fake.NewTowerVM()
+				vm.EntityAsyncStatus = nil
+				elfMachine.Status.VMRef = *vm.LocalID
+				placementGroup := fake.NewVMPlacementGroup([]string{fake.UUID()})
+				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
+				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+				mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+				mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+
+				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				ok, err := reconciler.reconcilePlacementGroup(machineContext, vm)
+				Expect(ok).To(BeTrue())
+				Expect(err).To(BeZero())
+				Expect(logBuffer.String()).To(ContainSubstring("The placement group is full, skip adding VM to the placement group"))
+			})
+
+			It("should add VM to placement group when VM is not in placement group and the host where VM in is not in placement group", func() {
+				towerCluster := fake.NewTowerCluster()
+				towerCluster.HostNum = util.TowerInt32(2)
+				hostID1 := fake.UUID()
+				hostID2 := fake.UUID()
+				towerCluster.Hosts = []*models.NestedHost{{ID: util.TowerString(hostID1)}, {ID: util.TowerString(hostID2)}}
+				vm := fake.NewTowerVM()
+				vm.EntityAsyncStatus = nil
+				vm.Host = &models.NestedHost{ID: util.TowerString(hostID1)}
+				elfMachine.Status.VMRef = *vm.LocalID
+				vm2 := fake.NewTowerVM()
+				vm2.Host = &models.NestedHost{ID: util.TowerString(hostID2)}
+				task := fake.NewTowerTask()
+				placementGroup := fake.NewVMPlacementGroup([]string{*vm2.ID})
+				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
+				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+				mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+				mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+				mockVMService.EXPECT().FindByIDs([]string{*vm2.ID}).Return([]*models.VM{vm2}, nil)
+				mockVMService.EXPECT().AddVMsToPlacementGroup(placementGroup, gomock.Any()).Return(task, nil)
+
+				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				ok, err := reconciler.reconcilePlacementGroup(machineContext, vm)
+				Expect(ok).To(BeFalse())
+				Expect(err).To(BeZero())
+				Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+				Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be added to the placement group"))
+				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.JoiningPlacementGroupReason}})
+			})
+
+			It("should not migrate VM when VM is running and kcp.Spec.Replicas != kcp.Status.UpdatedReplicas", func() {
+				towerCluster := fake.NewTowerCluster()
+				towerCluster.HostNum = util.TowerInt32(2)
+				hostID1 := fake.UUID()
+				hostID2 := fake.UUID()
+				towerCluster.Hosts = []*models.NestedHost{{ID: util.TowerString(hostID1)}, {ID: util.TowerString(hostID2)}}
+				vm := fake.NewTowerVM()
+				status := models.VMStatusRUNNING
+				vm.Status = &status
+				vm.EntityAsyncStatus = nil
+				vm.Host = &models.NestedHost{ID: util.TowerString(hostID2)}
+				elfMachine.Status.VMRef = *vm.LocalID
+				vm2 := fake.NewTowerVM()
+				vm2.Host = &models.NestedHost{ID: util.TowerString(hostID2)}
+				placementGroup := fake.NewVMPlacementGroup([]string{*vm2.ID})
+				kcp.Spec.Replicas = pointer.Int32(2)
+				kcp.Status.UpdatedReplicas = 1
+				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
+				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+				mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+				mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+				mockVMService.EXPECT().FindByIDs([]string{*vm2.ID}).Return([]*models.VM{vm2}, nil)
+
+				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				ok, err := reconciler.reconcilePlacementGroup(machineContext, vm)
+				Expect(ok).To(BeTrue())
+				Expect(err).To(BeZero())
+				Expect(logBuffer.String()).To(ContainSubstring("KCP rolling update in progress, skip migrate VM"))
+			})
+
+			It("should migrate VM to another host when the VM is running and the host of VM is not in unused hosts", func() {
+				towerCluster := fake.NewTowerCluster()
+				towerCluster.HostNum = util.TowerInt32(2)
+				hostID1 := fake.UUID()
+				hostID2 := fake.UUID()
+				towerCluster.Hosts = []*models.NestedHost{{ID: util.TowerString(hostID1)}, {ID: util.TowerString(hostID2)}}
+				vm := fake.NewTowerVM()
+				status := models.VMStatusRUNNING
+				vm.Status = &status
+				vm.EntityAsyncStatus = nil
+				vm.Host = &models.NestedHost{ID: util.TowerString(hostID2)}
+				elfMachine.Status.VMRef = *vm.LocalID
+				vm2 := fake.NewTowerVM()
+				vm2.Host = &models.NestedHost{ID: util.TowerString(hostID2)}
+				task := fake.NewTowerTask()
+				withTaskVM := fake.NewWithTaskVM(vm, task)
+				placementGroup := fake.NewVMPlacementGroup([]string{*vm2.ID})
+				kcp.Spec.Replicas = pointer.Int32(2)
+				kcp.Status.UpdatedReplicas = 2
+				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
+				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+				mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+				mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+				mockVMService.EXPECT().FindByIDs([]string{*vm2.ID}).Return([]*models.VM{vm2}, nil)
+				mockVMService.EXPECT().Migrate(*vm.ID, hostID1).Return(withTaskVM, nil)
+
+				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				ok, err := reconciler.reconcilePlacementGroup(machineContext, vm)
+				Expect(ok).To(BeFalse())
+				Expect(err).To(BeZero())
+				Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+				Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be migrated from"))
+				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.JoiningPlacementGroupReason}})
+			})
+		})
+	})
+
+	Context("Reconcile VM Host", func() {
+		BeforeEach(func() {
+			cluster.Status.InfrastructureReady = true
+			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
+			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
+			fake.ToControlPlaneMachine(machine, kcp)
+			fake.ToControlPlaneMachine(elfMachine, kcp)
+		})
+
+		It("should not set host when kcp.Spec.Replicas > kcp.Status.Replicas", func() {
+			kcp.Spec.Replicas = pointer.Int32(1)
+			kcp.Status.Replicas = 0
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			host, err := reconciler.getVMHostForRollingUpdate(machineContext)
+			Expect(err).To(BeZero())
+			Expect(host).To(BeEmpty())
+		})
+
+		It("should not set host when placement group does not exist", func() {
+			kcp.Spec.Replicas = pointer.Int32(1)
+			kcp.Status.Replicas = 1
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			host, err := reconciler.getVMHostForRollingUpdate(machineContext)
+			Expect(err).To(BeZero())
+			Expect(host).To(BeEmpty())
+		})
+
+		It("should not set host when placement group has capacity", func() {
+			towerCluster := fake.NewTowerCluster()
+			towerCluster.HostNum = util.TowerInt32(1)
+			placementGroup := fake.NewVMPlacementGroup([]string{})
+			kcp.Spec.Replicas = pointer.Int32(1)
+			kcp.Status.Replicas = 1
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			host, err := reconciler.getVMHostForRollingUpdate(machineContext)
+			Expect(err).To(BeZero())
+			Expect(host).To(BeEmpty())
+		})
+
+		It("should set host when placement group is full", func() {
+			towerCluster := fake.NewTowerCluster()
+			towerCluster.HostNum = util.TowerInt32(3)
+			elfMachine2, machine2 := fake.NewMachineObjects(elfCluster, cluster)
+			elfMachine3, machine3 := fake.NewMachineObjects(elfCluster, cluster)
+			elfMachine4, machine4 := fake.NewMachineObjects(elfCluster, cluster)
+			machine2.CreationTimestamp = metav1.Now()
+			machine3.CreationTimestamp = metav1.NewTime(time.Now().Add(1 * time.Minute))
+			machine4.CreationTimestamp = metav1.NewTime(time.Now().Add(2 * time.Minute))
+			fake.ToControlPlaneMachine(machine2, kcp)
+			fake.ToControlPlaneMachine(elfMachine2, kcp)
+			fake.ToControlPlaneMachine(machine3, kcp)
+			fake.ToControlPlaneMachine(elfMachine3, kcp)
+			fake.ToControlPlaneMachine(machine4, kcp)
+			fake.ToControlPlaneMachine(elfMachine4, kcp)
+			elfMachine2.Status.VMRef = fake.UUID()
+			elfMachine3.Status.VMRef = fake.UUID()
+			elfMachine4.Status.VMRef = fake.UUID()
+			hostID := fake.UUID()
+			vm := fake.NewTowerVM()
+			vm.Host = &models.NestedHost{ID: util.TowerString(hostID)}
+			placementGroup := fake.NewVMPlacementGroup([]string{})
+			placementGroup.Vms = []*models.NestedVM{
+				{ID: util.TowerString(fake.UUID()), Name: util.TowerString(elfMachine2.Name)},
+				{ID: util.TowerString(fake.UUID()), Name: util.TowerString(elfMachine3.Name)},
+				{ID: util.TowerString(*vm.ID), Name: util.TowerString(elfMachine4.Name)},
+			}
+			kcp.Spec.Replicas = pointer.Int32(3)
+			kcp.Status.Replicas = 3
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine2, machine2, elfMachine3, machine3, elfMachine4, machine4)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine2, machine2)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine3, machine3)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine4, machine4)
+
+			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			host, err := reconciler.getVMHostForRollingUpdate(machineContext)
+			Expect(err).To(BeZero())
+			Expect(host).To(Equal(hostID))
+		})
+	})
+
 	Context("Reconcile ElfMachine providerID", func() {
 		BeforeEach(func() {
 			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(3).Return(fake.NewTowerLabel(), nil)
@@ -549,24 +928,28 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should set providerID to ElfMachine when VM is created", func() {
-			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 			cluster.Status.InfrastructureReady = true
 			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
+			towerCluster := fake.NewTowerCluster()
 			vm := fake.NewTowerVM()
 			elfMachine.Status.VMRef = *vm.LocalID
 			vm.EntityAsyncStatus = nil
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
-			_, _ = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(err).To(BeZero())
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
-			Expect(*elfMachine.Spec.ProviderID).Should(Equal(util.ConvertUUIDToProviderID(*vm.LocalID)))
+			Expect(*elfMachine.Spec.ProviderID).Should(Equal(machineutil.ConvertUUIDToProviderID(*vm.LocalID)))
 		})
 	})
 
@@ -580,14 +963,18 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should wait VM network ready", func() {
+			towerCluster := fake.NewTowerCluster()
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
 			vm.Ips = util.TowerString("")
 			elfMachine.Status.VMRef = *vm.LocalID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -601,15 +988,19 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should set ElfMachine to ready when VM network is ready", func() {
+			towerCluster := fake.NewTowerCluster()
 			ip := "116.116.116.116"
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
 			vm.Ips = util.TowerString("116.116.116.116")
 			elfMachine.Status.VMRef = *vm.LocalID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -641,7 +1032,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfCluster.Annotations = map[string]string{
 				infrav1.ElfClusterForceDeleteAnnotation: "",
 			}
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -659,7 +1050,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockNewVMService = func(_ goctx.Context, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
 				return mockVMService, errors.New("get vm service failed")
 			}
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -672,7 +1063,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should delete ElfMachine when vmRef is empty and VM not found", func() {
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(nil, errors.New(service.VMNotFound))
 
@@ -690,7 +1081,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should delete the VM that in creating status and have not been saved to ElfMachine", func() {
 			vm := fake.NewTowerVM()
 			vm.LocalID = nil
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
 			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
@@ -714,7 +1105,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			status := models.VMStatusRUNNING
 			vm.Status = &status
 			task := fake.NewTowerTask()
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
 			mockVMService.EXPECT().Get(*vm.LocalID).Return(vm, nil)
@@ -738,7 +1129,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task := fake.NewTowerTask()
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			vmNotFoundError := errors.New(service.VMNotFound)
@@ -763,7 +1154,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task := fake.NewTowerTask()
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
@@ -789,7 +1180,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task.Status = &status
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
@@ -818,7 +1209,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task.ErrorMessage = pointer.String("JOB_VM_SHUTDOWN_TIMEOUT")
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
@@ -847,7 +1238,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task.Status = &status
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
@@ -870,7 +1261,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.EntityAsyncStatus = nil
 			task := fake.NewTowerTask()
 			elfMachine.Status.VMRef = *vm.LocalID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
@@ -895,7 +1286,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			status := models.VMStatusSTOPPED
 			vm.Status = &status
 			elfMachine.Status.VMRef = *vm.LocalID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
@@ -919,7 +1310,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.Status = &status
 			task := fake.NewTowerTask()
 			elfMachine.Status.VMRef = *vm.LocalID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
@@ -946,7 +1337,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task := fake.NewTowerTask()
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfCluster.Spec.VMGracefulShutdown = false
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
@@ -978,21 +1369,21 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
 				{NetworkType: infrav1.NetworkTypeIPV4},
 			}
-			waitStaticIPAllocationSpec(mockNewVMService, elfCluster, cluster, elfMachine, machine, secret)
+			waitStaticIPAllocationSpec(mockNewVMService, elfCluster, cluster, elfMachine, machine, secret, md)
 
 			// one IPV4 device without ipAddrs and one with ipAddrs
 			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
 				{NetworkType: infrav1.NetworkTypeIPV4},
 				{NetworkType: infrav1.NetworkTypeIPV4, IPAddrs: []string{"127.0.0.1"}},
 			}
-			waitStaticIPAllocationSpec(mockNewVMService, elfCluster, cluster, elfMachine, machine, secret)
+			waitStaticIPAllocationSpec(mockNewVMService, elfCluster, cluster, elfMachine, machine, secret, md)
 
 			// one IPV4 device without ipAddrs and one DHCP device
 			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
 				{NetworkType: infrav1.NetworkTypeIPV4},
 				{NetworkType: infrav1.NetworkTypeIPV4DHCP},
 			}
-			waitStaticIPAllocationSpec(mockNewVMService, elfCluster, cluster, elfMachine, machine, secret)
+			waitStaticIPAllocationSpec(mockNewVMService, elfCluster, cluster, elfMachine, machine, secret, md)
 		})
 
 		It("should not wait for IP allocation", func() {
@@ -1000,9 +1391,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
 				{NetworkType: infrav1.NetworkTypeIPV4, IPAddrs: []string{"127.0.0.1"}},
 			}
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
-			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("some error"))
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("some error"))
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -1019,9 +1410,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should handle task missing", func() {
 			task := fake.NewTowerTask()
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
-			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 			machineContext.VMService = mockVMService
 
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(nil, errors.New(service.TaskNotFound))
@@ -1036,9 +1427,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should handle failed to get task", func() {
 			task := fake.NewTowerTask()
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
-			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 			machineContext.VMService = mockVMService
 
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(nil, errors.New("some error"))
@@ -1054,8 +1445,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 func waitStaticIPAllocationSpec(mockNewVMService func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (service.VMService, error),
 	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
-	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine, secret *corev1.Secret) {
-	ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine, secret *corev1.Secret, md *clusterv1.MachineDeployment) {
+	ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 	fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 	logBuffer := new(bytes.Buffer)
 	klog.SetOutput(logBuffer)
@@ -1071,9 +1462,8 @@ func waitStaticIPAllocationSpec(mockNewVMService func(ctx goctx.Context, auth in
 	expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForStaticIPAllocationReason}})
 }
 
-func newCtrlContexts(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
-	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine, secret *corev1.Secret) *context.ControllerContext {
-	ctrlMgrContext := fake.NewControllerManagerContext(cluster, elfCluster, elfMachine, machine, secret)
+func newCtrlContexts(objs ...runtime.Object) *context.ControllerContext {
+	ctrlMgrContext := fake.NewControllerManagerContext(objs...)
 	ctrlContext := &context.ControllerContext{
 		ControllerManagerContext: ctrlMgrContext,
 		Logger:                   ctrllog.Log,
@@ -1084,7 +1474,8 @@ func newCtrlContexts(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
 
 func newMachineContext(ctrlCtx *context.ControllerContext,
 	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
-	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine) *context.MachineContext {
+	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine,
+	vmService service.VMService) *context.MachineContext {
 	return &context.MachineContext{
 		ControllerContext: ctrlCtx,
 		Cluster:           cluster,
@@ -1092,6 +1483,7 @@ func newMachineContext(ctrlCtx *context.ControllerContext,
 		Machine:           machine,
 		ElfMachine:        elfMachine,
 		Logger:            ctrlCtx.Logger,
+		VMService:         vmService,
 	}
 }
 
