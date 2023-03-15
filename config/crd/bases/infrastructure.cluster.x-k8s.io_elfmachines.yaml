@@ -28,6 +28,10 @@ spec:
       jsonPath: .status.addresses[0].address
       name: IP
       type: string
+    - description: Name of host server where the virtual machine runs on
+      jsonPath: .status.hostServerName
+      name: HOST
+      type: string
     - description: Machine object which owns with this ElfMachine
       jsonPath: .metadata.ownerReferences[?(@.kind=="Machine")].name
       name: Machine
