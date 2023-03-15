@@ -19,7 +19,17 @@ package labels
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
+
+func GetHostServerIDLabel(o metav1.Object) string {
+	return GetLabelValue(o, infrav1.HostServerIDLabel)
+}
+
+func GetHostServerNameLabel(o metav1.Object) string {
+	return GetLabelValue(o, infrav1.HostServerNameLabel)
+}
 
 func GetControlPlaneLabel(o metav1.Object) string {
 	return GetLabelValue(o, clusterv1.MachineControlPlaneNameLabel)

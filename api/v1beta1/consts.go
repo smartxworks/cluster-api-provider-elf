@@ -31,3 +31,14 @@ const (
 	// PlacementGroupNameAnnotation is the annotation identifying the name of placement group.
 	PlacementGroupNameAnnotation = "cape.infrastructure.cluster.x-k8s.io/placement-group-name"
 )
+
+// Labels.
+const (
+	// HostServerIDLabel is the label set on nodes.
+	// It is the Tower ID of host server where the virtual machine runs on.
+	HostServerIDLabel = "cape.infrastructure.cluster.x-k8s.io/host-server-id"
+
+	// HostServerNameLabel is the label set on nodes.
+	// It is the name of host server where the virtual machine runs on.
+	HostServerNameLabel = "cape.infrastructure.cluster.x-k8s.io/host-server-name"
+)
