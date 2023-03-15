@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -55,6 +56,7 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
+	"github.com/smartxworks/cluster-api-provider-elf/test/helpers"
 )
 
 var _ = Describe("ElfMachineReconciler", func() {
@@ -1439,6 +1441,118 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).Should(BeFalse())
 			Expect(strings.Contains(err.Error(), "failed to get task")).To(BeTrue())
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+		})
+	})
+
+	Context("Reconcile Node", func() {
+		var node *corev1.Node
+
+		AfterEach(func() {
+			Expect(testEnv.Delete(ctx, node)).To(Succeed())
+		})
+
+		It("should set providerID and labels for node", func() {
+			elfMachine.Status.HostServerRef = fake.UUID()
+			elfMachine.Status.HostServerName = fake.UUID()
+			vm := fake.NewTowerVM()
+			ctrlMgrContext := &context.ControllerManagerContext{
+				Context:                 goctx.Background(),
+				Client:                  testEnv.Client,
+				Logger:                  ctrllog.Log,
+				Name:                    fake.ControllerManagerName,
+				LeaderElectionNamespace: fake.LeaderElectionNamespace,
+				LeaderElectionID:        fake.LeaderElectionID,
+			}
+			ctrlContext := &context.ControllerContext{
+				ControllerManagerContext: ctrlMgrContext,
+				Logger:                   ctrllog.Log,
+			}
+			machineContext := &context.MachineContext{
+				ControllerContext: ctrlContext,
+				Cluster:           cluster,
+				Machine:           machine,
+				ElfCluster:        elfCluster,
+				ElfMachine:        elfMachine,
+				Logger:            ctrllog.Log,
+			}
+
+			node = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   elfMachine.Name,
+					Labels: map[string]string{},
+				},
+			}
+			Expect(testEnv.CreateAndWait(ctx, node)).To(Succeed())
+			Expect(helpers.CreateKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)).To(Succeed())
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileNode(machineContext, vm)
+			Expect(ok).Should(BeTrue())
+			Expect(err).To(BeNil())
+			Eventually(func() bool {
+				if err := testEnv.Get(ctx, client.ObjectKey{Namespace: node.Namespace, Name: node.Name}, node); err != nil {
+					return false
+				}
+
+				return node.Spec.ProviderID == machineutil.ConvertUUIDToProviderID(*vm.LocalID) &&
+					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
+					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName
+			}, timeout).Should(BeTrue())
+		})
+
+		It("should update labels but not update providerID", func() {
+			elfMachine.Status.HostServerRef = fake.UUID()
+			elfMachine.Status.HostServerName = fake.UUID()
+			vm := fake.NewTowerVM()
+			ctrlMgrContext := &context.ControllerManagerContext{
+				Context:                 goctx.Background(),
+				Client:                  testEnv.Client,
+				Logger:                  ctrllog.Log,
+				Name:                    fake.ControllerManagerName,
+				LeaderElectionNamespace: fake.LeaderElectionNamespace,
+				LeaderElectionID:        fake.LeaderElectionID,
+			}
+			ctrlContext := &context.ControllerContext{
+				ControllerManagerContext: ctrlMgrContext,
+				Logger:                   ctrllog.Log,
+			}
+			machineContext := &context.MachineContext{
+				ControllerContext: ctrlContext,
+				Cluster:           cluster,
+				Machine:           machine,
+				ElfCluster:        elfCluster,
+				ElfMachine:        elfMachine,
+				Logger:            ctrllog.Log,
+			}
+
+			providerID := machineutil.ConvertUUIDToProviderID(fake.UUID())
+			node = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: elfMachine.Name,
+					Labels: map[string]string{
+						infrav1.HostServerIDLabel:   "old-id",
+						infrav1.HostServerNameLabel: "old-name",
+					},
+				},
+				Spec: corev1.NodeSpec{ProviderID: providerID},
+			}
+			Expect(testEnv.CreateAndWait(ctx, node)).To(Succeed())
+			Expect(helpers.CreateKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)).To(Succeed())
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileNode(machineContext, vm)
+			Expect(ok).Should(BeTrue())
+			Expect(err).To(BeNil())
+
+			Eventually(func() bool {
+				if err := testEnv.Get(ctx, client.ObjectKey{Namespace: node.Namespace, Name: node.Name}, node); err != nil {
+					return false
+				}
+
+				return node.Spec.ProviderID == providerID &&
+					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
+					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName
+			}, timeout).Should(BeTrue())
 		})
 	})
 })

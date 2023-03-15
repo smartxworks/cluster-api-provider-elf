@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -34,6 +35,10 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/test/helpers"
 )
 
+const (
+	timeout = time.Second * 10
+)
+
 var (
 	testEnv *helpers.TestEnvironment
 )
@@ -44,14 +49,15 @@ func TestControllers(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	code := 0
+
+	defer func() { os.Exit(code) }()
+
 	setup()
 
-	defer func() {
-		teardown()
-	}()
+	defer teardown()
 
-	code := m.Run()
-	os.Exit(code) //nolint:gocritic
+	code = m.Run()
 }
 
 func setup() {
@@ -59,6 +65,9 @@ func setup() {
 	utilruntime.Must(clusterv1.AddToScheme(cgscheme.Scheme))
 
 	testEnv = helpers.NewTestEnvironment()
+
+	// Set kubeconfig.
+	os.Setenv("KUBECONFIG", testEnv.Kubeconfig)
 
 	go func() {
 		fmt.Println("Starting the manager")
@@ -74,7 +83,7 @@ func setup() {
 			Name: manager.DefaultPodNamespace,
 		},
 	}
-	if err := testEnv.Create(testEnv.GetContext(), ns); err != nil {
+	if err := testEnv.CreateAndWait(testEnv.GetContext(), ns); err != nil {
 		panic("unable to create controller namespace")
 	}
 
@@ -88,6 +97,6 @@ func setup() {
 
 func teardown() {
 	if err := testEnv.Stop(); err != nil {
-		panic(fmt.Sprintf("Failed to stop envtest: %v", err))
+		panic(fmt.Sprintf("failed to stop envtest: %v", err))
 	}
 }

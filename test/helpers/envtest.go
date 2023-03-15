@@ -25,6 +25,7 @@ import (
 	"path"
 	"path/filepath"
 	goruntime "runtime"
+	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
@@ -35,14 +36,19 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/log"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
+	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/kubeconfig"
+	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -70,8 +76,14 @@ func init() {
 }
 
 var (
-	scheme = runtime.NewScheme()
-	env    *envtest.Environment
+	scheme           = runtime.NewScheme()
+	crdPaths         []string
+	cacheSyncBackoff = wait.Backoff{
+		Duration: 100 * time.Millisecond,
+		Factor:   1.5,
+		Steps:    8,
+		Jitter:   0.4,
+	}
 )
 
 func init() {
@@ -87,7 +99,7 @@ func init() {
 	_, filename, _, _ := goruntime.Caller(0) //nolint
 	root := path.Join(path.Dir(filename), "..", "..")
 
-	crdPaths := []string{
+	crdPaths = []string{
 		filepath.Join(root, "config", "crd", "bases"),
 	}
 
@@ -95,25 +107,27 @@ func init() {
 	if capiPath := getFilePathToCAPICRDs(root); capiPath != "" {
 		crdPaths = append(crdPaths, capiPath)
 	}
-
-	// Create the test environment.
-	env = &envtest.Environment{
-		ErrorIfCRDPathMissing: true,
-		CRDDirectoryPaths:     crdPaths,
-	}
 }
 
 // TestEnvironment encapsulates a Kubernetes local test environment.
 type TestEnvironment struct {
 	manager.Manager
 	client.Client
-	Config *rest.Config
+	Env        *envtest.Environment
+	Config     *rest.Config
+	Kubeconfig string
 
 	cancel goctx.CancelFunc
 }
 
 // NewTestEnvironment creates a new environment spinning up a local api-server.
 func NewTestEnvironment() *TestEnvironment {
+	// Create the test environment.
+	env := &envtest.Environment{
+		ErrorIfCRDPathMissing: true,
+		CRDDirectoryPaths:     crdPaths,
+	}
+
 	if _, err := env.Start(); err != nil {
 		err = kerrors.NewAggregate([]error{err, env.Stop()})
 		panic(err)
@@ -137,10 +151,17 @@ func NewTestEnvironment() *TestEnvironment {
 		klog.Fatalf("failed to create the CAPE controller manager: %v", err)
 	}
 
+	kubeconfig, err := CreateKubeconfig(mgr.GetConfig(), fmt.Sprintf("%s-cluster", capiutil.RandomString(6)))
+	if err != nil {
+		klog.Fatalf("failed to create kubeconfig: %v", err)
+	}
+
 	return &TestEnvironment{
-		Manager: mgr,
-		Client:  mgr.GetClient(),
-		Config:  mgr.GetConfig(),
+		Manager:    mgr,
+		Client:     mgr.GetClient(),
+		Config:     mgr.GetConfig(),
+		Env:        env,
+		Kubeconfig: kubeconfig,
 	}
 }
 
@@ -154,7 +175,11 @@ func (t *TestEnvironment) StartManager(ctx goctx.Context) error {
 func (t *TestEnvironment) Stop() error {
 	t.cancel()
 
-	return env.Stop()
+	if err := t.Env.Stop(); err != nil {
+		return err
+	}
+
+	return os.Remove(t.Kubeconfig)
 }
 
 func (t *TestEnvironment) Cleanup(ctx goctx.Context, objs ...client.Object) error {
@@ -174,12 +199,12 @@ func (t *TestEnvironment) Cleanup(ctx goctx.Context, objs ...client.Object) erro
 	return kerrors.NewAggregate(errs)
 }
 
-func (t *TestEnvironment) CreateNamespace(ctx goctx.Context, generateName string) (*corev1.Namespace, error) {
+func (t *TestEnvironment) CreateNamespace(ctx goctx.Context, name string) (*corev1.Namespace, error) {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: fmt.Sprintf("%s-", generateName),
+			Name: name,
 			Labels: map[string]string{
-				"testenv/original-name": generateName,
+				"testenv/original-name": name,
 			},
 		},
 	}
@@ -193,6 +218,85 @@ func (t *TestEnvironment) CreateNamespace(ctx goctx.Context, generateName string
 
 func (t *TestEnvironment) CreateKubeconfigSecret(ctx goctx.Context, cluster *clusterv1.Cluster) error {
 	return t.Create(ctx, kubeconfig.GenerateSecret(cluster, kubeconfig.FromEnvTestConfig(t.Config, cluster)))
+}
+
+func (t *TestEnvironment) CreateAndWait(ctx goctx.Context, obj client.Object, opts ...client.CreateOption) error {
+	if err := t.Create(ctx, obj, opts...); err != nil {
+		return err
+	}
+
+	// Makes sure the cache is updated with the new object
+	key := client.ObjectKeyFromObject(obj)
+	return wait.ExponentialBackoff(cacheSyncBackoff, func() (done bool, err error) {
+		if err := t.Get(ctx, key, obj); err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return true, nil
+	})
+}
+
+func (t *TestEnvironment) PatchAndWait(ctx goctx.Context, obj, patchFromObj client.Object) error {
+	key := client.ObjectKeyFromObject(obj)
+	oldObj := obj.DeepCopyObject().(client.Object)
+	if err := t.Get(ctx, key, oldObj); err != nil {
+		return err
+	}
+	oldResourceVersion := oldObj.GetResourceVersion()
+
+	patchHelper, err := patch.NewHelper(patchFromObj, t.Client)
+	if err != nil {
+		return err
+	}
+	if err := patchHelper.Patch(ctx, obj); err != nil {
+		return err
+	}
+
+	// Makes sure the cache is updated with the new object
+	return wait.ExponentialBackoff(cacheSyncBackoff, func() (done bool, err error) {
+		if err := t.Get(ctx, key, obj); err != nil {
+			return false, err
+		}
+		if obj.GetResourceVersion() == oldResourceVersion {
+			return false, nil
+		}
+		return true, nil
+	})
+}
+
+// CreateKubeconfig returns a new kubeconfig from the envtest config.
+func CreateKubeconfig(cfg *rest.Config, clusterName string) (string, error) {
+	contextName := fmt.Sprintf("%s@%s", cfg.Username, clusterName)
+	c := api.Config{
+		Clusters: map[string]*api.Cluster{
+			clusterName: {
+				Server:                   cfg.Host,
+				CertificateAuthorityData: cfg.CAData,
+			},
+		},
+		Contexts: map[string]*api.Context{
+			contextName: {
+				Cluster:  clusterName,
+				AuthInfo: cfg.Username,
+			},
+		},
+		AuthInfos: map[string]*api.AuthInfo{
+			cfg.Username: {
+				ClientKeyData:         cfg.KeyData,
+				ClientCertificateData: cfg.CertData,
+			},
+		},
+		CurrentContext: contextName,
+	}
+
+	kubeconfig := "/var/tmp/" + clusterName + ".kubeconfig"
+	if err := clientcmd.WriteToFile(c, kubeconfig); err != nil {
+		return "", err
+	}
+
+	return kubeconfig, nil
 }
 
 func getFilePathToCAPICRDs(root string) string {
