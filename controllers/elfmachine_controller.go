@@ -56,6 +56,7 @@ import (
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	labelsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 )
 
@@ -434,8 +435,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 	ctx.ElfMachine.Status.Ready = true
 	conditions.MarkTrue(ctx.ElfMachine, infrav1.VMProvisionedCondition)
 
-	// Reconcile node providerID
-	if ok, err := r.reconcileNodeProviderID(ctx, vm); !ok {
+	if ok, err := r.reconcileNode(ctx, vm); !ok {
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -1020,8 +1020,8 @@ func (r *ElfMachineReconciler) reconcileProviderID(ctx *context.MachineContext, 
 	return nil
 }
 
-// ELF without cloud provider.
-func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineContext, vm *models.VM) (bool, error) {
+// reconcileNode sets providerID and host server labels for node.
+func (r *ElfMachineReconciler) reconcileNode(ctx *context.MachineContext, vm *models.VM) (bool, error) {
 	providerID := machineutil.ConvertUUIDToProviderID(*vm.LocalID)
 	if providerID == "" {
 		return false, errors.Errorf("invalid VM UUID %s from %s %s/%s for %s",
@@ -1034,45 +1034,48 @@ func (r *ElfMachineReconciler) reconcileNodeProviderID(ctx *context.MachineConte
 
 	kubeClient, err := util.NewKubeClient(ctx, ctx.Client, ctx.Cluster)
 	if err != nil {
-		return false, errors.Wrapf(err,
-			"failed to get client for Cluster %s/%s",
-			ctx.Cluster.Namespace, ctx.Cluster.Name,
-		)
+		return false, errors.Wrapf(err, "failed to get client for Cluster %s/%s", ctx.Cluster.Namespace, ctx.Cluster.Name)
 	}
 
 	node, err := kubeClient.CoreV1().Nodes().Get(ctx, ctx.ElfMachine.Name, metav1.GetOptions{})
 	if err != nil {
-		return false, errors.Wrapf(err,
-			"waiting for node add providerID k8s cluster %s/%s/%s",
-			ctx.Cluster.Namespace, ctx.Cluster.Name, ctx.ElfMachine.Name,
-		)
+		return false, errors.Wrapf(err, "failed to get node %s for setting providerID and labels", ctx.ElfMachine.Name)
 	}
 
-	if node.Spec.ProviderID != "" {
+	nodeHostID := labelsutil.GetHostServerIDLabel(node)
+	nodeHostName := labelsutil.GetHostServerNameLabel(node)
+	if node.Spec.ProviderID != "" && nodeHostID == ctx.ElfMachine.Status.HostServerRef && nodeHostName == ctx.ElfMachine.Status.HostServerName {
 		return true, nil
 	}
 
-	node.Spec.ProviderID = providerID
-	var payloads []interface{}
-	payloads = append(payloads,
-		infrav1.PatchStringValue{
-			Op:    "add",
-			Path:  "/spec/providerID",
-			Value: providerID,
-		})
+	payloads := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": map[string]string{
+				infrav1.HostServerIDLabel:   ctx.ElfMachine.Status.HostServerRef,
+				infrav1.HostServerNameLabel: ctx.ElfMachine.Status.HostServerName,
+			},
+		},
+	}
+	// providerID cannot be modified after setting a valid value.
+	if node.Spec.ProviderID == "" {
+		payloads["spec"] = map[string]interface{}{
+			"providerID": providerID,
+		}
+	}
+
 	payloadBytes, err := json.Marshal(payloads)
 	if err != nil {
 		return false, err
 	}
-	_, err = kubeClient.CoreV1().Nodes().Patch(ctx, node.Name, apitypes.JSONPatchType, payloadBytes, metav1.PatchOptions{})
+
+	_, err = kubeClient.CoreV1().Nodes().Patch(ctx, node.Name, apitypes.MergePatchType, payloadBytes, metav1.PatchOptions{})
 	if err != nil {
 		return false, err
 	}
 
-	ctx.Logger.Info("Set node providerID success",
-		"cluster", ctx.Cluster.Name,
-		"node", node.Name,
-		"providerID", providerID)
+	ctx.Logger.Info("Set node providerID and labels successfully",
+		"cluster", ctx.Cluster.Name, "node", node.Name,
+		"providerID", providerID, "hostID", ctx.ElfMachine.Status.HostServerRef, "hostName", ctx.ElfMachine.Status.HostServerName)
 
 	return true, nil
 }
