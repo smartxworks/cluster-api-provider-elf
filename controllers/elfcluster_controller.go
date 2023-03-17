@@ -238,11 +238,11 @@ func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.Clu
 }
 
 func (r *ElfClusterReconciler) reconcileDeleteLabels(ctx *context.ClusterContext) error {
-	if err := r.reconcileDeleteLabel(ctx, towerresources.GetVMLabelClusterName(), ctx.ElfCluster.Name, true); err != nil {
+	if err := r.reconcileDeleteLabel(ctx, towerresources.GetVMLabelClusterName(), ctx.ElfCluster.Name, false); err != nil {
 		return err
 	}
 
-	if err := r.reconcileDeleteLabel(ctx, towerresources.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host, true); err != nil {
+	if err := r.reconcileDeleteLabel(ctx, towerresources.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host, false); err != nil {
 		return err
 	}
 
