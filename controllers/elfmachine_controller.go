@@ -114,7 +114,7 @@ func AddMachineControllerToManager(ctx *context.ControllerManagerContext, mgr ct
 func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	// Get the ElfMachine resource for this request.
 	var elfMachine infrav1.ElfMachine
-	if err := r.Client.Get(r, req.NamespacedName, &elfMachine); err != nil {
+	if err := r.APIReader.Get(r, req.NamespacedName, &elfMachine); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.Logger.Info("ElfMachine not found, won't reconcile", "key", req.NamespacedName)
 

@@ -53,6 +53,9 @@ type ControllerManagerContext struct {
 	// Client is the controller manager's client.
 	Client client.Client
 
+	// APIReader is used to get/list resources directly via the API server to avoid outdated cache.
+	APIReader client.Reader
+
 	// Logger is the controller manager's logger.
 	Logger logr.Logger
 

@@ -66,6 +66,7 @@ func New(opts Options) (Manager, error) {
 		LeaderElectionNamespace: opts.LeaderElectionNamespace,
 		MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
 		Client:                  mgr.GetClient(),
+		APIReader:               mgr.GetAPIReader(),
 		Logger:                  opts.Logger.WithName(opts.PodName),
 		Scheme:                  opts.Scheme,
 	}

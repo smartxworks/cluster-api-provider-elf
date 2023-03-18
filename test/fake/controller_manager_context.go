@@ -23,6 +23,7 @@ import (
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -57,13 +58,28 @@ func NewControllerManagerContext(initObjects ...runtime.Object) *context.Control
 	_ = controlplanev1.AddToScheme(scheme)
 	_ = infrav1.AddToScheme(scheme)
 
+	client := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(initObjects...).Build()
+
 	return &context.ControllerManagerContext{
 		Context:                 goctx.Background(),
-		Client:                  fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(initObjects...).Build(),
+		Client:                  client,
+		APIReader:               &APIReader{Client: client},
 		Logger:                  ctrllog.Log.WithName(ControllerManagerName),
 		Scheme:                  scheme,
 		Name:                    ControllerManagerName,
 		LeaderElectionNamespace: LeaderElectionNamespace,
 		LeaderElectionID:        LeaderElectionID,
 	}
+}
+
+type APIReader struct {
+	Client client.Client
+}
+
+func (r *APIReader) Get(ctx goctx.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	return r.Client.Get(ctx, key, obj, opts...)
+}
+
+func (r *APIReader) List(ctx goctx.Context, list client.ObjectList, opts ...client.ListOption) error {
+	return r.Client.List(ctx, list, opts...)
 }
