@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -39,7 +40,6 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/collections"
 	"sigs.k8s.io/cluster-api/util/conditions"
-	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -58,6 +58,7 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 	labelsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
+	patchutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/patch"
 )
 
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines,verbs=get;list;watch;create;update;patch;delete
@@ -72,7 +73,8 @@ import (
 // ElfMachineReconciler reconciles a ElfMachine object.
 type ElfMachineReconciler struct {
 	*context.ControllerContext
-	NewVMService service.NewVMServiceFunc
+	NewVMService     service.NewVMServiceFunc
+	ResourceVersions sync.Map
 }
 
 // AddMachineControllerToManager adds the machine controller to the provided
@@ -124,6 +126,10 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 		return reconcile.Result{}, err
 	}
 
+	if r.isElfMachineCacheOutdated(&elfMachine) {
+		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+	}
+
 	// Fetch the CAPI Machine.
 	machine, err := capiutil.GetOwnerMachine(r, r.Client, elfMachine.ObjectMeta)
 	if err != nil {
@@ -165,7 +171,7 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 	}
 
 	// Create the patch helper.
-	patchHelper, err := patch.NewHelper(&elfMachine, r.Client)
+	patchHelper, err := patchutil.NewHelper(&elfMachine, r.Client)
 	if err != nil {
 		return reconcile.Result{}, errors.Wrapf(
 			err,
@@ -215,7 +221,12 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 		)
 
 		// Patch the ElfMachine resource.
-		if err := machineContext.Patch(); err != nil {
+		obj, err := machineContext.Patch()
+		if obj != nil && obj.GetResourceVersion() >= elfMachine.ResourceVersion {
+			r.ResourceVersions.Store(obj.GetName(), obj.GetResourceVersion())
+		}
+
+		if err != nil {
 			if reterr == nil {
 				reterr = err
 			}
@@ -1169,6 +1180,25 @@ func (r *ElfMachineReconciler) isWaitingForStaticIPAllocation(ctx *context.Machi
 			// Static IP is not available yet
 			return true
 		}
+	}
+
+	return false
+}
+
+func (r *ElfMachineReconciler) isElfMachineCacheOutdated(elfMachine *infrav1.ElfMachine) bool {
+	value, ok := r.ResourceVersions.Load(elfMachine.Name)
+	if !ok {
+		return false
+	}
+	resourceVersion, ok := value.(string)
+	if !ok {
+		return false
+	}
+
+	if resourceVersion > elfMachine.ResourceVersion {
+		r.Logger.Info(fmt.Sprintf("Outdated cache detected for ElfMachine %s, will retry in %s", elfMachine.Name, config.DefaultRequeueTimeout), "cachedResourceVersion", elfMachine.ResourceVersion, "lastResourceVersion", resourceVersion)
+
+		return true
 	}
 
 	return false

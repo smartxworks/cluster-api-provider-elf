@@ -165,7 +165,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).To(BeNil())
 			Expect(logBuffer.String()).To(ContainSubstring("Cluster infrastructure is not ready yet"))
 			elfMachine = &infrav1.ElfMachine{}
-			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(reconciler.Client.Get(&reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForClusterInfrastructureReason}})
 		})
 
@@ -181,7 +181,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).To(BeNil())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for bootstrap data to be available"))
 			elfMachine = &infrav1.ElfMachine{}
-			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(reconciler.Client.Get(&reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForBootstrapDataReason}})
 		})
 

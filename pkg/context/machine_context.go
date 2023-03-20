@@ -21,10 +21,11 @@ import (
 
 	"github.com/go-logr/logr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util/patch"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
+	patchutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/patch"
 )
 
 // MachineContext is a Go context used with a ElfMachine.
@@ -35,7 +36,7 @@ type MachineContext struct {
 	ElfCluster  *infrav1.ElfCluster
 	ElfMachine  *infrav1.ElfMachine
 	Logger      logr.Logger
-	PatchHelper *patch.Helper
+	PatchHelper *patchutil.Helper
 	VMService   service.VMService
 }
 
@@ -45,6 +46,6 @@ func (c *MachineContext) String() string {
 }
 
 // Patch updates the object and its status on the API server.
-func (c *MachineContext) Patch() error {
+func (c *MachineContext) Patch() (client.Object, error) {
 	return c.PatchHelper.Patch(c, c.ElfMachine)
 }
