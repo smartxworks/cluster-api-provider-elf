@@ -71,6 +71,12 @@ spec:
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
       kind: ElfMachineTemplate
       name: "${CLUSTER_NAME}-control-plane"
+      namespace: "${NAMESPACE}"
+    metadata: {}
+  rolloutStrategy:
+    rollingUpdate:
+      maxSurge: 1
+    type: RollingUpdate
   kubeadmConfigSpec:
     clusterConfiguration:
       clusterName: "${CLUSTER_NAME}"
@@ -133,6 +139,9 @@ spec:
             volumeMounts:
             - mountPath: /etc/kubernetes/admin.conf
               name: kubeconfig
+            - mountPath: /etc/localtime
+              name: localtime
+              readOnly: true
           hostAliases:
           - hostnames:
             - kubernetes
@@ -143,6 +152,10 @@ spec:
               path: /etc/kubernetes/admin.conf
               type: FileOrCreate
             name: kubeconfig
+          - hostPath:
+              path: /etc/localtime
+              type: ""
+            name: localtime
         status: {}
       owner: root:root
       path: /etc/kubernetes/manifests/kube-vip.yaml
@@ -198,13 +211,19 @@ metadata:
     cluster.x-k8s.io/cluster-name: "${CLUSTER_NAME}"
 spec:
   clusterName: "${CLUSTER_NAME}"
+  minReadySeconds: 0
+  progressDeadlineSeconds: 600
   replicas: ${WORKER_MACHINE_COUNT}
+  revisionHistoryLimit: 1
   selector:
-    matchLabels: {}
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: "${CLUSTER_NAME}"
+      cluster.x-k8s.io/deployment-name: "${CLUSTER_NAME}-md-0"
   template:
     metadata:
       labels:
         cluster.x-k8s.io/cluster-name: "${CLUSTER_NAME}"
+        cluster.x-k8s.io/deployment-name: "${CLUSTER_NAME}-md-0"
     spec:
       clusterName: "${CLUSTER_NAME}"
       version: "${KUBERNETES_VERSION}"
