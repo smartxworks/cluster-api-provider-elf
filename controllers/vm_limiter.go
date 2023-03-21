@@ -24,10 +24,9 @@ import (
 )
 
 const (
-	creationTimeout                = time.Minute * 6
-	vmOperationRateLimit           = time.Second * 6
-	placementGroupOperationTimeout = time.Minute * 3
-	vmMigrationTimeout             = time.Minute * 20
+	creationTimeout      = time.Minute * 6
+	vmOperationRateLimit = time.Second * 6
+	vmMigrationTimeout   = time.Minute * 20
 )
 
 var vmStatusMap = make(map[string]time.Time)
@@ -36,8 +35,6 @@ var vmOperationMap = make(map[string]time.Time)
 var placementGroupVMMigrationMap = make(map[string]time.Time)
 var vmOperationLock sync.Mutex
 
-var placementGroupStatusMap = make(map[string]time.Time)
-var placementGroupStatusLock sync.Mutex
 var placementGroupOperationMap = make(map[string]time.Time)
 var placementGroupOperationLock sync.Mutex
 
@@ -115,31 +112,6 @@ func releaseTicketForPlacementGroupVMMigration(groupName string) {
 	defer vmOperationLock.Unlock()
 
 	delete(placementGroupVMMigrationMap, groupName)
-}
-
-// acquireTicketForUpdatePlacementGroup returns whether placement group update operation
-// can be performed.
-func acquireTicketForUpdatePlacementGroup(groupName string) bool {
-	placementGroupStatusLock.Lock()
-	defer placementGroupStatusLock.Unlock()
-
-	if status, ok := placementGroupStatusMap[groupName]; ok {
-		if !time.Now().After(status.Add(placementGroupOperationTimeout)) {
-			return false
-		}
-	}
-
-	placementGroupStatusMap[groupName] = time.Now()
-
-	return true
-}
-
-// releaseTicketForUpdatePlacementGroup releases the placement group being updated.
-func releaseTicketForUpdatePlacementGroup(groupName string) {
-	placementGroupStatusLock.Lock()
-	defer placementGroupStatusLock.Unlock()
-
-	delete(placementGroupStatusMap, groupName)
 }
 
 // acquireTicketForPlacementGroupOperation returns whether placement group operation

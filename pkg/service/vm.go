@@ -18,6 +18,7 @@ package service
 
 import (
 	goctx "context"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -30,6 +31,7 @@ import (
 	clientvm "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm"
 	clientvmplacementgroup "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_placement_group"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
@@ -53,6 +55,7 @@ type VMService interface {
 	FindByIDs(ids []string) ([]*models.VM, error)
 	GetVMTemplate(id string) (*models.ContentLibraryVMTemplate, error)
 	GetTask(id string) (*models.Task, error)
+	WaitTask(id string, timeout, interval time.Duration) (*models.Task, error)
 	GetCluster(id string) (*models.Cluster, error)
 	GetHost(id string) (*models.Host, error)
 	GetVlan(id string) (*models.Vlan, error)
@@ -512,6 +515,30 @@ func (svr *TowerVMService) GetTask(id string) (*models.Task, error) {
 	}
 
 	return getTasksResp.Payload[0], nil
+}
+
+// WaitTask waits for task to complete and returns task.
+func (svr *TowerVMService) WaitTask(id string, timeout, interval time.Duration) (*models.Task, error) {
+	var task *models.Task
+	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
+		var err error
+		task, err = svr.GetTask(id)
+		if err != nil {
+			return false, err
+		}
+
+		if *task.Status == models.TaskStatusFAILED || *task.Status == models.TaskStatusSUCCESSED {
+			return true, err
+		}
+
+		return false, err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return task, err
 }
 
 // UpsertLabel upserts a label.

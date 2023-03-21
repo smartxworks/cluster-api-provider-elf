@@ -6,6 +6,7 @@ package mock_services
 
 import (
 	reflect "reflect"
+	time "time"
 
 	gomock "github.com/golang/mock/gomock"
 	models "github.com/smartxworks/cloudtower-go-sdk/v2/models"
@@ -349,4 +350,19 @@ func (m *MockVMService) UpsertLabel(key, value string) (*models.Label, error) {
 func (mr *MockVMServiceMockRecorder) UpsertLabel(key, value interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertLabel", reflect.TypeOf((*MockVMService)(nil).UpsertLabel), key, value)
+}
+
+// WaitTask mocks base method.
+func (m *MockVMService) WaitTask(id string, timeout, interval time.Duration) (*models.Task, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitTask", id, timeout, interval)
+	ret0, _ := ret[0].(*models.Task)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WaitTask indicates an expected call of WaitTask.
+func (mr *MockVMServiceMockRecorder) WaitTask(id, timeout, interval interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitTask", reflect.TypeOf((*MockVMService)(nil).WaitTask), id, timeout, interval)
 }

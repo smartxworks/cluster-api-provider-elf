@@ -666,7 +666,7 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 	return false, nil
 }
 
-func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *models.VM) (bool, error) {
+func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
 	taskRef := ctx.ElfMachine.Status.TaskRef
 	vmRef := ctx.ElfMachine.Status.VMRef
 
@@ -695,6 +695,12 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		return true, nil
 	}
 
+	defer func() {
+		if ret {
+			ctx.ElfMachine.SetTask("")
+		}
+	}()
+
 	switch *task.Status {
 	case models.TaskStatusFAILED:
 		errorMessage := util.GetTowerString(task.ErrorMessage)
@@ -704,8 +710,6 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 			ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.CloudInitConfigError)
 			ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(fmt.Sprintf("VM cloud-init config error: %s", service.FormatCloudInitError(errorMessage)))
 		}
-
-		ctx.ElfMachine.SetTask("")
 
 		ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "taskErrorMessage", errorMessage, "taskErrorCode", util.GetTowerString(task.ErrorCode), "taskDescription", util.GetTowerString(task.Description))
 
@@ -718,12 +722,6 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 				return false, err
 			}
 			releaseTicketForPlacementGroupVMMigration(placementGroupName)
-		case util.IsPlacementGroupTask(task):
-			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine)
-			if err != nil {
-				return false, err
-			}
-			releaseTicketForUpdatePlacementGroup(placementGroupName)
 		case service.IsMemoryInsufficientError(errorMessage):
 			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, true)
 			message := fmt.Sprintf("Insufficient memory detected for ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
@@ -731,11 +729,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 
 			return true, errors.New(message)
 		}
-
-		return true, nil
 	case models.TaskStatusSUCCESSED:
-		ctx.ElfMachine.SetTask("")
-
 		ctx.Logger.Info("VM task successful", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", util.GetTowerString(task.Description))
 
 		switch {
@@ -748,17 +742,13 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 				return false, err
 			}
 			releaseTicketForPlacementGroupVMMigration(placementGroupName)
-		case util.IsPlacementGroupTask(task):
-			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine)
-			if err != nil {
-				return false, err
-			}
-			releaseTicketForUpdatePlacementGroup(placementGroupName)
 		}
-
-		return true, nil
 	default:
 		ctx.Logger.Info("Waiting for VM task done", "vmRef", vmRef, "taskRef", taskRef, "taskStatus", util.GetTowerTaskStatus(task.Status), "taskDescription", util.GetTowerString(task.Description))
+	}
+
+	if *task.Status == models.TaskStatusFAILED || *task.Status == models.TaskStatusSUCCESSED {
+		return true, nil
 	}
 
 	return false, nil
@@ -796,23 +786,10 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 			return false, err
 		}
 
-		if ok := acquireTicketForUpdatePlacementGroup(placementGroupName); !ok {
-			ctx.Logger.V(1).Info(fmt.Sprintf("The placement group is performing create operation, skip create placement group %s", util.GetTowerString(placementGroup.Name)))
-
-			return false, nil
-		}
-
-		placementGroupPolicy := towerresources.GetVMPlacementGroupPolicy(ctx.Machine)
-		withTaskVMPlacementGroup, err := ctx.VMService.CreateVMPlacementGroup(placementGroupName, *towerCluster.ID, placementGroupPolicy)
+		placementGroup, err = r.createPlacementGroup(ctx, placementGroupName, *towerCluster.ID)
 		if err != nil {
 			return false, err
 		}
-
-		ctx.ElfMachine.SetTask(*withTaskVMPlacementGroup.TaskID)
-
-		ctx.Logger.Info("Waiting for the placement group to be created", "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID, "taskRef", ctx.ElfMachine.Status.TaskRef, "placementGroup", placementGroupName)
-
-		return false, nil
 	}
 
 	// Placement group is performing an operation
@@ -840,7 +817,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 
 		vms, err := ctx.VMService.FindByIDs(placementGroupVMSet.List())
 		if err != nil {
-			return false, nil
+			return false, err
 		}
 
 		vmHostSet := sets.NewString()
@@ -895,26 +872,64 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 	}
 
 	if !placementGroupVMSet.Has(*vm.ID) {
-		if ok := acquireTicketForUpdatePlacementGroup(placementGroupName); !ok {
-			ctx.Logger.V(1).Info(fmt.Sprintf("The placement group is performing another operation, skip update placement group %s", util.GetTowerString(placementGroup.Name)))
-
-			return false, nil
-		}
-
 		placementGroupVMSet.Insert(*vm.ID)
-		task, err := ctx.VMService.AddVMsToPlacementGroup(placementGroup, placementGroupVMSet.List())
-		if err != nil {
+		if err := r.addVMsToPlacementGroup(ctx, placementGroup, placementGroupVMSet.List()); err != nil {
 			return false, err
-		} else {
-			ctx.ElfMachine.SetTask(*task.ID)
-
-			ctx.Logger.Info("Waiting for the VM to be added to the placement group", "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID, "taskRef", ctx.ElfMachine.Status.TaskRef, "placementGroup", placementGroup.Name)
-
-			return false, nil
 		}
 	}
 
 	return true, nil
+}
+
+func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext, placementGroupName, towerClusterID string) (*models.VMPlacementGroup, error) {
+	placementGroupPolicy := towerresources.GetVMPlacementGroupPolicy(ctx.Machine)
+	withTaskVMPlacementGroup, err := ctx.VMService.CreateVMPlacementGroup(placementGroupName, towerClusterID, placementGroupPolicy)
+	if err != nil {
+		return nil, err
+	}
+
+	task, err := ctx.VMService.WaitTask(*withTaskVMPlacementGroup.TaskID, config.WaitTaskTimeout, config.WaitTaskInterval)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to wait for placement group %s creation task %s done", placementGroupName, *withTaskVMPlacementGroup.TaskID)
+	}
+
+	if *task.Status == models.TaskStatusFAILED {
+		ctx.Logger.Info("Create placement group failed", "taskID", *task.ID, "placementGroup", placementGroupName)
+
+		return nil, errors.Errorf("failed to create placement group %s in task %s", placementGroupName, *task.ID)
+	}
+
+	ctx.Logger.Info("Create placement group successfully", "taskID", *task.ID, "placementGroup", placementGroupName)
+
+	placementGroup, err := ctx.VMService.GetVMPlacementGroup(placementGroupName)
+	if err != nil {
+		return nil, err
+	}
+
+	return placementGroup, nil
+}
+
+func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContext, placementGroup *models.VMPlacementGroup, vmIDs []string) error {
+	task, err := ctx.VMService.AddVMsToPlacementGroup(placementGroup, vmIDs)
+	if err != nil {
+		return err
+	}
+
+	taskID := *task.ID
+	task, err = ctx.VMService.WaitTask(taskID, config.WaitTaskTimeout, config.WaitTaskInterval)
+	if err != nil {
+		return errors.Wrapf(err, "failed to wait for placement group %s updation task %s done", *placementGroup.Name, taskID)
+	}
+
+	if *task.Status == models.TaskStatusFAILED {
+		ctx.Logger.Info("Update placement group failed", "taskID", taskID, "placementGroup", *placementGroup.Name)
+
+		return errors.Errorf("failed to update placement group %s in task %s", *placementGroup.Name, taskID)
+	}
+
+	ctx.Logger.Info("Update placement group successfully", "taskID", taskID, "placementGroup", *placementGroup.Name)
+
+	return nil
 }
 
 // getVMHostForRollingUpdate returns the target host server id for a virtual machine during rolling update.
