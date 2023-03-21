@@ -23,5 +23,11 @@ var (
 
 	// DefaultRequeueTimeout is the default time for how long to wait when
 	// requeueing a CAPE operation.
-	DefaultRequeueTimeout = 20 * time.Second
+	DefaultRequeueTimeout = 10 * time.Second
+
+	// WaitTaskInterval is the default interval time polling task.
+	WaitTaskInterval = 1 * time.Second
+
+	// WaitTaskTimeout is the default timeout for waiting for task to complete.
+	WaitTaskTimeout = 3 * time.Second
 )
