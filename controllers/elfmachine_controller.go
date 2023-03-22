@@ -666,7 +666,7 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 	return false, nil
 }
 
-func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
+func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *models.VM) (taskDone bool, reterr error) {
 	taskRef := ctx.ElfMachine.Status.TaskRef
 	vmRef := ctx.ElfMachine.Status.VMRef
 
@@ -696,7 +696,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 	}
 
 	defer func() {
-		if ret {
+		if taskDone {
 			ctx.ElfMachine.SetTask("")
 		}
 	}()
@@ -730,7 +730,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 			return true, errors.New(message)
 		}
 	case models.TaskStatusSUCCESSED:
-		ctx.Logger.Info("VM task successful", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", util.GetTowerString(task.Description))
+		ctx.Logger.Info("VM task succeeded", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", util.GetTowerString(task.Description))
 
 		switch {
 		case util.IsCloneVMTask(task) || util.IsPowerOnVMTask(task):
@@ -787,7 +787,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 		}
 
 		placementGroup, err = r.createPlacementGroup(ctx, placementGroupName, *towerCluster.ID)
-		if err != nil {
+		if err != nil || placementGroup == nil {
 			return false, err
 		}
 	}
@@ -873,7 +873,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 
 	if !placementGroupVMSet.Has(*vm.ID) {
 		placementGroupVMSet.Insert(*vm.ID)
-		if err := r.addVMsToPlacementGroup(ctx, placementGroup, placementGroupVMSet.List()); err != nil {
+		if ok, err := r.addVMsToPlacementGroup(ctx, placementGroup, placementGroupVMSet.List()); err != nil || !ok {
 			return false, err
 		}
 	}
@@ -890,16 +890,16 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 
 	task, err := ctx.VMService.WaitTask(*withTaskVMPlacementGroup.TaskID, config.WaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to wait for placement group %s creation task %s done", placementGroupName, *withTaskVMPlacementGroup.TaskID)
+		ctx.Logger.Info(fmt.Sprintf("Wait for placement group creation task done timed out in %s", config.WaitTaskTimeout), "placementGroup", placementGroupName, "taskID", *withTaskVMPlacementGroup.TaskID, "error", err)
+
+		return nil, nil
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
-		ctx.Logger.Info("Create placement group failed", "taskID", *task.ID, "placementGroup", placementGroupName)
-
 		return nil, errors.Errorf("failed to create placement group %s in task %s", placementGroupName, *task.ID)
 	}
 
-	ctx.Logger.Info("Create placement group successfully", "taskID", *task.ID, "placementGroup", placementGroupName)
+	ctx.Logger.Info("Creating placement group succeeded", "taskID", *task.ID, "placementGroup", placementGroupName)
 
 	placementGroup, err := ctx.VMService.GetVMPlacementGroup(placementGroupName)
 	if err != nil {
@@ -909,27 +909,27 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 	return placementGroup, nil
 }
 
-func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContext, placementGroup *models.VMPlacementGroup, vmIDs []string) error {
+func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContext, placementGroup *models.VMPlacementGroup, vmIDs []string) (bool, error) {
 	task, err := ctx.VMService.AddVMsToPlacementGroup(placementGroup, vmIDs)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	taskID := *task.ID
 	task, err = ctx.VMService.WaitTask(taskID, config.WaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
-		return errors.Wrapf(err, "failed to wait for placement group %s updation task %s done", *placementGroup.Name, taskID)
+		ctx.Logger.Info(fmt.Sprintf("Wait for placement group updation task done timed out in %s", config.WaitTaskTimeout), "placementGroup", *placementGroup.Name, "taskID", taskID, "error", err)
+
+		return false, nil
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
-		ctx.Logger.Info("Update placement group failed", "taskID", taskID, "placementGroup", *placementGroup.Name)
-
-		return errors.Errorf("failed to update placement group %s in task %s", *placementGroup.Name, taskID)
+		return false, errors.Errorf("failed to update placement group %s in task %s", *placementGroup.Name, taskID)
 	}
 
-	ctx.Logger.Info("Update placement group successfully", "taskID", taskID, "placementGroup", *placementGroup.Name)
+	ctx.Logger.Info("Updating placement group succeeded", "taskID", taskID, "placementGroup", *placementGroup.Name)
 
-	return nil
+	return true, nil
 }
 
 // getVMHostForRollingUpdate returns the target host server id for a virtual machine during rolling update.
@@ -1088,7 +1088,7 @@ func (r *ElfMachineReconciler) reconcileNode(ctx *context.MachineContext, vm *mo
 		return false, err
 	}
 
-	ctx.Logger.Info("Set node providerID and labels successfully",
+	ctx.Logger.Info("Setting node providerID and labels succeeded",
 		"cluster", ctx.Cluster.Name, "node", node.Name,
 		"providerID", providerID, "hostID", ctx.ElfMachine.Status.HostServerRef, "hostName", ctx.ElfMachine.Status.HostServerName)
 

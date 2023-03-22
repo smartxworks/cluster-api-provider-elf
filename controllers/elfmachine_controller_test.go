@@ -605,8 +605,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.reconcilePlacementGroup(machineContext, vm)
 			Expect(ok).To(BeTrue())
 			Expect(err).To(BeZero())
-			Expect(logBuffer.String()).To(ContainSubstring("Create placement group successfully"))
-			Expect(logBuffer.String()).To(ContainSubstring("Update placement group successfully"))
+			Expect(logBuffer.String()).To(ContainSubstring("Creating placement group succeeded"))
+			Expect(logBuffer.String()).To(ContainSubstring("Updating placement group succeeded"))
 		})
 
 		It("createPlacementGroup", func() {
@@ -633,7 +633,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			pg, err := reconciler.createPlacementGroup(machineContext, *placementGroup.Name, *towerCluster.ID)
 			Expect(err).To(BeZero())
 			Expect(*pg.Name).To(Equal(*placementGroup.Name))
-			Expect(logBuffer.String()).To(ContainSubstring("Create placement group successfully"))
+			Expect(logBuffer.String()).To(ContainSubstring("Creating placement group succeeded"))
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
@@ -645,7 +645,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 			pg, err = reconciler.createPlacementGroup(machineContext, *placementGroup.Name, *towerCluster.ID)
 			Expect(pg).To(BeNil())
 			Expect(strings.Contains(err.Error(), "failed to create placement group")).To(BeTrue())
-			Expect(logBuffer.String()).To(ContainSubstring("Create placement group failed"))
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
@@ -654,7 +653,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			pg, err = reconciler.createPlacementGroup(machineContext, *placementGroup.Name, *towerCluster.ID)
 			Expect(pg).To(BeNil())
-			Expect(strings.Contains(err.Error(), "failed to wait for placement group")).To(BeTrue())
+			Expect(err).To(BeNil())
+			Expect(logBuffer.String()).To(ContainSubstring("Wait for placement group creation task done timed out"))
 		})
 
 		It("addVMsToPlacementGroup", func() {
@@ -675,9 +675,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval).Return(task, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-			err := reconciler.addVMsToPlacementGroup(machineContext, placementGroup, []string{*vm.ID})
+			ok, err := reconciler.addVMsToPlacementGroup(machineContext, placementGroup, []string{*vm.ID})
+			Expect(ok).To(BeTrue())
 			Expect(err).To(BeZero())
-			Expect(logBuffer.String()).To(ContainSubstring("Update placement group successfully"))
+			Expect(logBuffer.String()).To(ContainSubstring("Updating placement group succeeded"))
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
@@ -687,9 +688,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval).Return(task, nil)
 
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-			err = reconciler.addVMsToPlacementGroup(machineContext, placementGroup, []string{*vm.ID})
-			Expect(err).To(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Update placement group failed"))
+			ok, err = reconciler.addVMsToPlacementGroup(machineContext, placementGroup, []string{*vm.ID})
+			Expect(ok).To(BeFalse())
+			Expect(strings.Contains(err.Error(), "failed to update placement group")).To(BeTrue())
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
@@ -697,8 +698,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval).Return(nil, errors.New("xxx"))
 
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-			err = reconciler.addVMsToPlacementGroup(machineContext, placementGroup, []string{*vm.ID})
-			Expect(strings.Contains(err.Error(), "failed to wait for placement group")).To(BeTrue())
+			ok, err = reconciler.addVMsToPlacementGroup(machineContext, placementGroup, []string{*vm.ID})
+			Expect(ok).To(BeFalse())
+			Expect(err).To(BeNil())
+			Expect(logBuffer.String()).To(ContainSubstring("Wait for placement group updation task done timed out"))
 		})
 
 		It("should wait for placement group task done", func() {
@@ -811,7 +814,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ok, err := reconciler.reconcilePlacementGroup(machineContext, vm)
 				Expect(ok).To(BeTrue())
 				Expect(err).To(BeZero())
-				Expect(logBuffer.String()).To(ContainSubstring("Update placement group successfully"))
+				Expect(logBuffer.String()).To(ContainSubstring("Updating placement group succeeded"))
 			})
 
 			It("should not migrate VM when VM is running and kcp.Spec.Replicas != kcp.Status.UpdatedReplicas", func() {
@@ -1315,7 +1318,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, _ = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
-			Expect(logBuffer.String()).To(ContainSubstring("VM task successful"))
+			Expect(logBuffer.String()).To(ContainSubstring("VM task succeeded"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
