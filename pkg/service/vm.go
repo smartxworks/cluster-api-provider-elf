@@ -547,6 +547,8 @@ func (svr *TowerVMService) UpsertLabel(key, value string) (*models.Label, error)
 }
 
 // DeleteLabel deletes a label.
+// If strict is false, delete the label directly.
+// If strict is true, delete the label only if no virtual machine references the label.
 func (svr *TowerVMService) DeleteLabel(key, value string, strict bool) (string, error) {
 	deleteLabelParams := clientlabel.NewDeleteLabelParams()
 	deleteLabelParams.RequestBody = &models.LabelDeletionParams{
