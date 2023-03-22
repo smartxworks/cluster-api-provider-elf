@@ -105,29 +105,6 @@ var _ = Describe("Placement Group VM Migration Limiter", func() {
 	})
 })
 
-var _ = Describe("Placement Group Update Limiter", func() {
-	var groupName string
-
-	BeforeEach(func() {
-		groupName = fake.UUID()
-	})
-
-	It("acquireTicketForUpdatePlacementGroup", func() {
-		Expect(acquireTicketForUpdatePlacementGroup(groupName)).To(BeTrue())
-		Expect(placementGroupStatusMap).To(HaveKey(groupName))
-		releaseTicketForUpdatePlacementGroup(groupName)
-
-		placementGroupStatusMap[groupName] = time.Now()
-		Expect(acquireTicketForUpdatePlacementGroup(groupName)).To(BeFalse())
-		releaseTicketForUpdatePlacementGroup(groupName)
-
-		placementGroupStatusMap[groupName] = time.Now().Add(-placementGroupOperationTimeout)
-		Expect(acquireTicketForUpdatePlacementGroup(groupName)).To(BeTrue())
-		Expect(placementGroupStatusMap).To(HaveKey(groupName))
-		releaseTicketForUpdatePlacementGroup(groupName)
-	})
-})
-
 var _ = Describe("Placement Group Operation Limiter", func() {
 	var groupName string
 
