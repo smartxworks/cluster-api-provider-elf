@@ -85,6 +85,7 @@ spec:
         extraArgs:
       controllerManager:
         extraArgs:
+    format: cloud-config
     initConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
@@ -171,6 +172,7 @@ spec:
       clusterConfiguration:
         clusterName: "${CLUSTER_NAME}"
         imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
+      format: cloud-config
       joinConfiguration:
         nodeRegistration:
           kubeletExtraArgs:
