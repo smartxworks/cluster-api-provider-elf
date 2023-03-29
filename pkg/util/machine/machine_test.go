@@ -83,32 +83,32 @@ func TestConvertProviderIDToUUID(t *testing.T) {
 		},
 		{
 			name:         "empty providerID",
-			providerID:   toStringPtr(""),
+			providerID:   toString(""),
 			expectedUUID: "",
 		},
 		{
 			name:         "invalid providerID",
-			providerID:   toStringPtr("1234"),
+			providerID:   toString("1234"),
 			expectedUUID: "",
 		},
 		{
 			name:         "missing prefix",
-			providerID:   toStringPtr("12345678-1234-1234-1234-123456789abc"),
+			providerID:   toString("12345678-1234-1234-1234-123456789abc"),
 			expectedUUID: "",
 		},
 		{
 			name:         "valid providerID",
-			providerID:   toStringPtr("elf://12345678-1234-1234-1234-123456789abc"),
+			providerID:   toString("elf://12345678-1234-1234-1234-123456789abc"),
 			expectedUUID: "12345678-1234-1234-1234-123456789abc",
 		},
 		{
 			name:         "mixed case",
-			providerID:   toStringPtr("elf://12345678-1234-1234-1234-123456789AbC"),
+			providerID:   toString("elf://12345678-1234-1234-1234-123456789AbC"),
 			expectedUUID: "12345678-1234-1234-1234-123456789AbC",
 		},
 		{
 			name:         "invalid hex chars",
-			providerID:   toStringPtr("elf://12345678-1234-1234-1234-123456789abg"),
+			providerID:   toString("elf://12345678-1234-1234-1234-123456789abg"),
 			expectedUUID: "",
 		},
 	}
@@ -252,6 +252,6 @@ func TestGetNetworkStatus(t *testing.T) {
 	}
 }
 
-func toStringPtr(s string) *string {
+func toString(s string) *string {
 	return &s
 }

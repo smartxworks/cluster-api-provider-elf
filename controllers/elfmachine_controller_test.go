@@ -132,7 +132,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should exit immediately on an error state", func() {
 			createMachineError := capierrors.CreateMachineError
 			elfMachine.Status.FailureReason = &createMachineError
-			elfMachine.Status.FailureMessage = pointer.StringPtr("Couldn't create machine")
+			elfMachine.Status.FailureMessage = pointer.String("Couldn't create machine")
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -203,7 +203,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should not wait cluster ControlPlaneInitialized true when create master machine", func() {
 			cluster.Status.InfrastructureReady = true
-			elfMachine.Labels[clusterv1.MachineControlPlaneLabelName] = ""
+			elfMachine.Labels[clusterv1.MachineControlPlaneLabel] = ""
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
