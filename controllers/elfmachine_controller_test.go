@@ -1565,7 +1565,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				return node.Spec.ProviderID == machineutil.ConvertUUIDToProviderID(*vm.LocalID) &&
 					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
 					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName &&
-					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID
+					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID &&
+					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(elfMachine)
 			}, timeout).Should(BeTrue())
 		})
 

@@ -1065,12 +1065,14 @@ func (r *ElfMachineReconciler) reconcileNode(ctx *context.MachineContext, vm *mo
 		return true, nil
 	}
 
+	nodeGroupName := machineutil.GetNodeGroupName(ctx.ElfMachine)
 	payloads := map[string]interface{}{
 		"metadata": map[string]interface{}{
 			"labels": map[string]string{
 				infrav1.HostServerIDLabel:   ctx.ElfMachine.Status.HostServerRef,
 				infrav1.HostServerNameLabel: ctx.ElfMachine.Status.HostServerName,
 				infrav1.TowerVMIDLabel:      *vm.ID,
+				infrav1.NodeGroupLabel:      nodeGroupName,
 			},
 		},
 	}
