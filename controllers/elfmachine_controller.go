@@ -1059,15 +1059,20 @@ func (r *ElfMachineReconciler) reconcileNode(ctx *context.MachineContext, vm *mo
 
 	nodeHostID := labelsutil.GetHostServerIDLabel(node)
 	nodeHostName := labelsutil.GetHostServerNameLabel(node)
-	if node.Spec.ProviderID != "" && nodeHostID == ctx.ElfMachine.Status.HostServerRef && nodeHostName == ctx.ElfMachine.Status.HostServerName {
+	towerVMID := labelsutil.GetTowerVMIDLabel(node)
+	if node.Spec.ProviderID != "" && nodeHostID == ctx.ElfMachine.Status.HostServerRef &&
+		nodeHostName == ctx.ElfMachine.Status.HostServerName && towerVMID == *vm.ID {
 		return true, nil
 	}
 
+	nodeGroupName := machineutil.GetNodeGroupName(ctx.ElfMachine)
 	payloads := map[string]interface{}{
 		"metadata": map[string]interface{}{
 			"labels": map[string]string{
 				infrav1.HostServerIDLabel:   ctx.ElfMachine.Status.HostServerRef,
 				infrav1.HostServerNameLabel: ctx.ElfMachine.Status.HostServerName,
+				infrav1.TowerVMIDLabel:      *vm.ID,
+				infrav1.NodeGroupLabel:      nodeGroupName,
 			},
 		},
 	}

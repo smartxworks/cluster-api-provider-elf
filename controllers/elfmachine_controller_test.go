@@ -1564,7 +1564,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 				return node.Spec.ProviderID == machineutil.ConvertUUIDToProviderID(*vm.LocalID) &&
 					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
-					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName
+					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName &&
+					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID &&
+					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(elfMachine)
 			}, timeout).Should(BeTrue())
 		})
 
@@ -1598,8 +1600,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: elfMachine.Name,
 					Labels: map[string]string{
-						infrav1.HostServerIDLabel:   "old-id",
-						infrav1.HostServerNameLabel: "old-name",
+						infrav1.HostServerIDLabel:   "old-host-id",
+						infrav1.HostServerNameLabel: "old-host-name",
+						infrav1.TowerVMIDLabel:      "old-vm-id",
 					},
 				},
 				Spec: corev1.NodeSpec{ProviderID: providerID},

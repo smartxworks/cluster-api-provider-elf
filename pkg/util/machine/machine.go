@@ -18,6 +18,7 @@ package machine
 
 import (
 	goctx "context"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -27,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	labelsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
 )
 
 const (
@@ -99,6 +101,20 @@ func IsControlPlaneMachine(machine metav1.Object) bool {
 
 	_, ok := labels[clusterv1.MachineControlPlaneLabelName]
 	return ok
+}
+
+// GetNodeGroupName returns the name of node group that the machine belongs.
+func GetNodeGroupName(machine metav1.Object) string {
+	nodeGroupName := ""
+	if IsControlPlaneMachine(machine) {
+		nodeGroupName = labelsutil.GetControlPlaneNameLabel(machine)
+	} else {
+		nodeGroupName = labelsutil.GetDeploymentNameLabel(machine)
+	}
+
+	clusterName := labelsutil.GetClusterNameLabelLabel(machine)
+
+	return strings.ReplaceAll(nodeGroupName, fmt.Sprintf("%s-", clusterName), "")
 }
 
 func ConvertProviderIDToUUID(providerID *string) string {

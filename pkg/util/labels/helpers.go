@@ -31,7 +31,19 @@ func GetHostServerNameLabel(o metav1.Object) string {
 	return GetLabelValue(o, infrav1.HostServerNameLabel)
 }
 
-func GetControlPlaneLabel(o metav1.Object) string {
+func GetTowerVMIDLabel(o metav1.Object) string {
+	return GetLabelValue(o, infrav1.TowerVMIDLabel)
+}
+
+func GetNodeGroupLabel(o metav1.Object) string {
+	return GetLabelValue(o, infrav1.NodeGroupLabel)
+}
+
+func GetClusterNameLabelLabel(o metav1.Object) string {
+	return GetLabelValue(o, clusterv1.ClusterLabelName)
+}
+
+func GetControlPlaneNameLabel(o metav1.Object) string {
 	return GetLabelValue(o, clusterv1.MachineControlPlaneNameLabel)
 }
 

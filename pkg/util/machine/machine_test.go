@@ -17,6 +17,7 @@ limitations under the License.
 package machine
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/onsi/gomega"
@@ -65,6 +66,24 @@ func TestIsControlPlaneMachine(t *testing.T) {
 	t.Run("CP Machine returns true, Worker node returns false", func(t *testing.T) {
 		g.Expect(IsControlPlaneMachine(machine1)).To(gomega.BeTrue())
 		g.Expect(IsControlPlaneMachine(machine2)).To(gomega.BeFalse())
+	})
+}
+
+func TestGetNodeGroupName(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+	elfCluster, cluster := fake.NewClusterObjects()
+	_, machine1 := fake.NewMachineObjects(elfCluster, cluster)
+	_, machine2 := fake.NewMachineObjects(elfCluster, cluster)
+	kcp := fake.NewKCP()
+	kcp.Name = fmt.Sprintf("%s-kcp", cluster.Name)
+	md := fake.NewMD()
+	md.Name = fmt.Sprintf("%s-md", cluster.Name)
+	fake.ToControlPlaneMachine(machine1, kcp)
+	fake.ToWorkerMachine(machine2, md)
+
+	t.Run("CP Machine returns true, Worker node returns false", func(t *testing.T) {
+		g.Expect(GetNodeGroupName(machine1)).To(gomega.Equal("kcp"))
+		g.Expect(GetNodeGroupName(machine2)).To(gomega.Equal("md"))
 	})
 }
 

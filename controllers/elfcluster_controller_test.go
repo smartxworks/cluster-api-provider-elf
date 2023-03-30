@@ -211,7 +211,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 
 			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(fmt.Sprintf("%s-managed-%s-%s", towerresources.GetResourcePrefix(), cluster.Namespace, cluster.Name)).Return(nil, nil)
-			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelClusterName(), elfCluster.Name, false).Return("labelid", nil)
+			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelClusterName(), elfCluster.Name, true).Return("labelid", nil)
 			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelVIP(), elfCluster.Spec.ControlPlaneEndpoint.Host, false).Return("labelid", nil)
 			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelNamespace(), elfCluster.Namespace, true).Return("", nil)
 			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelManaged(), "true", true).Return("", nil)

@@ -29,7 +29,7 @@ import (
 
 func GetKCPByMachine(ctx goctx.Context, ctrlClient client.Client, machine *clusterv1.Machine) (*controlplanev1.KubeadmControlPlane, error) {
 	var kcp controlplanev1.KubeadmControlPlane
-	if err := ctrlClient.Get(ctx, apitypes.NamespacedName{Namespace: machine.Namespace, Name: labelutil.GetControlPlaneLabel(machine)}, &kcp); err != nil {
+	if err := ctrlClient.Get(ctx, apitypes.NamespacedName{Namespace: machine.Namespace, Name: labelutil.GetControlPlaneNameLabel(machine)}, &kcp); err != nil {
 		return nil, err
 	}
 
