@@ -34,7 +34,7 @@ func TestGetKCPByMachine(t *testing.T) {
 
 	t.Run("should return kcp", func(t *testing.T) {
 		kcp, err := GetKCPByMachine(ctx, ctx.Client, machine)
-		g.Expect(err).To(gomega.BeNil())
+		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(kcp.Name).To(gomega.Equal(kubeadmCP.Name))
 	})
 }

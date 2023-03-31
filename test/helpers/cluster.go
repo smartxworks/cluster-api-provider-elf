@@ -30,7 +30,7 @@ func CreateKubeConfigSecret(testEnv *TestEnvironment, namespace, clusterName str
 			Name:      capisecret.Name(clusterName, capisecret.Kubeconfig),
 			Namespace: namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName: clusterName,
+				clusterv1.ClusterNameLabel: clusterName,
 			},
 		},
 		Data: map[string][]byte{

@@ -53,7 +53,7 @@ func GetElfMachinesInCluster(
 	ctx goctx.Context,
 	controllerClient client.Client,
 	namespace, clusterName string) ([]*infrav1.ElfMachine, error) {
-	labels := map[string]string{clusterv1.ClusterLabelName: clusterName}
+	labels := map[string]string{clusterv1.ClusterNameLabel: clusterName}
 	var machineList infrav1.ElfMachineList
 
 	if err := controllerClient.List(
@@ -75,8 +75,8 @@ func GetElfMachinesInCluster(
 func GetControlPlaneElfMachinesInCluster(ctx goctx.Context, ctrlClient client.Client, namespace, clusterName string) ([]*infrav1.ElfMachine, error) {
 	var machineList infrav1.ElfMachineList
 	labels := map[string]string{
-		clusterv1.ClusterLabelName:             clusterName,
-		clusterv1.MachineControlPlaneLabelName: "",
+		clusterv1.ClusterNameLabel:         clusterName,
+		clusterv1.MachineControlPlaneLabel: "",
 	}
 
 	if err := ctrlClient.List(ctx, &machineList, client.InNamespace(namespace), client.MatchingLabels(labels)); err != nil {
@@ -99,7 +99,7 @@ func IsControlPlaneMachine(machine metav1.Object) bool {
 		return false
 	}
 
-	_, ok := labels[clusterv1.MachineControlPlaneLabelName]
+	_, ok := labels[clusterv1.MachineControlPlaneLabel]
 	return ok
 }
 

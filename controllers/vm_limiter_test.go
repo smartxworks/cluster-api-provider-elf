@@ -49,7 +49,7 @@ var _ = Describe("VMLimiter", func() {
 		}
 		Expect(acquireTicketForCreateVM(vmName)).To(BeTrue())
 		Expect(vmStatusMap).To(HaveKey(vmName))
-		Expect(len(vmStatusMap)).To(Equal(1))
+		Expect(vmStatusMap).To(HaveLen(1))
 	})
 
 	It("releaseTicketForCreateVM", func() {
@@ -79,7 +79,7 @@ var _ = Describe("VM Operation Limiter", func() {
 		vmOperationMap[vmName] = time.Now().Add(-vmOperationRateLimit)
 		Expect(acquireTicketForUpdatingVM(vmName)).To(BeTrue())
 		Expect(vmOperationMap).To(HaveKey(vmName))
-		Expect(len(vmOperationMap)).To(Equal(1))
+		Expect(vmOperationMap).To(HaveLen(1))
 		resetVMOperationMap()
 	})
 })

@@ -34,8 +34,8 @@ func TestGetElfMachinesInCluster(t *testing.T) {
 
 	t.Run("should return ElfMachines", func(t *testing.T) {
 		elfMachines, err := GetElfMachinesInCluster(ctx, ctx.Client, cluster.Namespace, cluster.Name)
-		g.Expect(err).To(gomega.BeNil())
-		g.Expect(len(elfMachines)).To(gomega.Equal(1))
+		g.Expect(err).ToNot(gomega.HaveOccurred())
+		g.Expect(elfMachines).To(gomega.HaveLen(1))
 	})
 }
 
@@ -49,8 +49,8 @@ func TestGetControlPlaneElfMachinesInCluster(t *testing.T) {
 
 	t.Run("should return Control Plane ElfMachines", func(t *testing.T) {
 		elfMachines, err := GetControlPlaneElfMachinesInCluster(ctx, ctx.Client, cluster.Namespace, cluster.Name)
-		g.Expect(err).To(gomega.BeNil())
-		g.Expect(len(elfMachines)).To(gomega.Equal(1))
+		g.Expect(err).ToNot(gomega.HaveOccurred())
+		g.Expect(elfMachines).To(gomega.HaveLen(1))
 		g.Expect(elfMachines[0].Name).To(gomega.Equal(elfMachine1.Name))
 	})
 }
@@ -102,32 +102,32 @@ func TestConvertProviderIDToUUID(t *testing.T) {
 		},
 		{
 			name:         "empty providerID",
-			providerID:   toStringPtr(""),
+			providerID:   toString(""),
 			expectedUUID: "",
 		},
 		{
 			name:         "invalid providerID",
-			providerID:   toStringPtr("1234"),
+			providerID:   toString("1234"),
 			expectedUUID: "",
 		},
 		{
 			name:         "missing prefix",
-			providerID:   toStringPtr("12345678-1234-1234-1234-123456789abc"),
+			providerID:   toString("12345678-1234-1234-1234-123456789abc"),
 			expectedUUID: "",
 		},
 		{
 			name:         "valid providerID",
-			providerID:   toStringPtr("elf://12345678-1234-1234-1234-123456789abc"),
+			providerID:   toString("elf://12345678-1234-1234-1234-123456789abc"),
 			expectedUUID: "12345678-1234-1234-1234-123456789abc",
 		},
 		{
 			name:         "mixed case",
-			providerID:   toStringPtr("elf://12345678-1234-1234-1234-123456789AbC"),
+			providerID:   toString("elf://12345678-1234-1234-1234-123456789AbC"),
 			expectedUUID: "12345678-1234-1234-1234-123456789AbC",
 		},
 		{
 			name:         "invalid hex chars",
-			providerID:   toStringPtr("elf://12345678-1234-1234-1234-123456789abg"),
+			providerID:   toString("elf://12345678-1234-1234-1234-123456789abg"),
 			expectedUUID: "",
 		},
 	}
@@ -271,6 +271,6 @@ func TestGetNetworkStatus(t *testing.T) {
 	}
 }
 
-func toStringPtr(s string) *string {
+func toString(s string) *string {
 	return &s
 }

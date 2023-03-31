@@ -28,7 +28,7 @@ func TestGetOrCreate(t *testing.T) {
 		sessionCache.Store(inactiveSessionKey, &cacheItem{Session: &TowerSession{}, LastUsedTime: time.Now().Add(-sessionIdleTime)})
 
 		session, err := GetOrCreate(goctx.Background(), tower)
-		g.Expect(err).To(gomega.BeNil())
+		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(session).To(gomega.Equal(cachedSession))
 
 		_, ok := sessionCache.Load(inactiveSessionKey)

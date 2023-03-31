@@ -82,7 +82,7 @@ func NewMachineObjects(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluste
 			Name:      names.SimpleNameGenerator.GenerateName("elfmachine-"),
 			Namespace: Namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName: elfCluster.Name,
+				clusterv1.ClusterNameLabel: elfCluster.Name,
 			},
 			CreationTimestamp: metav1.Now(),
 		},
@@ -100,13 +100,13 @@ func NewMachineObjects(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluste
 			Name:      names.SimpleNameGenerator.GenerateName("machine-"),
 			Namespace: Namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName: cluster.Name,
+				clusterv1.ClusterNameLabel: cluster.Name,
 			},
 			CreationTimestamp: metav1.Now(),
 		},
 		Spec: clusterv1.MachineSpec{
 			ClusterName: cluster.Name,
-			Version:     pointer.StringPtr("1.26.0"),
+			Version:     pointer.String("1.26.0"),
 			InfrastructureRef: corev1.ObjectReference{
 				APIVersion: infrav1.GroupVersion.String(),
 				Kind:       ElfMachineKind,
@@ -194,7 +194,7 @@ func ToControlPlaneMachine(machine metav1.Object, kcp *controlplanev1.KubeadmCon
 		labels = make(map[string]string)
 	}
 
-	labels[clusterv1.MachineControlPlaneLabelName] = ""
+	labels[clusterv1.MachineControlPlaneLabel] = ""
 	if kcp != nil {
 		labels[clusterv1.MachineControlPlaneNameLabel] = kcp.Name
 	}
@@ -208,9 +208,9 @@ func ToWorkerMachine(machine metav1.Object, md *clusterv1.MachineDeployment) {
 		labels = make(map[string]string)
 	}
 
-	labels[clusterv1.MachineDeploymentLabelName] = ""
+	labels[clusterv1.MachineDeploymentNameLabel] = ""
 	if md != nil {
-		labels[clusterv1.MachineDeploymentLabelName] = md.Name
+		labels[clusterv1.MachineDeploymentNameLabel] = md.Name
 	}
 
 	machine.SetLabels(labels)

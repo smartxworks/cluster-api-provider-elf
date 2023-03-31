@@ -40,7 +40,7 @@ func GetNodeGroupLabel(o metav1.Object) string {
 }
 
 func GetClusterNameLabelLabel(o metav1.Object) string {
-	return GetLabelValue(o, clusterv1.ClusterLabelName)
+	return GetLabelValue(o, clusterv1.ClusterNameLabel)
 }
 
 func GetControlPlaneNameLabel(o metav1.Object) string {
@@ -48,11 +48,11 @@ func GetControlPlaneNameLabel(o metav1.Object) string {
 }
 
 func GetDeploymentNameLabel(o metav1.Object) string {
-	return GetLabelValue(o, clusterv1.MachineDeploymentLabelName)
+	return GetLabelValue(o, clusterv1.MachineDeploymentNameLabel)
 }
 
 func GetClusterNameLabel(o metav1.Object) string {
-	return GetLabelValue(o, clusterv1.ClusterLabelName)
+	return GetLabelValue(o, clusterv1.ClusterNameLabel)
 }
 
 func GetLabelValue(o metav1.Object, label string) string {

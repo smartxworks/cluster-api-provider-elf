@@ -69,8 +69,8 @@ var _ = Describe("CAPE HA e2e test", func() {
 				Namespace:                namespace.Name,
 				ClusterName:              fmt.Sprintf("%s-%s", specName, capiutil.RandomString(6)),
 				KubernetesVersion:        e2eConfig.GetVariable(capie2e.KubernetesVersion),
-				ControlPlaneMachineCount: pointer.Int64Ptr(3),
-				WorkerMachineCount:       pointer.Int64Ptr(1),
+				ControlPlaneMachineCount: pointer.Int64(3),
+				WorkerMachineCount:       pointer.Int64(1),
 			},
 			WaitForClusterIntervals:      e2eConfig.GetIntervals(specName, "wait-cluster"),
 			WaitForControlPlaneIntervals: e2eConfig.GetIntervals(specName, "wait-control-plane"),
@@ -84,7 +84,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 			ClusterName: clusterResources.Cluster.Name,
 			Namespace:   clusterResources.Cluster.Namespace,
 		})
-		Expect(len(machines)).Should(Equal(3))
+		Expect(machines).Should(HaveLen(3))
 
 		Logf("Shut down VM")
 		ShutDownVM(ctx, ShutDownVMInput{
