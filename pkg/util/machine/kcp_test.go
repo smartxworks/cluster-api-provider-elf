@@ -27,14 +27,19 @@ import (
 func TestGetKCPByMachine(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 	elfCluster, cluster := fake.NewClusterObjects()
-	_, machine := fake.NewMachineObjects(elfCluster, cluster)
+	_, cpMachine := fake.NewMachineObjects(elfCluster, cluster)
 	kubeadmCP := fake.NewKCP()
-	fake.ToControlPlaneMachine(machine, kubeadmCP)
+	fake.ToControlPlaneMachine(cpMachine, kubeadmCP)
 	ctx := fake.NewControllerManagerContext(kubeadmCP)
-
 	t.Run("should return kcp", func(t *testing.T) {
-		kcp, err := GetKCPByMachine(ctx, ctx.Client, machine)
+		kcp, err := GetKCPByMachine(ctx, ctx.Client, cpMachine)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(kcp.Name).To(gomega.Equal(kubeadmCP.Name))
+	})
+
+	_, workerMachine := fake.NewMachineObjects(elfCluster, cluster)
+	t.Run("should return error", func(t *testing.T) {
+		_, err := GetKCPByMachine(ctx, ctx.Client, workerMachine)
+		g.Expect(err).To(gomega.HaveOccurred())
 	})
 }
