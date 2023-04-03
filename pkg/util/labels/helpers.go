@@ -43,10 +43,6 @@ func GetClusterNameLabelLabel(o metav1.Object) string {
 	return GetLabelValue(o, clusterv1.ClusterNameLabel)
 }
 
-func GetControlPlaneNameLabel(o metav1.Object) string {
-	return GetLabelValue(o, clusterv1.MachineControlPlaneNameLabel)
-}
-
 func GetDeploymentNameLabel(o metav1.Object) string {
 	return GetLabelValue(o, clusterv1.MachineDeploymentNameLabel)
 }
