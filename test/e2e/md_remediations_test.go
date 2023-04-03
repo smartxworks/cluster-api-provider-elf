@@ -24,8 +24,8 @@ import (
 )
 
 var _ = Describe("Machines remediation using CAPI remediation test", func() {
-	capie2e.MachineRemediationSpec(context.TODO(), func() capie2e.MachineRemediationSpecInput {
-		return capie2e.MachineRemediationSpecInput{
+	capie2e.MachineDeploymentRemediationSpec(context.TODO(), func() capie2e.MachineDeploymentRemediationSpecInput {
+		return capie2e.MachineDeploymentRemediationSpecInput{
 			E2EConfig:             e2eConfig,
 			ClusterctlConfigPath:  clusterctlConfigPath,
 			BootstrapClusterProxy: bootstrapClusterProxy,

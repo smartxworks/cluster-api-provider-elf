@@ -34,7 +34,7 @@ func TestGetMDByMachine(t *testing.T) {
 
 	t.Run("should return md", func(t *testing.T) {
 		md, err := GetMDByMachine(ctx, ctx.Client, machine)
-		g.Expect(err).To(gomega.BeNil())
+		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(md.Name).To(gomega.Equal(machineDeployment.Name))
 	})
 }

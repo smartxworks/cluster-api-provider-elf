@@ -113,7 +113,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: capiutil.ObjectKey(elfMachine)})
 			Expect(result).To(BeZero())
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for Machine Controller to set OwnerRef on ElfMachine"))
 		})
 
@@ -125,21 +125,21 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext}
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: capiutil.ObjectKey(elfMachine)})
 			Expect(result).To(BeZero())
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("ElfMachine linked to a cluster that is paused"))
 		})
 
 		It("should exit immediately on an error state", func() {
 			createMachineError := capierrors.CreateMachineError
 			elfMachine.Status.FailureReason = &createMachineError
-			elfMachine.Status.FailureMessage = pointer.StringPtr("Couldn't create machine")
+			elfMachine.Status.FailureMessage = pointer.String("Couldn't create machine")
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: capiutil.ObjectKey(elfMachine)})
 			Expect(result).To(BeZero())
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Error state detected, skipping reconciliation"))
 		})
 
@@ -163,7 +163,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Cluster infrastructure is not ready yet"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
@@ -179,7 +179,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for bootstrap data to be available"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
@@ -194,7 +194,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the control plane to be initialized"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
@@ -203,14 +203,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should not wait cluster ControlPlaneInitialized true when create master machine", func() {
 			cluster.Status.InfrastructureReady = true
-			elfMachine.Labels[clusterv1.MachineControlPlaneLabelName] = ""
+			elfMachine.Labels[clusterv1.MachineControlPlaneLabel] = ""
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for bootstrap data to be available"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
@@ -256,7 +256,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM task done"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
@@ -278,7 +278,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM task done"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
@@ -348,7 +348,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(elfMachine.GetVMDisconnectionTimestamp()).NotTo(BeNil())
 
 			patchHelper, err := patch.NewHelper(elfMachine, reconciler.Client)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			now := metav1.NewTime(time.Now().Add(-infrav1.VMDisconnectionTimeout))
 			elfMachine.SetVMDisconnectionTimestamp(&now)
 			Expect(patchHelper.Patch(ctx, elfMachine)).To(Succeed())
@@ -375,7 +375,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).To(BeZero())
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(*elfMachine.Status.FailureReason).To(Equal(capeerrors.MovedToRecycleBinError))
 			Expect(*elfMachine.Status.FailureMessage).To(Equal(fmt.Sprintf("The VM %s was moved to the Tower recycle bin by users, so treat it as deleted.", *vm.LocalID)))
@@ -399,7 +399,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("failed to create VM for ElfMachine"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
@@ -427,7 +427,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).To(BeZero())
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(""))
@@ -463,7 +463,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be powered on"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
@@ -492,7 +492,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("VM state is not reconciled"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
@@ -653,7 +653,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			pg, err = reconciler.createPlacementGroup(machineContext, *placementGroup.Name, *towerCluster.ID)
 			Expect(pg).To(BeNil())
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Wait for placement group creation task done timed out"))
 		})
 
@@ -700,7 +700,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err = reconciler.addVMsToPlacementGroup(machineContext, placementGroup, []string{*vm.ID})
 			Expect(ok).To(BeFalse())
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Wait for placement group updation task done timed out"))
 		})
 
@@ -1050,7 +1050,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
-			Expect(err).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("network is not reconciled"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
@@ -1469,7 +1469,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).To(BeZero())
-			Expect(err).ShouldNot(BeNil())
+			Expect(err).Should(HaveOccurred())
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.CloningFailedReason}})
@@ -1556,7 +1556,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err := reconciler.reconcileNode(machineContext, vm)
 			Expect(ok).Should(BeTrue())
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Eventually(func() bool {
 				if err := testEnv.Get(ctx, client.ObjectKey{Namespace: node.Namespace, Name: node.Name}, node); err != nil {
 					return false
@@ -1613,7 +1613,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err := reconciler.reconcileNode(machineContext, vm)
 			Expect(ok).Should(BeTrue())
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 
 			Eventually(func() bool {
 				if err := testEnv.Get(ctx, client.ObjectKey{Namespace: node.Namespace, Name: node.Name}, node); err != nil {
@@ -1640,7 +1640,7 @@ func waitStaticIPAllocationSpec(mockNewVMService func(ctx goctx.Context, auth in
 	elfMachineKey := capiutil.ObjectKey(elfMachine)
 	result, err := reconciler.Reconcile(goctx.Background(), ctrl.Request{NamespacedName: elfMachineKey})
 	Expect(result.RequeueAfter).To(BeZero())
-	Expect(err).Should(BeNil())
+	Expect(err).ShouldNot(HaveOccurred())
 	Expect(logBuffer.String()).To(ContainSubstring("VM is waiting for static ip to be available"))
 	elfMachine = &infrav1.ElfMachine{}
 	Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())

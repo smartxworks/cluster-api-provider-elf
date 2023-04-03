@@ -564,7 +564,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	if util.IsVMInRecycleBin(vm) {
 		message := fmt.Sprintf("The VM %s was moved to the Tower recycle bin by users, so treat it as deleted.", ctx.ElfMachine.Status.VMRef)
 		ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.MovedToRecycleBinError)
-		ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(message)
+		ctx.ElfMachine.Status.FailureMessage = pointer.String(message)
 		ctx.ElfMachine.SetVM("")
 		ctx.Logger.Error(stderrors.New(message), "")
 
@@ -611,7 +611,7 @@ func (r *ElfMachineReconciler) getVM(ctx *context.MachineContext) (*models.VM, e
 
 		// If the machine was not found by UUID and timed out it means that it got deleted directly
 		ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.RemovedFromInfrastructureError)
-		ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", ctx.ElfMachine.Status.VMRef))
+		ctx.ElfMachine.Status.FailureMessage = pointer.String(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", ctx.ElfMachine.Status.VMRef))
 		ctx.Logger.Error(err, fmt.Sprintf("failed to get VM by UUID %s in %s", ctx.ElfMachine.Status.VMRef, infrav1.VMDisconnectionTimeout.String()), "message", ctx.ElfMachine.Status.FailureMessage)
 
 		return nil, err
@@ -708,7 +708,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 
 		if service.IsCloudInitConfigError(errorMessage) {
 			ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.CloudInitConfigError)
-			ctx.ElfMachine.Status.FailureMessage = pointer.StringPtr(fmt.Sprintf("VM cloud-init config error: %s", service.FormatCloudInitError(errorMessage)))
+			ctx.ElfMachine.Status.FailureMessage = pointer.String(fmt.Sprintf("VM cloud-init config error: %s", service.FormatCloudInitError(errorMessage)))
 		}
 
 		ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "taskErrorMessage", errorMessage, "taskErrorCode", util.GetTowerString(task.ErrorCode), "taskDescription", util.GetTowerString(task.Description))
@@ -1027,7 +1027,7 @@ func (r *ElfMachineReconciler) reconcileProviderID(ctx *context.MachineContext, 
 	}
 
 	if ctx.ElfMachine.Spec.ProviderID == nil || *ctx.ElfMachine.Spec.ProviderID != providerID {
-		ctx.ElfMachine.Spec.ProviderID = pointer.StringPtr(providerID)
+		ctx.ElfMachine.Spec.ProviderID = pointer.String(providerID)
 
 		ctx.Logger.Info("updated providerID", "providerID", providerID)
 	}

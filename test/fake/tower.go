@@ -51,7 +51,7 @@ func NewTowerVM() *models.VM {
 		ID:                &id,
 		LocalID:           &localID,
 		Status:            &status,
-		EntityAsyncStatus: (*models.EntityAsyncStatus)(pointer.StringPtr("CREATING")),
+		EntityAsyncStatus: (*models.EntityAsyncStatus)(pointer.String("CREATING")),
 	}
 }
 
