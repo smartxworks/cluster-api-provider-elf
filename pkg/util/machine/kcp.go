@@ -18,6 +18,7 @@ package machine
 
 import (
 	goctx "context"
+	"fmt"
 
 	"github.com/pkg/errors"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -35,7 +36,7 @@ func GetKCPNameByMachine(machine *clusterv1.Machine) string {
 			return o.Name
 		}
 	}
-	return ""
+	panic(fmt.Sprintf("Machine %s is not owned by KubeadmControlPlane", machine.GetName()))
 }
 
 func GetKCPByMachine(ctx goctx.Context, ctrlClient client.Client, machine *clusterv1.Machine) (*controlplanev1.KubeadmControlPlane, error) {
