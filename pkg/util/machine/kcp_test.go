@@ -38,8 +38,7 @@ func TestGetKCPByMachine(t *testing.T) {
 	})
 
 	_, workerMachine := fake.NewMachineObjects(elfCluster, cluster)
-	t.Run("should return error", func(t *testing.T) {
-		_, err := GetKCPByMachine(ctx, ctx.Client, workerMachine)
-		g.Expect(err).To(gomega.HaveOccurred())
+	t.Run("should panic when failed to get kcp name", func(t *testing.T) {
+		g.Expect(func() { _, _ = GetKCPByMachine(ctx, ctx.Client, workerMachine) }).To(gomega.Panic())
 	})
 }

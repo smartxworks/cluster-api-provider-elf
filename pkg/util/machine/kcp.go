@@ -20,7 +20,6 @@ import (
 	goctx "context"
 	"fmt"
 
-	"github.com/pkg/errors"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
@@ -43,10 +42,6 @@ func GetKCPByMachine(ctx goctx.Context, ctrlClient client.Client, machine *clust
 	var kcp controlplanev1.KubeadmControlPlane
 
 	kcpName := GetKCPNameByMachine(machine)
-	if kcpName == "" {
-		return nil, errors.New("failed to get KCP name by Machine OwnerReferences")
-	}
-
 	if err := ctrlClient.Get(ctx, apitypes.NamespacedName{Namespace: machine.Namespace, Name: kcpName}, &kcp); err != nil {
 		return nil, err
 	}
