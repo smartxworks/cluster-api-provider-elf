@@ -27,8 +27,8 @@ import (
 )
 
 // GetKCPNameByMachine returns the KCP name associated with the Machine.
-// Can not use "cluster.x-k8s.io/control-plane-name" label because
-// it's value will be a hash string when the KCP name exceeds 63 characters.
+// Do not use "cluster.x-k8s.io/control-plane-name" label because
+// its value will be a hashed string of the KCP name when the KCP name exceeds 63 characters.
 func GetKCPNameByMachine(machine *clusterv1.Machine) string {
 	for _, o := range machine.OwnerReferences {
 		if o.Kind == "KubeadmControlPlane" {
