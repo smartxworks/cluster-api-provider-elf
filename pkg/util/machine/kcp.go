@@ -18,18 +18,31 @@ package machine
 
 import (
 	goctx "context"
+	"fmt"
 
 	apitypes "k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	labelutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
 )
+
+// GetKCPNameByMachine returns the KCP name associated with the Machine.
+// Do not use "cluster.x-k8s.io/control-plane-name" label because
+// its value will be a hashed string of the KCP name when the KCP name exceeds 63 characters.
+func GetKCPNameByMachine(machine *clusterv1.Machine) string {
+	for _, o := range machine.OwnerReferences {
+		if o.Kind == "KubeadmControlPlane" {
+			return o.Name
+		}
+	}
+	panic(fmt.Sprintf("Machine %s is not owned by KubeadmControlPlane", machine.GetName()))
+}
 
 func GetKCPByMachine(ctx goctx.Context, ctrlClient client.Client, machine *clusterv1.Machine) (*controlplanev1.KubeadmControlPlane, error) {
 	var kcp controlplanev1.KubeadmControlPlane
-	if err := ctrlClient.Get(ctx, apitypes.NamespacedName{Namespace: machine.Namespace, Name: labelutil.GetControlPlaneNameLabel(machine)}, &kcp); err != nil {
+
+	kcpName := GetKCPNameByMachine(machine)
+	if err := ctrlClient.Get(ctx, apitypes.NamespacedName{Namespace: machine.Namespace, Name: kcpName}, &kcp); err != nil {
 		return nil, err
 	}
 

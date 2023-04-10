@@ -195,11 +195,9 @@ func ToControlPlaneMachine(machine metav1.Object, kcp *controlplanev1.KubeadmCon
 	}
 
 	labels[clusterv1.MachineControlPlaneLabel] = ""
-	if kcp != nil {
-		labels[clusterv1.MachineControlPlaneNameLabel] = kcp.Name
-	}
-
 	machine.SetLabels(labels)
+
+	machine.SetOwnerReferences([]metav1.OwnerReference{*metav1.NewControllerRef(kcp, controlplanev1.GroupVersion.WithKind("KubeadmControlPlane"))})
 }
 
 func ToWorkerMachine(machine metav1.Object, md *clusterv1.MachineDeployment) {

@@ -1065,7 +1065,7 @@ func (r *ElfMachineReconciler) reconcileNode(ctx *context.MachineContext, vm *mo
 		return true, nil
 	}
 
-	nodeGroupName := machineutil.GetNodeGroupName(ctx.ElfMachine)
+	nodeGroupName := machineutil.GetNodeGroupName(ctx.Machine)
 	payloads := map[string]interface{}{
 		"metadata": map[string]interface{}{
 			"labels": map[string]string{

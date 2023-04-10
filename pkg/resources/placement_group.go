@@ -42,7 +42,7 @@ func GetVMPlacementGroupName(ctx goctx.Context, ctrlClient client.Client, machin
 			return placementGroupName, nil
 		}
 
-		groupName = labelsutil.GetControlPlaneNameLabel(machine)
+		groupName = machineutil.GetKCPNameByMachine(machine)
 	} else {
 		md, err := machineutil.GetMDByMachine(ctx, ctrlClient, machine)
 		if err != nil {

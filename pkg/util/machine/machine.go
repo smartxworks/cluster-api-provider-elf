@@ -104,10 +104,10 @@ func IsControlPlaneMachine(machine metav1.Object) bool {
 }
 
 // GetNodeGroupName returns the name of node group that the machine belongs.
-func GetNodeGroupName(machine metav1.Object) string {
+func GetNodeGroupName(machine *clusterv1.Machine) string {
 	nodeGroupName := ""
 	if IsControlPlaneMachine(machine) {
-		nodeGroupName = labelsutil.GetControlPlaneNameLabel(machine)
+		nodeGroupName = GetKCPNameByMachine(machine)
 	} else {
 		nodeGroupName = labelsutil.GetDeploymentNameLabel(machine)
 	}
