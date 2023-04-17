@@ -29,7 +29,7 @@ import (
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 )
 
-func GetVMPlacementGroupName(ctx goctx.Context, ctrlClient client.Client, machine *clusterv1.Machine) (string, error) {
+func GetVMPlacementGroupName(ctx goctx.Context, ctrlClient client.Client, machine *clusterv1.Machine, cluster *clusterv1.Cluster) (string, error) {
 	groupName := ""
 	if machineutil.IsControlPlaneMachine(machine) {
 		kcp, err := machineutil.GetKCPByMachine(ctx, ctrlClient, machine)
@@ -61,7 +61,7 @@ func GetVMPlacementGroupName(ctx goctx.Context, ctrlClient client.Client, machin
 		return "", nil
 	}
 
-	return fmt.Sprintf("%s-managed-%s-%s", GetResourcePrefix(), machine.Namespace, groupName), nil
+	return fmt.Sprintf("%s-managed-%s-%s-%s", GetResourcePrefix(), cluster.UID, machine.Namespace, groupName), nil
 }
 
 func GetVMPlacementGroupPolicy(machine *clusterv1.Machine) models.VMVMPolicy {

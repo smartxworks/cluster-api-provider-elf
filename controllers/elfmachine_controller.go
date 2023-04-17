@@ -717,7 +717,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		case util.IsCloneVMTask(task):
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
 		case util.IsVMMigrationTask(task):
-			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine)
+			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
 			if err != nil {
 				return false, err
 			}
@@ -737,7 +737,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, false)
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
 		case util.IsVMMigrationTask(task):
-			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine)
+			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
 			if err != nil {
 				return false, err
 			}
@@ -769,7 +769,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 		return false, err
 	}
 
-	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine)
+	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
 	if err != nil {
 		return false, err
 	}
@@ -952,7 +952,7 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx *context.MachineCon
 		return "", nil
 	}
 
-	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine)
+	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
 	if err != nil {
 		return "", err
 	}
