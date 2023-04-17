@@ -7,7 +7,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
 	github.com/onsi/ginkgo/v2 v2.9.2
-	github.com/onsi/gomega v1.27.4
+	github.com/onsi/gomega v1.27.6
 	github.com/pkg/errors v0.9.1
 	github.com/smartxworks/cloudtower-go-sdk/v2 v2.5.0
 	golang.org/x/mod v0.9.0
@@ -18,8 +18,8 @@ require (
 	k8s.io/client-go v0.26.1
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448
-	sigs.k8s.io/cluster-api v1.4.0
-	sigs.k8s.io/cluster-api/test v1.4.0
+	sigs.k8s.io/cluster-api v1.4.1
+	sigs.k8s.io/cluster-api/test v1.4.1
 	sigs.k8s.io/controller-runtime v0.14.6
 )
 
