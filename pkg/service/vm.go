@@ -268,7 +268,7 @@ func (svr *TowerVMService) Migrate(vmID, hostID string) (*models.WithTaskVM, err
 // Delete destroys a virtual machine.
 func (svr *TowerVMService) Delete(id string) (*models.Task, error) {
 	deleteVMParams := clientvm.NewDeleteVMParams()
-	deleteVMParams.RequestBody = &models.VMOperateParams{
+	deleteVMParams.RequestBody = &models.VMDeleteParams{
 		Where: &models.VMWhereInput{
 			OR: []*models.VMWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
 		},
