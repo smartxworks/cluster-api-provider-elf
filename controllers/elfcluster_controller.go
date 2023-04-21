@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -214,8 +215,10 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 
 	// if cluster need to force delete, skipping infra resource deletion and remove the finalizer.
 	if !ctx.ElfCluster.HasForceDeleteCluster() {
-		if err := r.reconcileDeleteVMPlacementGroups(ctx); err != nil {
+		if ok, err := r.reconcileDeleteVMPlacementGroups(ctx); err != nil {
 			return reconcile.Result{}, errors.Wrapf(err, "failed to delete vm placement groups")
+		} else if !ok {
+			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 		}
 
 		if err := r.reconcileDeleteLabels(ctx); err != nil {
@@ -229,12 +232,29 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 	return reconcile.Result{}, nil
 }
 
-func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) error {
-	if _, err := ctx.VMService.DeleteVMPlacementGroupsByName(fmt.Sprintf("%s-managed-%s-%s", towerresources.GetResourcePrefix(), ctx.Cluster.Namespace, ctx.Cluster.Name)); err != nil {
-		return err
+func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) (bool, error) {
+	placementGroupClusterName := towerresources.GetVMPlacementGroupClusterName(ctx.Cluster)
+	task, err := ctx.VMService.DeleteVMPlacementGroupsByName(placementGroupClusterName)
+	if err != nil {
+		return false, err
+	} else if task == nil {
+		return true, nil
 	}
 
-	return nil
+	withLatestStatusTask, err := ctx.VMService.WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval)
+	if err != nil {
+		ctx.Logger.Info(fmt.Sprintf("Wait for placement groups %s deletion task done timed out in %s", placementGroupClusterName, config.WaitTaskTimeout), "taskID", *task.ID, "error", err)
+
+		return false, nil
+	}
+
+	if *withLatestStatusTask.Status == models.TaskStatusFAILED {
+		return false, errors.Errorf("failed to delete placement groups %s in task %s", placementGroupClusterName, *withLatestStatusTask.ID)
+	}
+
+	ctx.Logger.Info(fmt.Sprintf("Placement groups %s deleted", placementGroupClusterName), "taskID", *withLatestStatusTask.ID)
+
+	return true, nil
 }
 
 func (r *ElfClusterReconciler) reconcileDeleteLabels(ctx *context.ClusterContext) error {
