@@ -165,6 +165,13 @@ spec:
                   to distribute CPUs in this VM.
                 format: int32
                 type: integer
+              osType:
+                default: LINUX
+                description: OSType is the operation system type of the virtual machine.
+                enum:
+                - LINUX
+                - WINDOWS
+                type: string
               providerID:
                 description: ProviderID is the virtual machine's UUID formatted as
                   elf://f0f6f65d-0786-4170-9ab9-d02187a61ad6
