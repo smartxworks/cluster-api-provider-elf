@@ -222,6 +222,7 @@ func (svr *TowerVMService) Clone(
 		Ha:          util.TowerBool(elfMachine.Spec.HA),
 		IsFullCopy:  util.TowerBool(isFullCopy),
 		TemplateID:  template.ID,
+		GuestOsType: models.NewVMGuestsOperationSystem(models.VMGuestsOperationSystem(elfMachine.Spec.OSType)),
 		VMNics:      nics,
 		DiskOperate: &models.VMDiskOperate{
 			NewDisks: &models.VMDiskParams{

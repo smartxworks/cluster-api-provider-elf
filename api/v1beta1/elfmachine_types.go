@@ -48,6 +48,12 @@ type ElfMachineSpec struct {
 	// Template is the name or ID of the template used to clone new machines.
 	Template string `json:"template"`
 
+	// OSType is the operation system type of the virtual machine.
+	// +kubebuilder:validation:Enum=LINUX;WINDOWS
+	// +kubebuilder:default=LINUX
+	// +optional
+	OSType string `json:"osType,omitempty"`
+
 	// Network is the network configuration for this machin's VM.
 	// +optional
 	Network NetworkSpec `json:"network,omitempty"`
