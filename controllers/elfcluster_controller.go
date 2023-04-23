@@ -215,10 +215,8 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 
 	// if cluster need to force delete, skipping infra resource deletion and remove the finalizer.
 	if !ctx.ElfCluster.HasForceDeleteCluster() {
-		if ok, err := r.reconcileDeleteVMPlacementGroups(ctx); err != nil {
+		if err := r.reconcileDeleteVMPlacementGroups(ctx); err != nil {
 			return reconcile.Result{}, errors.Wrapf(err, "failed to delete vm placement groups")
-		} else if !ok {
-			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 		}
 
 		if err := r.reconcileDeleteLabels(ctx); err != nil {
@@ -232,29 +230,27 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 	return reconcile.Result{}, nil
 }
 
-func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) (bool, error) {
-	placementGroupClusterName := towerresources.GetVMPlacementGroupClusterName(ctx.Cluster)
-	task, err := ctx.VMService.DeleteVMPlacementGroupsByName(placementGroupClusterName)
+func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) error {
+	placementGroupPrefix := towerresources.GetVMPlacementGroupNamePrefix(ctx.Cluster)
+	task, err := ctx.VMService.DeleteVMPlacementGroupsByName(placementGroupPrefix)
 	if err != nil {
-		return false, err
+		return err
 	} else if task == nil {
-		return true, nil
+		return nil
 	}
 
 	withLatestStatusTask, err := ctx.VMService.WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
-		ctx.Logger.Info(fmt.Sprintf("Wait for placement groups %s deletion task done timed out in %s", placementGroupClusterName, config.WaitTaskTimeout), "taskID", *task.ID, "error", err)
-
-		return false, nil
+		return errors.Wrapf(err, "failed to wait for placement groups %s deletion task %s done timed out in %s", placementGroupPrefix, *task.ID, config.WaitTaskTimeout)
 	}
 
 	if *withLatestStatusTask.Status == models.TaskStatusFAILED {
-		return false, errors.Errorf("failed to delete placement groups %s in task %s", placementGroupClusterName, *withLatestStatusTask.ID)
+		return errors.Errorf("failed to delete placement groups %s in task %s", placementGroupPrefix, *withLatestStatusTask.ID)
 	}
 
-	ctx.Logger.Info(fmt.Sprintf("Placement groups %s deleted", placementGroupClusterName), "taskID", *withLatestStatusTask.ID)
+	ctx.Logger.Info(fmt.Sprintf("Placement groups %s deleted", placementGroupPrefix), "taskID", *withLatestStatusTask.ID)
 
-	return true, nil
+	return nil
 }
 
 func (r *ElfClusterReconciler) reconcileDeleteLabels(ctx *context.ClusterContext) error {

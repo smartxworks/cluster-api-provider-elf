@@ -216,37 +216,37 @@ var _ = Describe("ElfClusterReconciler", func() {
 			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
 
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(towerresources.GetVMPlacementGroupClusterName(cluster)).Return(task, errors.New("some error"))
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return(task, errors.New("some error"))
 
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
 
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(towerresources.GetVMPlacementGroupClusterName(cluster)).Return(task, nil)
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return(task, nil)
 			mockVMService.EXPECT().WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval).Return(nil, errors.New("some error"))
 
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
-			Expect(result).NotTo(BeZero())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Wait for placement groups %s deletion task done timed out", towerresources.GetVMPlacementGroupClusterName(cluster))))
+			Expect(result).To(BeZero())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to wait for placement groups %s deletion task %s done timed out in %s", towerresources.GetVMPlacementGroupNamePrefix(cluster), *task.ID, config.WaitTaskTimeout)))
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
 			withLatestStatusTask := fake.NewTowerTask()
 			*withLatestStatusTask.ID = *task.ID
 			withLatestStatusTask.Status = models.NewTaskStatus(models.TaskStatusFAILED)
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(towerresources.GetVMPlacementGroupClusterName(cluster)).Return(task, nil)
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return(task, nil)
 			mockVMService.EXPECT().WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval).Return(withLatestStatusTask, nil)
 
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to delete placement groups %s in task", towerresources.GetVMPlacementGroupClusterName(cluster))))
+			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to delete placement groups %s in task", towerresources.GetVMPlacementGroupNamePrefix(cluster))))
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
 			withLatestStatusTask.Status = models.NewTaskStatus(models.TaskStatusSUCCESSED)
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(towerresources.GetVMPlacementGroupClusterName(cluster)).Return(task, nil)
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return(task, nil)
 			mockVMService.EXPECT().WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval).Return(withLatestStatusTask, nil)
 			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelClusterName(), elfCluster.Name, true).Return("labelid", nil)
 			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelVIP(), elfCluster.Spec.ControlPlaneEndpoint.Host, false).Return("labelid", nil)
@@ -256,7 +256,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Placement groups %s deleted", towerresources.GetVMPlacementGroupClusterName(cluster))))
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Placement groups %s deleted", towerresources.GetVMPlacementGroupNamePrefix(cluster))))
 			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Label %s:%s deleted", towerresources.GetVMLabelClusterName(), elfCluster.Name)))
 			Expect(apierrors.IsNotFound(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster))).To(BeTrue())
 		})

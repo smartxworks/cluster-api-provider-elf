@@ -873,7 +873,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 
 	if !placementGroupVMSet.Has(*vm.ID) {
 		placementGroupVMSet.Insert(*vm.ID)
-		if ok, err := r.addVMsToPlacementGroup(ctx, placementGroup, placementGroupVMSet.List()); err != nil || !ok {
+		if err := r.addVMsToPlacementGroup(ctx, placementGroup, placementGroupVMSet.List()); err != nil {
 			return false, err
 		}
 	}
@@ -890,9 +890,7 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 
 	task, err := ctx.VMService.WaitTask(*withTaskVMPlacementGroup.TaskID, config.WaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
-		ctx.Logger.Info(fmt.Sprintf("Wait for placement group creation task done timed out in %s", config.WaitTaskTimeout), "placementGroup", placementGroupName, "taskID", *withTaskVMPlacementGroup.TaskID, "error", err)
-
-		return nil, nil
+		return nil, errors.Wrapf(err, "failed to wait for placement group %s creation task %s done timed out in %s", placementGroupName, *withTaskVMPlacementGroup.TaskID, config.WaitTaskTimeout)
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
@@ -909,27 +907,25 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 	return placementGroup, nil
 }
 
-func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContext, placementGroup *models.VMPlacementGroup, vmIDs []string) (bool, error) {
+func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContext, placementGroup *models.VMPlacementGroup, vmIDs []string) error {
 	task, err := ctx.VMService.AddVMsToPlacementGroup(placementGroup, vmIDs)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	taskID := *task.ID
 	task, err = ctx.VMService.WaitTask(taskID, config.WaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
-		ctx.Logger.Info(fmt.Sprintf("Wait for placement group updation task done timed out in %s", config.WaitTaskTimeout), "placementGroup", *placementGroup.Name, "taskID", taskID, "error", err)
-
-		return false, nil
+		return errors.Wrapf(err, "failed to wait for placement group %s updation task %s done timed out in %s", *placementGroup.Name, taskID, config.WaitTaskTimeout)
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
-		return false, errors.Errorf("failed to update placement group %s in task %s", *placementGroup.Name, taskID)
+		return errors.Errorf("failed to update placement group %s in task %s", *placementGroup.Name, taskID)
 	}
 
 	ctx.Logger.Info("Updating placement group succeeded", "taskID", taskID, "placementGroup", *placementGroup.Name)
 
-	return true, nil
+	return nil
 }
 
 // getVMHostForRollingUpdate returns the target host server id for a virtual machine during rolling update.
