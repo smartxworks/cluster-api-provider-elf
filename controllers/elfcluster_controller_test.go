@@ -228,7 +228,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to wait for placement groups %s deletion task %s done timed out in %s", towerresources.GetVMPlacementGroupNamePrefix(cluster), *task.ID, config.WaitTaskTimeout)))
+			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to wait for placement groups deletion task done in %s: namePrefix %s, taskID %s", config.WaitTaskTimeout, towerresources.GetVMPlacementGroupNamePrefix(cluster), *task.ID)))
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)

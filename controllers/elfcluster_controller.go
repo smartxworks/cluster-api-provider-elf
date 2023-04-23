@@ -241,7 +241,7 @@ func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.Clu
 
 	withLatestStatusTask, err := ctx.VMService.WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
-		return errors.Wrapf(err, "failed to wait for placement groups %s deletion task %s done timed out in %s", placementGroupPrefix, *task.ID, config.WaitTaskTimeout)
+		return errors.Wrapf(err, "failed to wait for placement groups deletion task done in %s: namePrefix %s, taskID %s", config.WaitTaskTimeout, placementGroupPrefix, *task.ID)
 	}
 
 	if *withLatestStatusTask.Status == models.TaskStatusFAILED {

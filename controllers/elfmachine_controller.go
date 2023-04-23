@@ -890,7 +890,7 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 
 	task, err := ctx.VMService.WaitTask(*withTaskVMPlacementGroup.TaskID, config.WaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to wait for placement group %s creation task %s done timed out in %s", placementGroupName, *withTaskVMPlacementGroup.TaskID, config.WaitTaskTimeout)
+		return nil, errors.Wrapf(err, "failed to wait for placement group creation task done timed out in %s: placementName %s, taskID %s", config.WaitTaskTimeout, placementGroupName, *withTaskVMPlacementGroup.TaskID)
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
@@ -916,7 +916,7 @@ func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContex
 	taskID := *task.ID
 	task, err = ctx.VMService.WaitTask(taskID, config.WaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
-		return errors.Wrapf(err, "failed to wait for placement group %s updation task %s done timed out in %s", *placementGroup.Name, taskID, config.WaitTaskTimeout)
+		return errors.Wrapf(err, "failed to wait for placement group updation task done timed out in %s: placementName %s, taskID %s", config.WaitTaskTimeout, *placementGroup.Name, taskID)
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
