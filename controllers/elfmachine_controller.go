@@ -1050,6 +1050,12 @@ func (r *ElfMachineReconciler) reconcileNode(ctx *context.MachineContext, vm *mo
 
 	node, err := kubeClient.CoreV1().Nodes().Get(ctx, ctx.ElfMachine.Name, metav1.GetOptions{})
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			r.Logger.Info("Node not found, skip setting providerID and labels")
+
+			return false, nil
+		}
+
 		return false, errors.Wrapf(err, "failed to get node %s for setting providerID and labels", ctx.ElfMachine.Name)
 	}
 
