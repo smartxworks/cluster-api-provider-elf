@@ -1078,7 +1078,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.Network[0].IPAddrs[0]).To(Equal(*nic.IPAddress))
-			Expect(elfMachine.Status.Addresses[0].Type).To(Equal(clusterv1.MachineExternalIP))
+			Expect(elfMachine.Status.Addresses[0].Type).To(Equal(clusterv1.MachineInternalIP))
 			Expect(elfMachine.Status.Addresses[0].Address).To(Equal(*nic.IPAddress))
 			Expect(elfMachine.Status.Ready).To(BeTrue())
 			expectConditions(elfMachine, []conditionAssertion{{conditionType: infrav1.VMProvisionedCondition, status: corev1.ConditionTrue}})
