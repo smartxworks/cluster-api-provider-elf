@@ -29,6 +29,7 @@ import (
 	clienttask "github.com/smartxworks/cloudtower-go-sdk/v2/client/task"
 	clientvlan "github.com/smartxworks/cloudtower-go-sdk/v2/client/vlan"
 	clientvm "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm"
+	clientvmnic "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_nic"
 	clientvmplacementgroup "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_placement_group"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -53,6 +54,7 @@ type VMService interface {
 	Get(id string) (*models.VM, error)
 	GetByName(name string) (*models.VM, error)
 	FindByIDs(ids []string) ([]*models.VM, error)
+	GetVMNics(vmID string) ([]*models.VMNic, error)
 	GetVMTemplate(id string) (*models.ContentLibraryVMTemplate, error)
 	GetTask(id string) (*models.Task, error)
 	WaitTask(id string, timeout, interval time.Duration) (*models.Task, error)
@@ -411,6 +413,25 @@ func (svr *TowerVMService) FindByIDs(ids []string) ([]*models.VM, error) {
 	}
 
 	return getVmsResp.Payload, nil
+}
+
+// GetVMNics searches for nics by virtual machines id.
+func (svr *TowerVMService) GetVMNics(vmID string) ([]*models.VMNic, error) {
+	getVMNicsParams := clientvmnic.NewGetVMNicsParams()
+	getVMNicsParams.RequestBody = &models.GetVMNicsRequestBody{
+		Where: &models.VMNicWhereInput{
+			VM: &models.VMWhereInput{
+				OR: []*models.VMWhereInput{{LocalID: util.TowerString(vmID)}, {ID: util.TowerString(vmID)}},
+			},
+		},
+	}
+
+	getVMNicsResp, err := svr.Session.VMNic.GetVMNics(getVMNicsParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return getVMNicsResp.Payload, nil
 }
 
 // GetCluster searches for a cluster.

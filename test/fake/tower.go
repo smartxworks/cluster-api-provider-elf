@@ -22,6 +22,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/utils/pointer"
+
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
 func ID() string {
@@ -52,6 +54,18 @@ func NewTowerVM() *models.VM {
 		LocalID:           &localID,
 		Status:            &status,
 		EntityAsyncStatus: (*models.EntityAsyncStatus)(pointer.String("CREATING")),
+	}
+}
+
+func NewTowerVMNic(order int) *models.VMNic {
+	id := ID()
+	localID := UUID()
+
+	return &models.VMNic{
+		ID:        &id,
+		LocalID:   &localID,
+		IPAddress: util.TowerString("192.168.0.1"),
+		Order:     util.TowerInt32(order),
 	}
 }
 

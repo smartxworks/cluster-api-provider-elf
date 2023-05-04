@@ -423,12 +423,9 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 	}
 
 	// Reconcile the ElfMachine's node addresses from the VM's IP addresses.
-	if ok := r.reconcileNetwork(ctx, vm); !ok {
-		ctx.Logger.Info("network is not reconciled",
-			"namespace", ctx.ElfMachine.Namespace, "elfMachine", ctx.ElfMachine.Name)
-
-		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityInfo, "")
-
+	if ok, err := r.reconcileNetwork(ctx, vm); err != nil {
+		return reconcile.Result{}, err
+	} else if !ok {
 		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 	}
 
@@ -1098,29 +1095,52 @@ func (r *ElfMachineReconciler) reconcileNode(ctx *context.MachineContext, vm *mo
 
 // If the VM is powered on then issue requeues until all of the VM's
 // networks have IP addresses.
-func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm *models.VM) bool {
-	if vm.Ips == nil {
-		return false
+func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
+	defer func() {
+		if reterr != nil {
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityWarning, reterr.Error())
+		} else if !ret {
+			ctx.Logger.Info("VM network is not ready yet", "network", ctx.ElfMachine.Status.Network)
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityInfo, "")
+		}
+	}()
+
+	nics, err := ctx.VMService.GetVMNics(*vm.ID)
+	if err != nil {
+		return false, err
 	}
 
-	network := machineutil.GetNetworkStatus(*vm.Ips)
-	if len(network) == 0 {
-		return false
+	networkStatuses := make([]infrav1.NetworkStatus, 0, len(nics))
+	for i := 0; i < len(nics); i++ {
+		nic := nics[i]
+		if util.GetTowerString(nic.IPAddress) == "" {
+			ctx.Logger.V(1).Info(fmt.Sprintf("VM nic %d has not been allocated an IP", *nic.Order))
+
+			continue
+		}
+
+		networkStatuses = append(networkStatuses, infrav1.NetworkStatus{
+			IPAddrs: []string{util.GetTowerString(nic.IPAddress)},
+			MACAddr: util.GetTowerString(nic.MacAddress),
+		})
 	}
 
-	ctx.ElfMachine.Status.Network = network
+	ctx.ElfMachine.Status.Network = networkStatuses
+	if len(networkStatuses) < len(ctx.ElfMachine.Spec.Network.Devices) {
+		return false, nil
+	}
 
 	ipAddrs := make([]clusterv1.MachineAddress, 0, len(ctx.ElfMachine.Status.Network))
 	for _, netStatus := range ctx.ElfMachine.Status.Network {
 		ipAddrs = append(ipAddrs, clusterv1.MachineAddress{
-			Type:    clusterv1.MachineInternalIP,
+			Type:    clusterv1.MachineExternalIP,
 			Address: netStatus.IPAddrs[0],
 		})
 	}
 
 	ctx.ElfMachine.Status.Addresses = ipAddrs
 
-	return true
+	return true, nil
 }
 
 func (r *ElfMachineReconciler) getBootstrapData(ctx *context.MachineContext) (string, error) {

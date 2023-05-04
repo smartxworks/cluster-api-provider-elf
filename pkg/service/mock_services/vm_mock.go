@@ -232,6 +232,21 @@ func (mr *MockVMServiceMockRecorder) GetTask(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTask", reflect.TypeOf((*MockVMService)(nil).GetTask), id)
 }
 
+// GetVMNics mocks base method.
+func (m *MockVMService) GetVMNics(vmID string) ([]*models.VMNic, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVMNics", vmID)
+	ret0, _ := ret[0].([]*models.VMNic)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetVMNics indicates an expected call of GetVMNics.
+func (mr *MockVMServiceMockRecorder) GetVMNics(vmID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMNics", reflect.TypeOf((*MockVMService)(nil).GetVMNics), vmID)
+}
+
 // GetVMPlacementGroup mocks base method.
 func (m *MockVMService) GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error) {
 	m.ctrl.T.Helper()
