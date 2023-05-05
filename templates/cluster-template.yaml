@@ -46,6 +46,7 @@ metadata:
 spec:
   template:
     spec:
+      osType: LINUX
       template: "${VM_TEMPLATE}"
       ha: true
       cloneMode: ${ELF_VM_CLONE_MODE:-FastClone}
@@ -192,6 +193,7 @@ metadata:
 spec:
   template:
     spec:
+      osType: LINUX
       template: "${VM_TEMPLATE}"
       ha: true
       cloneMode: ${ELF_VM_CLONE_MODE:-FastClone}
