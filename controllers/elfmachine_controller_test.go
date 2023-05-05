@@ -312,11 +312,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.LocalID
 			now := metav1.NewTime(time.Now().Add(-infrav1.VMDisconnectionTimeout))
 			elfMachine.SetVMDisconnectionTimestamp(&now)
+			nic := fake.NewTowerVMNic(0)
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{nic}, nil)
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(3).Return(fake.NewTowerLabel(), nil)
@@ -1007,6 +1009,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 
@@ -1025,58 +1028,82 @@ var _ = Describe("ElfMachineReconciler", func() {
 			cluster.Status.InfrastructureReady = true
 			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
-			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(3).Return(fake.NewTowerLabel(), nil)
-			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(1)
 		})
 
 		It("should wait VM network ready", func() {
 			towerCluster := fake.NewTowerCluster()
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
-			vm.Ips = util.TowerString("")
 			elfMachine.Status.VMRef = *vm.LocalID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
-			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
-			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Times(3).Return(vm, nil)
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Times(3).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Times(3).Return(placementGroup, nil)
+			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(9).Return(fake.NewTowerLabel(), nil)
+			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(3)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ShouldNot(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("network is not reconciled"))
+			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+
+			nic := fake.NewTowerVMNic(0)
+			nic.IPAddress = util.TowerString("")
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
+
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, errors.New("error"))
+
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).To(BeZero())
+			Expect(err).Should(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.WaitingForNetworkAddressesReason}})
 		})
 
 		It("should set ElfMachine to ready when VM network is ready", func() {
 			towerCluster := fake.NewTowerCluster()
-			ip := "116.116.116.116"
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
-			vm.Ips = util.TowerString("116.116.116.116")
 			elfMachine.Status.VMRef = *vm.LocalID
+			nic := fake.NewTowerVMNic(0)
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{nic}, nil)
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(3).Return(fake.NewTowerLabel(), nil)
+			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(1)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, _ = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
-			Expect(elfMachine.Status.Network[0].IPAddrs[0]).To(Equal(ip))
+			Expect(elfMachine.Status.Network[0].IPAddrs[0]).To(Equal(*nic.IPAddress))
 			Expect(elfMachine.Status.Addresses[0].Type).To(Equal(clusterv1.MachineInternalIP))
-			Expect(elfMachine.Status.Addresses[0].Address).To(Equal(ip))
+			Expect(elfMachine.Status.Addresses[0].Address).To(Equal(*nic.IPAddress))
 			Expect(elfMachine.Status.Ready).To(BeTrue())
 			expectConditions(elfMachine, []conditionAssertion{{conditionType: infrav1.VMProvisionedCondition, status: corev1.ConditionTrue}})
 		})
