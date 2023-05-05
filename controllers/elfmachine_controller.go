@@ -1100,7 +1100,7 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 		if reterr != nil {
 			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityWarning, reterr.Error())
 		} else if !ret {
-			ctx.Logger.V(1).Info("VM nicStatus is not ready yet", "network", ctx.ElfMachine.Status.Network)
+			ctx.Logger.V(1).Info("VM network is not ready yet", "nicStatus", ctx.ElfMachine.Status.Network)
 			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityInfo, "")
 		}
 	}()
@@ -1114,8 +1114,6 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 	for i := 0; i < len(nics); i++ {
 		nic := nics[i]
 		if util.GetTowerString(nic.IPAddress) == "" {
-			ctx.Logger.V(1).Info(fmt.Sprintf("VM nic %d has not been allocated an IP", *nic.Order))
-
 			continue
 		}
 
