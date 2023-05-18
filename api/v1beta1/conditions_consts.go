@@ -42,10 +42,18 @@ const (
 	// PoweringOnReason documents (Severity=Info) a ElfMachine currently executing the power on sequence.
 	PoweringOnReason = "PoweringOn"
 
+	// PowerOffReason documents (Severity=Info) a ElfMachine currently executing the power off sequence.
+	PowerOffReason = "PoweringOff"
+
 	// PoweringOnFailedReason (Severity=Warning) documents a ElfMachine controller detecting
 	// an error while powering on; those kind of errors are usually transient and failed provisioning
 	// are automatically re-tried by the controller.
 	PoweringOnFailedReason = "PoweringOnFailed"
+
+	// PoweringOffFailedReason (Severity=Warning) documents a ElfMachine controller detecting
+	// an error while powering off; those kind of errors are usually transient and failed provisioning
+	// are automatically re-tried by the controller.
+	PoweringOffFailedReason = "PoweringOffFailed"
 
 	// CloningFailedReason (Severity=Warning) documents a ElfMachine controller detecting
 	// an error while provisioning; those kind of errors are usually transient and failed provisioning
