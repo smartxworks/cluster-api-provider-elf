@@ -573,7 +573,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		return nil, err
 	}
 
-	// Attempt to recover the VM from an abnormal state.
+	// Make sures the VM in the Running status.
 	if ok, err := r.reconcileVMStatus(ctx, vm); err != nil || !ok {
 		return nil, err
 	}
@@ -626,7 +626,10 @@ func (r *ElfMachineReconciler) getVM(ctx *context.MachineContext) (*models.VM, e
 	return nil, errors.Wrapf(err, "failed to create VM for ElfMachine %s/%s", ctx.ElfMachine.Namespace, ctx.ElfMachine.Name)
 }
 
-// reconcileVMStatus attempt to recover the VM from an abnormal state.
+// reconcileVMStatus make sures the VM in the Running status.
+// 1. VM in STOPPED status will be powered on.
+// 2. VM in SUSPENDED status will be powered off and power on.
+// It will return true when VM status is not in STOPPED or SUSPENDED status.
 func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm *models.VM) (bool, error) {
 	if vm.Status == nil {
 		return true, nil
