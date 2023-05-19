@@ -912,8 +912,8 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 
 // deletePlacementGroup deletes the placement group when the MachineDeployment is deleted
 // and the cluster is not deleted.
+// If the cluster is deleted, all placement groups are deleted by the ElfCluster controller.
 func (r *ElfMachineReconciler) deletePlacementGroup(ctx *context.MachineContext) (bool, error) {
-	// If the cluster is deleted, all placement groups are deleted by the ElfCluster controller.
 	if !ctx.Cluster.DeletionTimestamp.IsZero() || machineutil.IsControlPlaneMachine(ctx.Machine) {
 		return true, nil
 	}

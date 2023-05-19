@@ -234,7 +234,7 @@ func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.Clu
 	if err := ctx.VMService.DeleteVMPlacementGroupsByName(placementGroupPrefix); err != nil {
 		return err
 	} else {
-		ctx.Logger.Info(fmt.Sprintf("Placement groups %s deleted", placementGroupPrefix))
+		ctx.Logger.Info(fmt.Sprintf("Placement groups with name prefix %s deleted", placementGroupPrefix))
 	}
 
 	return nil

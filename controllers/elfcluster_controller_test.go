@@ -233,7 +233,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Placement groups %s deleted", towerresources.GetVMPlacementGroupNamePrefix(cluster))))
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Placement groups with name prefix %s deleted", towerresources.GetVMPlacementGroupNamePrefix(cluster))))
 			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Label %s:%s deleted", towerresources.GetVMLabelClusterName(), elfCluster.Name)))
 			Expect(apierrors.IsNotFound(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster))).To(BeTrue())
 		})
