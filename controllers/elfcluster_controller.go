@@ -231,11 +231,10 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 
 func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) error {
 	placementGroupPrefix := towerresources.GetVMPlacementGroupNamePrefix(ctx.Cluster)
-	task, err := ctx.VMService.SynchDeleteVMPlacementGroupsByName(placementGroupPrefix)
-	if err != nil {
+	if err := ctx.VMService.DeleteVMPlacementGroupsByName(placementGroupPrefix); err != nil {
 		return err
-	} else if task != nil {
-		ctx.Logger.Info(fmt.Sprintf("Placement groups %s deleted", placementGroupPrefix), "taskID", *task.ID)
+	} else {
+		ctx.Logger.Info(fmt.Sprintf("Placement groups %s deleted", placementGroupPrefix))
 	}
 
 	return nil

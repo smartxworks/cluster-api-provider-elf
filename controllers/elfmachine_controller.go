@@ -910,9 +910,10 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 	return placementGroup, nil
 }
 
-// deletePlacementGroup deletes the placement group when the deployment is deleted
+// deletePlacementGroup deletes the placement group when the MachineDeployment is deleted
 // and the cluster is not deleted.
 func (r *ElfMachineReconciler) deletePlacementGroup(ctx *context.MachineContext) (bool, error) {
+	// If the cluster is deleted, all placement groups are deleted by the ElfCluster controller.
 	if !ctx.Cluster.DeletionTimestamp.IsZero() || machineutil.IsControlPlaneMachine(ctx.Machine) {
 		return true, nil
 	}
@@ -926,6 +927,10 @@ func (r *ElfMachineReconciler) deletePlacementGroup(ctx *context.MachineContext)
 		return false, err
 	}
 
+	// SKS will set replicas to 0 before deleting the MachineDeployment,
+	// and then delete it after all the machines are deleted.
+	// In this scenario, CAPE needs to delete the placement group first
+	// when md.Spec.Replicas is 0.
 	if md.DeletionTimestamp.IsZero() && *md.Spec.Replicas > 0 {
 		return true, nil
 	}
@@ -935,6 +940,7 @@ func (r *ElfMachineReconciler) deletePlacementGroup(ctx *context.MachineContext)
 		return false, err
 	}
 
+	// Only delete the placement groups created by CAPE.
 	if !strings.HasPrefix(placementGroupName, towerresources.GetVMPlacementGroupNamePrefix(ctx.Cluster)) {
 		return true, nil
 	}
@@ -954,11 +960,10 @@ func (r *ElfMachineReconciler) deletePlacementGroup(ctx *context.MachineContext)
 		return false, nil
 	}
 
-	task, err := ctx.VMService.SynchDeleteVMPlacementGroupsByName(*placementGroup.Name)
-	if err != nil {
+	if err := ctx.VMService.DeleteVMPlacementGroupsByName(*placementGroup.Name); err != nil {
 		return false, err
-	} else if task != nil {
-		ctx.Logger.Info(fmt.Sprintf("Placement group %s deleted", *placementGroup.Name), "taskID", *task.ID)
+	} else {
+		ctx.Logger.Info(fmt.Sprintf("Placement group %s deleted", *placementGroup.Name))
 	}
 
 	return true, nil
