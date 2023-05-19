@@ -152,7 +152,7 @@ func NewMD() *clusterv1.MachineDeployment {
 			Name:      names.SimpleNameGenerator.GenerateName("md-"),
 			Namespace: Namespace,
 		},
-		Spec:   clusterv1.MachineDeploymentSpec{},
+		Spec:   clusterv1.MachineDeploymentSpec{Replicas: pointer.Int32(1)},
 		Status: clusterv1.MachineDeploymentStatus{},
 	}
 }
@@ -210,6 +210,7 @@ func ToWorkerMachine(machine metav1.Object, md *clusterv1.MachineDeployment) {
 	if md != nil {
 		labels[clusterv1.MachineDeploymentNameLabel] = md.Name
 	}
+	delete(labels, clusterv1.MachineControlPlaneLabel)
 
 	machine.SetLabels(labels)
 }

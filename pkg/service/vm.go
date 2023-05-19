@@ -68,6 +68,7 @@ type VMService interface {
 	GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error)
 	AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error)
 	DeleteVMPlacementGroupsByName(placementGroupName string) (*models.Task, error)
+	SynchDeleteVMPlacementGroupsByName(placementGroupName string) (*models.Task, error)
 }
 
 type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
@@ -737,4 +738,25 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByName(placementGroupName stri
 	}
 
 	return &models.Task{ID: deleteVMPlacementGroupResp.Payload[0].TaskID}, nil
+}
+
+// SynchDeleteVMPlacementGroupsByName deletes placement groups by name synchronously.
+func (svr *TowerVMService) SynchDeleteVMPlacementGroupsByName(placementGroupName string) (*models.Task, error) {
+	task, err := svr.DeleteVMPlacementGroupsByName(placementGroupName)
+	if err != nil {
+		return nil, err
+	} else if task == nil {
+		return nil, nil
+	}
+
+	withLatestStatusTask, err := svr.WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to wait for placement group deletion task done in %s: namePrefix %s, taskID %s", config.WaitTaskTimeout, placementGroupName, *task.ID)
+	}
+
+	if *withLatestStatusTask.Status == models.TaskStatusFAILED {
+		return nil, errors.Errorf("failed to delete placement group %s in task %s", placementGroupName, *withLatestStatusTask.ID)
+	}
+
+	return withLatestStatusTask, nil
 }

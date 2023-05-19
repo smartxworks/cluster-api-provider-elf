@@ -297,6 +297,12 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 
 	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.DeletingReason, clusterv1.ConditionSeverityInfo, "")
 
+	if ok, err := r.deletePlacementGroup(ctx); err != nil {
+		return reconcile.Result{}, err
+	} else if !ok {
+		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+	}
+
 	// if cluster need to force delete, skipping VM deletion and remove the finalizer.
 	if ctx.ElfCluster.HasForceDeleteCluster() {
 		ctx.Logger.Info("Skip VM deletion due to the force-delete-cluster annotation")
@@ -902,6 +908,60 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 	}
 
 	return placementGroup, nil
+}
+
+// deletePlacementGroup deletes the placement group when the deployment is deleted
+// and the cluster is not deleted.
+func (r *ElfMachineReconciler) deletePlacementGroup(ctx *context.MachineContext) (bool, error) {
+	if !ctx.Cluster.DeletionTimestamp.IsZero() || machineutil.IsControlPlaneMachine(ctx.Machine) {
+		return true, nil
+	}
+
+	md, err := machineutil.GetMDByMachine(ctx, ctx.Client, ctx.Machine)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return true, nil
+		}
+
+		return false, err
+	}
+
+	if md.DeletionTimestamp.IsZero() && *md.Spec.Replicas > 0 {
+		return true, nil
+	}
+
+	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
+	if err != nil {
+		return false, err
+	}
+
+	if !strings.HasPrefix(placementGroupName, towerresources.GetVMPlacementGroupNamePrefix(ctx.Cluster)) {
+		return true, nil
+	}
+
+	placementGroup, err := ctx.VMService.GetVMPlacementGroup(placementGroupName)
+	if err != nil {
+		if service.IsVMPlacementGroupNotFound(err) {
+			return true, nil
+		}
+
+		return false, err
+	}
+
+	if ok := acquireTicketForPlacementGroupOperation(*placementGroup.Name); ok {
+		defer releaseTicketForPlacementGroupOperation(*placementGroup.Name)
+	} else {
+		return false, nil
+	}
+
+	task, err := ctx.VMService.SynchDeleteVMPlacementGroupsByName(*placementGroup.Name)
+	if err != nil {
+		return false, err
+	} else if task != nil {
+		ctx.Logger.Info(fmt.Sprintf("Placement group %s deleted", *placementGroup.Name), "taskID", *task.ID)
+	}
+
+	return true, nil
 }
 
 func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContext, placementGroup *models.VMPlacementGroup, vmIDs []string) error {

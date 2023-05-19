@@ -352,6 +352,21 @@ func (mr *MockVMServiceMockRecorder) ShutDown(uuid interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ShutDown", reflect.TypeOf((*MockVMService)(nil).ShutDown), uuid)
 }
 
+// SynchDeleteVMPlacementGroupsByName mocks base method.
+func (m *MockVMService) SynchDeleteVMPlacementGroupsByName(placementGroupName string) (*models.Task, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SynchDeleteVMPlacementGroupsByName", placementGroupName)
+	ret0, _ := ret[0].(*models.Task)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SynchDeleteVMPlacementGroupsByName indicates an expected call of SynchDeleteVMPlacementGroupsByName.
+func (mr *MockVMServiceMockRecorder) SynchDeleteVMPlacementGroupsByName(placementGroupName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SynchDeleteVMPlacementGroupsByName", reflect.TypeOf((*MockVMService)(nil).SynchDeleteVMPlacementGroupsByName), placementGroupName)
+}
+
 // UpsertLabel mocks base method.
 func (m *MockVMService) UpsertLabel(key, value string) (*models.Label, error) {
 	m.ctrl.T.Helper()
