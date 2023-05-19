@@ -628,7 +628,7 @@ func (r *ElfMachineReconciler) getVM(ctx *context.MachineContext) (*models.VM, e
 
 // reconcileVMStatus make sures the VM in the Running status.
 // 1. VM in STOPPED status will be powered on.
-// 2. VM in SUSPENDED status will be powered off and power on.
+// 2. VM in SUSPENDED status will be powered off, then powered on in future reconcile.
 // It will return true when VM status is not in STOPPED or SUSPENDED status.
 func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm *models.VM) (bool, error) {
 	if vm.Status == nil {
