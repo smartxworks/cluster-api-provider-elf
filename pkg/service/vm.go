@@ -67,7 +67,7 @@ type VMService interface {
 	CreateVMPlacementGroup(name, clusterID string, vmPolicy models.VMVMPolicy) (*models.WithTaskVMPlacementGroup, error)
 	GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error)
 	AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error)
-	DeleteVMPlacementGroupsByName(placementGroupName string) (*models.Task, error)
+	DeleteVMPlacementGroupsByName(placementGroupName string) error
 }
 
 type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
@@ -718,8 +718,8 @@ func (svr *TowerVMService) AddVMsToPlacementGroup(placementGroup *models.VMPlace
 	return &models.Task{ID: updateVMPlacementGroupResp.Payload[0].TaskID}, nil
 }
 
-// DeleteVMPlacementGroupsByName deletes placement groups by name.
-func (svr *TowerVMService) DeleteVMPlacementGroupsByName(placementGroupName string) (*models.Task, error) {
+// DeleteVMPlacementGroupsByName deletes placement groups by name synchronously.
+func (svr *TowerVMService) DeleteVMPlacementGroupsByName(placementGroupName string) error {
 	deleteVMPlacementGroupParams := clientvmplacementgroup.NewDeleteVMPlacementGroupParams()
 	deleteVMPlacementGroupParams.RequestBody = &models.VMPlacementGroupDeletionParams{
 		Where: &models.VMPlacementGroupWhereInput{
@@ -729,12 +729,22 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByName(placementGroupName stri
 
 	deleteVMPlacementGroupResp, err := svr.Session.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if len(deleteVMPlacementGroupResp.Payload) == 0 {
-		return nil, nil
+		return nil
 	}
 
-	return &models.Task{ID: deleteVMPlacementGroupResp.Payload[0].TaskID}, nil
+	taskID := *deleteVMPlacementGroupResp.Payload[0].TaskID
+	withLatestStatusTask, err := svr.WaitTask(taskID, config.WaitTaskTimeout, config.WaitTaskInterval)
+	if err != nil {
+		return errors.Wrapf(err, "failed to wait for placement group deletion task done in %s: namePrefix %s, taskID %s", config.WaitTaskTimeout, placementGroupName, taskID)
+	}
+
+	if *withLatestStatusTask.Status == models.TaskStatusFAILED {
+		return errors.Errorf("failed to delete placement group %s in task %s", placementGroupName, *withLatestStatusTask.ID)
+	}
+
+	return nil
 }
