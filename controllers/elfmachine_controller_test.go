@@ -1449,6 +1449,84 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
 		})
+
+		It("should delete placement group when the deployment is deleted", func() {
+			cluster.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.VMService = mockVMService
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err := reconciler.deletePlacementGroup(machineContext)
+			Expect(ok).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+
+			cluster.DeletionTimestamp = nil
+			fake.ToControlPlaneMachine(machine, kcp)
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err = reconciler.deletePlacementGroup(machineContext)
+			Expect(ok).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+
+			fake.ToWorkerMachine(machine, md)
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err = reconciler.deletePlacementGroup(machineContext)
+			Expect(ok).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			machineContext = newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err = reconciler.deletePlacementGroup(machineContext)
+			Expect(ok).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+
+			md.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			machineContext = newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.VMService = mockVMService
+			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctrlContext.Client, machine, cluster)
+			Expect(err).NotTo(HaveOccurred())
+			placementGroup := fake.NewVMPlacementGroup([]string{})
+			placementGroup.Name = util.TowerString(placementGroupName)
+			mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(placementGroupName).Return(nil)
+
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err = reconciler.deletePlacementGroup(machineContext)
+			Expect(ok).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+
+			md.DeletionTimestamp = nil
+			md.Spec.Replicas = pointer.Int32(0)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err = reconciler.deletePlacementGroup(machineContext)
+			Expect(ok).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New("error"))
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err = reconciler.deletePlacementGroup(machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(err).To(HaveOccurred())
+
+			mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(placementGroupName).Return(errors.New("error"))
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err = reconciler.deletePlacementGroup(machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(err).To(HaveOccurred())
+		})
 	})
 
 	Context("Reconcile static IP allocation", func() {

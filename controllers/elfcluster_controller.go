@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -232,23 +231,11 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 
 func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) error {
 	placementGroupPrefix := towerresources.GetVMPlacementGroupNamePrefix(ctx.Cluster)
-	task, err := ctx.VMService.DeleteVMPlacementGroupsByName(placementGroupPrefix)
-	if err != nil {
+	if err := ctx.VMService.DeleteVMPlacementGroupsByName(placementGroupPrefix); err != nil {
 		return err
-	} else if task == nil {
-		return nil
+	} else {
+		ctx.Logger.Info(fmt.Sprintf("Placement groups with name prefix %s deleted", placementGroupPrefix))
 	}
-
-	withLatestStatusTask, err := ctx.VMService.WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval)
-	if err != nil {
-		return errors.Wrapf(err, "failed to wait for placement groups deletion task done in %s: namePrefix %s, taskID %s", config.WaitTaskTimeout, placementGroupPrefix, *task.ID)
-	}
-
-	if *withLatestStatusTask.Status == models.TaskStatusFAILED {
-		return errors.Errorf("failed to delete placement groups %s in task %s", placementGroupPrefix, *withLatestStatusTask.ID)
-	}
-
-	ctx.Logger.Info(fmt.Sprintf("Placement groups %s deleted", placementGroupPrefix), "taskID", *withLatestStatusTask.ID)
 
 	return nil
 }
