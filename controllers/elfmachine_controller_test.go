@@ -571,6 +571,74 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task2.ID))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PoweringOnReason}})
 		})
+
+		It("should power off the VM when vm is in SUSPENDED status", func() {
+			towerCluster := fake.NewTowerCluster()
+			vm := fake.NewTowerVM()
+			vm.EntityAsyncStatus = nil
+			status := models.VMStatusSUSPENDED
+			vm.Status = &status
+			task1 := fake.NewTowerTask()
+			taskStatus := models.TaskStatusSUCCESSED
+			task1.Status = &taskStatus
+			task2 := fake.NewTowerTask()
+			elfMachine.Status.VMRef = *vm.ID
+			elfMachine.Status.TaskRef = *task1.ID
+			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task1, nil)
+			mockVMService.EXPECT().PowerOff(*vm.LocalID).Return(task2, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be powered off"))
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
+			Expect(elfMachine.Status.TaskRef).To(Equal(*task2.ID))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PowerOffReason}})
+		})
+
+		It("should handle power off error", func() {
+			towerCluster := fake.NewTowerCluster()
+			vm := fake.NewTowerVM()
+			vm.EntityAsyncStatus = nil
+			status := models.VMStatusSUSPENDED
+			vm.Status = &status
+			task1 := fake.NewTowerTask()
+			taskStatus := models.TaskStatusSUCCESSED
+			task1.Status = &taskStatus
+			elfMachine.Status.VMRef = *vm.ID
+			elfMachine.Status.TaskRef = *task1.ID
+			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task1, nil)
+			mockVMService.EXPECT().PowerOff(*vm.LocalID).Return(nil, errors.New("some error"))
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).To(BeZero())
+			Expect(err.Error()).To(ContainSubstring("failed to trigger powering off for VM"))
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
+			Expect(elfMachine.Status.TaskRef).To(Equal(""))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.PoweringOffFailedReason}})
+		})
 	})
 
 	Context("Reconcile Placement Group", func() {
