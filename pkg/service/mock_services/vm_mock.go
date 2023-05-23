@@ -351,6 +351,21 @@ func (mr *MockVMServiceMockRecorder) ShutDown(uuid interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ShutDown", reflect.TypeOf((*MockVMService)(nil).ShutDown), uuid)
 }
 
+// UpdateVM mocks base method.
+func (m *MockVMService) UpdateVM(vm *models.VM, elfMachine *v1beta1.ElfMachine) (*models.WithTaskVM, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateVM", vm, elfMachine)
+	ret0, _ := ret[0].(*models.WithTaskVM)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateVM indicates an expected call of UpdateVM.
+func (mr *MockVMServiceMockRecorder) UpdateVM(vm, elfMachine interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateVM", reflect.TypeOf((*MockVMService)(nil).UpdateVM), vm, elfMachine)
+}
+
 // UpsertLabel mocks base method.
 func (m *MockVMService) UpsertLabel(key, value string) (*models.Label, error) {
 	m.ctrl.T.Helper()

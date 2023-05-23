@@ -305,7 +305,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should allow VM to be temporarily disconnected", func() {
 			towerCluster := fake.NewTowerCluster()
-			vm := fake.NewTowerVM()
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusRUNNING
 			vm.Status = &status
@@ -441,7 +441,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should power on the VM after it is created", func() {
 			towerCluster := fake.NewTowerCluster()
-			vm := fake.NewTowerVM()
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
 			vm.Status = &status
@@ -505,7 +505,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should handle power on error", func() {
 			towerCluster := fake.NewTowerCluster()
-			vm := fake.NewTowerVM()
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
 			vm.Status = &status
@@ -538,7 +538,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It(" handle power on task failure", func() {
 			towerCluster := fake.NewTowerCluster()
-			vm := fake.NewTowerVM()
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
 			vm.Status = &status
@@ -574,7 +574,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should power off the VM when vm is in SUSPENDED status", func() {
 			towerCluster := fake.NewTowerCluster()
-			vm := fake.NewTowerVM()
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSUSPENDED
 			vm.Status = &status
@@ -609,7 +609,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should handle power off error", func() {
 			towerCluster := fake.NewTowerCluster()
-			vm := fake.NewTowerVM()
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSUSPENDED
 			vm.Status = &status
@@ -638,6 +638,91 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.PoweringOffFailedReason}})
+		})
+	})
+
+	Context("Reconcile VM status", func() {
+		It("should shut down the VM when configurations was modified and VM is running", func() {
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			*vm.Vcpu += 1
+			vm.Status = models.NewVMStatus(models.VMStatusRUNNING)
+			task := fake.NewTowerTask()
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.VMService = mockVMService
+
+			mockVMService.EXPECT().ShutDown(elfMachine.Status.VMRef).Return(task, nil)
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileVMStatus(machineContext, vm)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("The VM configurations has been modified, shut down the VM first and then restore the VM configurations"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ShuttingDownReason}})
+		})
+
+		It("should power off the VM when configurations was modified and shut down failed", func() {
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			*vm.CPU.Cores += 1
+			vm.Status = models.NewVMStatus(models.VMStatusRUNNING)
+			task := fake.NewTowerTask()
+
+			conditions.MarkFalse(elfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, "JOB_VM_SHUTDOWN_TIMEOUT")
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.VMService = mockVMService
+
+			mockVMService.EXPECT().PowerOff(elfMachine.Status.VMRef).Return(task, nil)
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileVMStatus(machineContext, vm)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("The VM configurations has been modified, power off the VM first and then restore the VM configurations"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PowerOffReason}})
+		})
+
+		It("should restore the VM configurations when configurations was modified", func() {
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			*vm.CPU.Sockets += 1
+			vm.Status = models.NewVMStatus(models.VMStatusSTOPPED)
+			task := fake.NewTowerTask()
+			withTaskVM := fake.NewWithTaskVM(vm, task)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.VMService = mockVMService
+
+			logBuffer = new(bytes.Buffer)
+			klog.SetOutput(logBuffer)
+			mockVMService.EXPECT().UpdateVM(vm, elfMachine).Return(withTaskVM, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileVMStatus(machineContext, vm)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("The VM configurations has been modified, and the VM is stopped, just restore the VM configurations to expected values"))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be updated"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.UpdatingReason}})
+		})
+
+		It("should power off the VM configurations when configurations and VM is suspended", func() {
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			*vm.Vcpu += 1
+			vm.Status = models.NewVMStatus(models.VMStatusSUSPENDED)
+			task := fake.NewTowerTask()
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.VMService = mockVMService
+
+			mockVMService.EXPECT().PowerOff(elfMachine.Status.VMRef).Return(task, nil)
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileVMStatus(machineContext, vm)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("The VM configurations has been modified"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PowerOffReason}})
 		})
 	})
 
@@ -1069,7 +1154,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
 			towerCluster := fake.NewTowerCluster()
-			vm := fake.NewTowerVM()
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			elfMachine.Status.VMRef = *vm.LocalID
 			vm.EntityAsyncStatus = nil
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
@@ -1100,7 +1185,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should wait VM network ready", func() {
 			towerCluster := fake.NewTowerCluster()
-			vm := fake.NewTowerVM()
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.EntityAsyncStatus = nil
 			elfMachine.Status.VMRef = *vm.LocalID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
@@ -1149,7 +1234,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should set ElfMachine to ready when VM network is ready", func() {
 			towerCluster := fake.NewTowerCluster()
-			vm := fake.NewTowerVM()
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.EntityAsyncStatus = nil
 			elfMachine.Status.VMRef = *vm.LocalID
 			nic := fake.NewTowerVMNic(0)

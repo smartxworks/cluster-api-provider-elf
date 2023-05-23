@@ -23,6 +23,7 @@ import (
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/utils/pointer"
 
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
@@ -55,6 +56,20 @@ func NewTowerVM() *models.VM {
 		Status:            &status,
 		EntityAsyncStatus: (*models.EntityAsyncStatus)(pointer.String("CREATING")),
 	}
+}
+
+func NewTowerVMFromElfMachine(elfMachine *infrav1.ElfMachine) *models.VM {
+	vm := NewTowerVM()
+
+	vm.Vcpu = util.TowerCPU(elfMachine.Spec.NumCPUs)
+	vm.CPU = &models.NestedCPU{
+		Cores:   util.TowerCPU(elfMachine.Spec.NumCoresPerSocket),
+		Sockets: util.TowerCPU(elfMachine.Spec.NumCPUs / elfMachine.Spec.NumCoresPerSocket),
+	}
+	vm.Memory = util.TowerMemory(elfMachine.Spec.MemoryMiB)
+	vm.Ha = util.TowerBool(elfMachine.Spec.HA)
+
+	return vm
 }
 
 func NewTowerVMNic(order int) *models.VMNic {

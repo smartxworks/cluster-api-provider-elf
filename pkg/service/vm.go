@@ -46,6 +46,7 @@ type VMService interface {
 		machine *clusterv1.Machine,
 		elfMachine *infrav1.ElfMachine,
 		bootstrapData, host string) (*models.WithTaskVM, error)
+	UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachine) (*models.WithTaskVM, error)
 	Migrate(vmID, hostID string) (*models.WithTaskVM, error)
 	Delete(uuid string) (*models.Task, error)
 	PowerOff(uuid string) (*models.Task, error)
@@ -84,6 +85,35 @@ func NewVMService(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VM
 type TowerVMService struct {
 	Session *session.TowerSession `json:"session"`
 	Logger  logr.Logger           `json:"logger"`
+}
+
+func (svr *TowerVMService) UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachine) (*models.WithTaskVM, error) {
+	numCPUs := elfMachine.Spec.NumCPUs
+	if numCPUs <= 0 {
+		numCPUs = config.VMNumCPUs
+	}
+	numCoresPerSocket := elfMachine.Spec.NumCoresPerSocket
+	if numCoresPerSocket <= 0 {
+		numCoresPerSocket = numCPUs
+	}
+	numCPUSockets := numCPUs / numCoresPerSocket
+
+	updateVMParams := clientvm.NewUpdateVMParams()
+	updateVMParams.RequestBody = &models.VMUpdateParams{
+		Data: &models.VMUpdateParamsData{
+			Vcpu:       util.TowerCPU(numCPUs),
+			CPUCores:   util.TowerCPU(numCoresPerSocket),
+			CPUSockets: util.TowerCPU(numCPUSockets),
+		},
+		Where: &models.VMWhereInput{ID: util.TowerString(*vm.ID)},
+	}
+
+	updateVMResp, err := svr.Session.VM.UpdateVM(updateVMParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return updateVMResp.Payload[0], nil
 }
 
 // Clone kicks off a clone operation on Elf to create a new virtual machine using VM template.

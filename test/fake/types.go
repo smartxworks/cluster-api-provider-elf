@@ -87,6 +87,10 @@ func NewMachineObjects(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluste
 			CreationTimestamp: metav1.Now(),
 		},
 		Spec: infrav1.ElfMachineSpec{
+			HA:                true,
+			NumCPUs:           1,
+			NumCoresPerSocket: 1,
+			MemoryMiB:         1024,
 			Network: infrav1.NetworkSpec{
 				Devices: []infrav1.NetworkDeviceSpec{
 					{},

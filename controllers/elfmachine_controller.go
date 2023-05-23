@@ -631,41 +631,89 @@ func (r *ElfMachineReconciler) getVM(ctx *context.MachineContext) (*models.VM, e
 	return nil, errors.Wrapf(err, "failed to create VM for ElfMachine %s/%s", ctx.ElfMachine.Namespace, ctx.ElfMachine.Name)
 }
 
-// reconcileVMStatus ensures the VM is in Running status.
+// reconcileVMStatus ensures the VM is in Running status and configured as expected.
 // 1. VM in STOPPED status will be powered on.
 // 2. VM in SUSPENDED status will be powered off, then powered on in future reconcile.
+// 3. Set VM configurations to the expected values.
 // It will return true when VM status is not in STOPPED or SUSPENDED status.
 func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm *models.VM) (bool, error) {
 	if vm.Status == nil {
 		return true, nil
 	}
 
+	vmModifiedFields := service.GetVMModifiedFields(vm, ctx.ElfMachine)
+	if len(vmModifiedFields) > 0 {
+		message := "The VM configurations has been modified"
+		switch *vm.Status {
+		case models.VMStatusRUNNING:
+			// If VM shutdown timed out, simply power off the VM.
+			if service.IsShutDownTimeout(conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)) {
+				ctx.Logger.Info(fmt.Sprintf("%s, power off the VM first and then restore the VM configurations", message), "vmRef", ctx.ElfMachine.Status.VMRef, "vmModifiedFields", vmModifiedFields)
+
+				return false, r.powerOffVM(ctx)
+			} else {
+				ctx.Logger.Info(fmt.Sprintf("%s, shut down the VM first and then restore the VM configurations", message), "vmRef", ctx.ElfMachine.Status.VMRef, "vmModifiedFields", vmModifiedFields)
+
+				return false, r.shutDownVM(ctx)
+			}
+		case models.VMStatusSTOPPED:
+			ctx.Logger.Info(fmt.Sprintf("%s, and the VM is stopped, just restore the VM configurations to expected values", message), "vmRef", ctx.ElfMachine.Status.VMRef, "vmModifiedFields", vmModifiedFields)
+
+			return false, r.updateVM(ctx, vm)
+		}
+
+		ctx.Logger.Info(message, "vmRef", ctx.ElfMachine.Status.VMRef, "vmStatus", *vm.Status, "vmModifiedFields", vmModifiedFields)
+	}
+
 	switch *vm.Status {
 	case models.VMStatusSTOPPED:
-		return r.powerOnVM(ctx)
+		return false, r.powerOnVM(ctx)
 	case models.VMStatusSUSPENDED:
 		// In some abnormal conditions, the VM will be in a suspended state,
 		// e.g. wrong settings in VM or an exception occurred in the Guest OS.
 		// try to 'Power off VM -> Power on VM' resumes the VM from a suspended state.
 		// See issue http://jira.smartx.com/browse/SKS-1351 for details.
-		return r.powerOffVM(ctx)
+		return false, r.powerOffVM(ctx)
 	}
 
 	return true, nil
 }
 
-func (r *ElfMachineReconciler) powerOffVM(ctx *context.MachineContext) (bool, error) {
+func (r *ElfMachineReconciler) shutDownVM(ctx *context.MachineContext) error {
+	if ok := acquireTicketForUpdatingVM(ctx.ElfMachine.Name); !ok {
+		ctx.Logger.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip shut down VM %s", ctx.ElfMachine.Status.VMRef))
+
+		return nil
+	}
+
+	task, err := ctx.VMService.ShutDown(ctx.ElfMachine.Status.VMRef)
+	if err != nil {
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.ShuttingDownFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+
+		return errors.Wrapf(err, "failed to trigger shut down for VM %s", ctx)
+	}
+
+	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.ShuttingDownReason, clusterv1.ConditionSeverityInfo, "")
+
+	ctx.ElfMachine.SetTask(*task.ID)
+
+	ctx.Logger.Info("Waiting for VM to be shut down", "vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
+
+	return nil
+}
+
+func (r *ElfMachineReconciler) powerOffVM(ctx *context.MachineContext) error {
 	if ok := acquireTicketForUpdatingVM(ctx.ElfMachine.Name); !ok {
 		ctx.Logger.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip powering off VM %s", ctx.ElfMachine.Status.VMRef))
 
-		return false, nil
+		return nil
 	}
 
 	task, err := ctx.VMService.PowerOff(ctx.ElfMachine.Status.VMRef)
 	if err != nil {
 		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOffFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 
-		return false, errors.Wrapf(err, "failed to trigger powering off for VM %s", ctx)
+		return errors.Wrapf(err, "failed to trigger powering off for VM %s", ctx)
 	}
 
 	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PowerOffReason, clusterv1.ConditionSeverityInfo, "")
@@ -674,15 +722,15 @@ func (r *ElfMachineReconciler) powerOffVM(ctx *context.MachineContext) (bool, er
 
 	ctx.Logger.Info("Waiting for VM to be powered off", "vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
 
-	return false, nil
+	return nil
 }
 
-func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext) (bool, error) {
+func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext) error {
 	if ok := isElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster); ok {
 		if canRetry := canRetryVMOperation(ctx.ElfCluster.Spec.Cluster); !canRetry {
 			ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, skip powering on VM %s", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
 
-			return false, nil
+			return nil
 		}
 
 		ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for the ELF cluster %s was detected previously, try to power on VM %s to check if the ELF cluster has sufficient memory now", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
@@ -691,14 +739,14 @@ func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext) (bool, err
 	if ok := acquireTicketForUpdatingVM(ctx.ElfMachine.Name); !ok {
 		ctx.Logger.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip power on VM %s", ctx.ElfMachine.Status.VMRef))
 
-		return false, nil
+		return nil
 	}
 
 	task, err := ctx.VMService.PowerOn(ctx.ElfMachine.Status.VMRef)
 	if err != nil {
 		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOnFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 
-		return false, errors.Wrapf(err, "failed to trigger power on for VM %s", ctx)
+		return errors.Wrapf(err, "failed to trigger power on for VM %s", ctx)
 	}
 
 	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOnReason, clusterv1.ConditionSeverityInfo, "")
@@ -707,7 +755,30 @@ func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext) (bool, err
 
 	ctx.Logger.Info("Waiting for VM to be powered on", "vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
 
-	return false, nil
+	return nil
+}
+
+func (r *ElfMachineReconciler) updateVM(ctx *context.MachineContext, vm *models.VM) error {
+	if ok := acquireTicketForUpdatingVM(ctx.ElfMachine.Name); !ok {
+		ctx.Logger.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip updating VM %s", ctx.ElfMachine.Status.VMRef))
+
+		return nil
+	}
+
+	withTaskVM, err := ctx.VMService.UpdateVM(vm, ctx.ElfMachine)
+	if err != nil {
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.UpdatingFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+
+		return errors.Wrapf(err, "failed to trigger update for VM %s", ctx)
+	}
+
+	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.UpdatingReason, clusterv1.ConditionSeverityInfo, "")
+
+	ctx.ElfMachine.SetTask(*withTaskVM.TaskID)
+
+	ctx.Logger.Info("Waiting for the VM to be updated", "vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
+
+	return nil
 }
 
 func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *models.VM) (taskDone bool, reterr error) {
