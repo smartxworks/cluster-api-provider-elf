@@ -21,8 +21,18 @@ import "github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 // Tower resources.
 const (
 	TowerResourcePrefix = "TOWER_RESOURCE_PREFIX"
+	// By default, CAPE does not allow modify the configurations(CPU) of VM directly.
+	// If the configurations of the VM is modified,
+	// CAPE will try to restore the VM configurations set by ElfMachine.
+	// If want to skip CAPE and modify the configurations of the VM,
+	// can use AllowCustomVMConfig.
+	AllowCustomVMConfig = "ALLOW_CUSTOM_VM_CONFIG"
 )
 
 func GetResourcePrefix() string {
 	return util.GetEnv(TowerResourcePrefix, "cape")
+}
+
+func IsAllowCustomVMConfig() bool {
+	return util.GetEnv(AllowCustomVMConfig, "false") == "true"
 }

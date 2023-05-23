@@ -641,28 +641,30 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 		return true, nil
 	}
 
-	vmModifiedFields := service.GetVMModifiedFields(vm, ctx.ElfMachine)
-	if len(vmModifiedFields) > 0 {
-		message := "The VM configurations has been modified"
-		switch *vm.Status {
-		case models.VMStatusRUNNING:
-			// If VM shutdown timed out, simply power off the VM.
-			if service.IsShutDownTimeout(conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)) {
-				ctx.Logger.Info(fmt.Sprintf("%s, power off the VM first and then restore the VM configurations", message), "vmRef", ctx.ElfMachine.Status.VMRef, "vmModifiedFields", vmModifiedFields)
+	if !towerresources.IsAllowCustomVMConfig() {
+		vmModifiedFields := service.GetVMModifiedFields(vm, ctx.ElfMachine)
+		if len(vmModifiedFields) > 0 {
+			message := "The VM configurations has been modified"
+			switch *vm.Status {
+			case models.VMStatusRUNNING:
+				// If VM shutdown timed out, simply power off the VM.
+				if service.IsShutDownTimeout(conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)) {
+					ctx.Logger.Info(fmt.Sprintf("%s, power off the VM first and then restore the VM configurations", message), "vmRef", ctx.ElfMachine.Status.VMRef, "vmModifiedFields", vmModifiedFields)
 
-				return false, r.powerOffVM(ctx)
-			} else {
-				ctx.Logger.Info(fmt.Sprintf("%s, shut down the VM first and then restore the VM configurations", message), "vmRef", ctx.ElfMachine.Status.VMRef, "vmModifiedFields", vmModifiedFields)
+					return false, r.powerOffVM(ctx)
+				} else {
+					ctx.Logger.Info(fmt.Sprintf("%s, shut down the VM first and then restore the VM configurations", message), "vmRef", ctx.ElfMachine.Status.VMRef, "vmModifiedFields", vmModifiedFields)
 
-				return false, r.shutDownVM(ctx)
+					return false, r.shutDownVM(ctx)
+				}
+			case models.VMStatusSTOPPED:
+				ctx.Logger.Info(fmt.Sprintf("%s, and the VM is stopped, just restore the VM configurations to expected values", message), "vmRef", ctx.ElfMachine.Status.VMRef, "vmModifiedFields", vmModifiedFields)
+
+				return false, r.updateVM(ctx, vm)
 			}
-		case models.VMStatusSTOPPED:
-			ctx.Logger.Info(fmt.Sprintf("%s, and the VM is stopped, just restore the VM configurations to expected values", message), "vmRef", ctx.ElfMachine.Status.VMRef, "vmModifiedFields", vmModifiedFields)
 
-			return false, r.updateVM(ctx, vm)
+			ctx.Logger.Info(message, "vmRef", ctx.ElfMachine.Status.VMRef, "vmStatus", *vm.Status, "vmModifiedFields", vmModifiedFields)
 		}
-
-		ctx.Logger.Info(message, "vmRef", ctx.ElfMachine.Status.VMRef, "vmStatus", *vm.Status, "vmModifiedFields", vmModifiedFields)
 	}
 
 	switch *vm.Status {
