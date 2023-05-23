@@ -26,7 +26,9 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
-func GetVMModifiedFields(vm *models.VM, elfMachine *infrav1.ElfMachine) map[string]string {
+// GetUpdatedVMRestrictedFields returns the updated restricted fields of the VM compared to ElfMachine.
+// restricted fields: vcpu/cpuCores/cpuSockets.
+func GetUpdatedVMRestrictedFields(vm *models.VM, elfMachine *infrav1.ElfMachine) map[string]string {
 	fieldMap := make(map[string]string)
 	numCPUs := elfMachine.Spec.NumCPUs
 	if numCPUs <= 0 {

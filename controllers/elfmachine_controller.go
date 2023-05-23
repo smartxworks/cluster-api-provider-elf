@@ -641,41 +641,43 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 		return true, nil
 	}
 
-	if !towerresources.IsAllowCustomVMConfig() {
-		vmModifiedFields := service.GetVMModifiedFields(vm, ctx.ElfMachine)
-		if len(vmModifiedFields) > 0 {
-			message := "The VM configurations has been modified"
-			switch *vm.Status {
-			case models.VMStatusRUNNING:
-				// If VM shutdown timed out, simply power off the VM.
-				if service.IsShutDownTimeout(conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)) {
-					ctx.Logger.Info(fmt.Sprintf("%s, power off the VM first and then restore the VM configurations", message), "vmRef", ctx.ElfMachine.Status.VMRef, "vmModifiedFields", vmModifiedFields)
-
-					return false, r.powerOffVM(ctx)
-				} else {
-					ctx.Logger.Info(fmt.Sprintf("%s, shut down the VM first and then restore the VM configurations", message), "vmRef", ctx.ElfMachine.Status.VMRef, "vmModifiedFields", vmModifiedFields)
-
-					return false, r.shutDownVM(ctx)
-				}
-			case models.VMStatusSTOPPED:
-				ctx.Logger.Info(fmt.Sprintf("%s, and the VM is stopped, just restore the VM configurations to expected values", message), "vmRef", ctx.ElfMachine.Status.VMRef, "vmModifiedFields", vmModifiedFields)
-
-				return false, r.updateVM(ctx, vm)
-			}
-
-			ctx.Logger.Info(message, "vmRef", ctx.ElfMachine.Status.VMRef, "vmStatus", *vm.Status, "vmModifiedFields", vmModifiedFields)
-		}
-	}
-
+	updatedVMRestrictedFields := service.GetUpdatedVMRestrictedFields(vm, ctx.ElfMachine)
 	switch *vm.Status {
+	case models.VMStatusRUNNING:
+		if len(updatedVMRestrictedFields) > 0 {
+			// If VM shutdown timed out, simply power off the VM.
+			if service.IsShutDownTimeout(conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)) {
+				ctx.Logger.Info("The VM configurations has been modified, power off the VM first and then restore the VM configurations", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
+
+				return false, r.powerOffVM(ctx)
+			} else {
+				ctx.Logger.Info("The VM configurations has been modified, shut down the VM first and then restore the VM configurations", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
+
+				return false, r.shutDownVM(ctx)
+			}
+		}
 	case models.VMStatusSTOPPED:
+		if len(updatedVMRestrictedFields) > 0 {
+			ctx.Logger.Info("The VM configurations has been modified, and the VM is stopped, just restore the VM configurations to expected values", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
+
+			return false, r.updateVM(ctx, vm)
+		}
+
 		return false, r.powerOnVM(ctx)
 	case models.VMStatusSUSPENDED:
+		if len(updatedVMRestrictedFields) > 0 {
+			ctx.Logger.Info("The VM configurations has been modified", "vmRef", ctx.ElfMachine.Status.VMRef, "vmStatus", *vm.Status, "updatedVMRestrictedFields", updatedVMRestrictedFields)
+		}
+
 		// In some abnormal conditions, the VM will be in a suspended state,
 		// e.g. wrong settings in VM or an exception occurred in the Guest OS.
 		// try to 'Power off VM -> Power on VM' resumes the VM from a suspended state.
 		// See issue http://jira.smartx.com/browse/SKS-1351 for details.
 		return false, r.powerOffVM(ctx)
+	default:
+		if len(updatedVMRestrictedFields) > 0 {
+			ctx.Logger.Info("The VM configurations has been modified", "vmRef", ctx.ElfMachine.Status.VMRef, "vmStatus", *vm.Status, "updatedVMRestrictedFields", updatedVMRestrictedFields)
+		}
 	}
 
 	return true, nil
