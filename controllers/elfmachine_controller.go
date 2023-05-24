@@ -634,7 +634,7 @@ func (r *ElfMachineReconciler) getVM(ctx *context.MachineContext) (*models.VM, e
 // reconcileVMStatus ensures the VM is in Running status and configured as expected.
 // 1. VM in STOPPED status will be powered on.
 // 2. VM in SUSPENDED status will be powered off, then powered on in future reconcile.
-// 3. Set VM configurations to the expected values.
+// 3. Set VM configuration to the expected values.
 // It will return true when VM status is not in STOPPED or SUSPENDED status.
 func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm *models.VM) (bool, error) {
 	if vm.Status == nil {
@@ -647,18 +647,18 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 		if len(updatedVMRestrictedFields) > 0 {
 			// If VM shutdown timed out, simply power off the VM.
 			if service.IsShutDownTimeout(conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)) {
-				ctx.Logger.Info("The VM configuration has been modified, power off the VM first and then restore the VM configurations", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
+				ctx.Logger.Info("The VM configuration has been modified, power off the VM first and then restore the VM configuration", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
 
 				return false, r.powerOffVM(ctx)
 			} else {
-				ctx.Logger.Info("The VM configuration has been modified, shut down the VM first and then restore the VM configurations", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
+				ctx.Logger.Info("The VM configuration has been modified, shut down the VM first and then restore the VM configuration", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
 
 				return false, r.shutDownVM(ctx)
 			}
 		}
 	case models.VMStatusSTOPPED:
 		if len(updatedVMRestrictedFields) > 0 {
-			ctx.Logger.Info("The VM configuration has been modified, and the VM is stopped, just restore the VM configurations to expected values", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
+			ctx.Logger.Info("The VM configuration has been modified, and the VM is stopped, just restore the VM configuration to expected values", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
 
 			return false, r.updateVM(ctx, vm)
 		}
@@ -670,10 +670,6 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 		// try to 'Power off VM -> Power on VM' resumes the VM from a suspended state.
 		// See issue http://jira.smartx.com/browse/SKS-1351 for details.
 		return false, r.powerOffVM(ctx)
-	default:
-		if len(updatedVMRestrictedFields) > 0 {
-			ctx.Logger.Info("The VM configuration has been modified", "vmRef", ctx.ElfMachine.Status.VMRef, "vmStatus", *vm.Status, "updatedVMRestrictedFields", updatedVMRestrictedFields)
-		}
 	}
 
 	return true, nil

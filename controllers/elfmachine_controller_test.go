@@ -642,7 +642,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 	})
 
 	Context("Reconcile VM status", func() {
-		It("should shut down the VM when configurations was modified and VM is running", func() {
+		It("should shut down the VM when configuration was modified and VM is running", func() {
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			*vm.Vcpu += 1
 			vm.Status = models.NewVMStatus(models.VMStatusRUNNING)
@@ -657,11 +657,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.reconcileVMStatus(machineContext, vm)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("The VM configuration has been modified, shut down the VM first and then restore the VM configurations"))
+			Expect(logBuffer.String()).To(ContainSubstring("The VM configuration has been modified, shut down the VM first and then restore the VM configuration"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ShuttingDownReason}})
 		})
 
-		It("should power off the VM when configurations was modified and shut down failed", func() {
+		It("should power off the VM when configuration was modified and shut down failed", func() {
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			*vm.CPU.Cores += 1
 			vm.Status = models.NewVMStatus(models.VMStatusRUNNING)
@@ -678,11 +678,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.reconcileVMStatus(machineContext, vm)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("The VM configuration has been modified, power off the VM first and then restore the VM configurations"))
+			Expect(logBuffer.String()).To(ContainSubstring("The VM configuration has been modified, power off the VM first and then restore the VM configuration"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PowerOffReason}})
 		})
 
-		It("should restore the VM configurations when configurations was modified", func() {
+		It("should restore the VM configuration when configuration was modified", func() {
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			*vm.CPU.Sockets += 1
 			vm.Status = models.NewVMStatus(models.VMStatusSTOPPED)
@@ -701,12 +701,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.reconcileVMStatus(machineContext, vm)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("The VM configuration has been modified, and the VM is stopped, just restore the VM configurations to expected values"))
+			Expect(logBuffer.String()).To(ContainSubstring("The VM configuration has been modified, and the VM is stopped, just restore the VM configuration to expected values"))
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be updated"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.UpdatingReason}})
 		})
 
-		It("should power off the VM configurations when configurations and VM is suspended", func() {
+		It("should power off the VM configuration when configuration and VM is suspended", func() {
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			*vm.Vcpu += 1
 			vm.Status = models.NewVMStatus(models.VMStatusSUSPENDED)
@@ -721,7 +721,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.reconcileVMStatus(machineContext, vm)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("The VM configuration has been modified"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PowerOffReason}})
 		})
 	})
