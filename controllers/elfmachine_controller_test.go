@@ -21,6 +21,7 @@ import (
 	goctx "context"
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -642,6 +643,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 	})
 
 	Context("Reconcile VM status", func() {
+		BeforeEach(func() {
+			Expect(os.Setenv(towerresources.AllowCustomVMConfig, "false")).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			Expect(os.Unsetenv(towerresources.AllowCustomVMConfig)).NotTo(HaveOccurred())
+		})
+
 		It("should shut down the VM when configuration was modified and VM is running", func() {
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			*vm.Vcpu += 1

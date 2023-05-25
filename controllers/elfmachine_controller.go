@@ -644,7 +644,7 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 	updatedVMRestrictedFields := service.GetUpdatedVMRestrictedFields(vm, ctx.ElfMachine)
 	switch *vm.Status {
 	case models.VMStatusRUNNING:
-		if len(updatedVMRestrictedFields) > 0 {
+		if len(updatedVMRestrictedFields) > 0 && towerresources.IsAllowCustomVMConfig() {
 			// If VM shutdown timed out, simply power off the VM.
 			if service.IsShutDownTimeout(conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)) {
 				ctx.Logger.Info("The VM configuration has been modified, power off the VM first and then restore the VM configuration", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
@@ -657,7 +657,7 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 			}
 		}
 	case models.VMStatusSTOPPED:
-		if len(updatedVMRestrictedFields) > 0 {
+		if len(updatedVMRestrictedFields) > 0 && towerresources.IsAllowCustomVMConfig() {
 			ctx.Logger.Info("The VM configuration has been modified, and the VM is stopped, just restore the VM configuration to expected values", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
 
 			return false, r.updateVM(ctx, vm)
