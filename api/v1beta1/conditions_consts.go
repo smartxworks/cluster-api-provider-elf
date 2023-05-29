@@ -39,11 +39,17 @@ const (
 	// CloningReason documents (Severity=Info) ElfMachine currently executing the clone operation.
 	CloningReason = "Cloning"
 
+	// UpdatingReason documents (Severity=Info) ElfMachine currently executing the update operation.
+	UpdatingReason = "Updating"
+
 	// PoweringOnReason documents (Severity=Info) a ElfMachine currently executing the power on sequence.
 	PoweringOnReason = "PoweringOn"
 
 	// PowerOffReason documents (Severity=Info) a ElfMachine currently executing the power off sequence.
 	PowerOffReason = "PoweringOff"
+
+	// ShuttingDownReason documents (Severity=Info) a ElfMachine currently executing the shut down sequence.
+	ShuttingDownReason = "ShuttingDown"
 
 	// PoweringOnFailedReason (Severity=Warning) documents a ElfMachine controller detecting
 	// an error while powering on; those kind of errors are usually transient and failed provisioning
@@ -55,10 +61,20 @@ const (
 	// are automatically re-tried by the controller.
 	PoweringOffFailedReason = "PoweringOffFailed"
 
+	// ShuttingDownFailedReason (Severity=Warning) documents a ElfMachine controller detecting
+	// an error while shutting down; those kind of errors are usually transient and failed provisioning
+	// are automatically re-tried by the controller.
+	ShuttingDownFailedReason = "ShuttingDownFailed"
+
 	// CloningFailedReason (Severity=Warning) documents a ElfMachine controller detecting
 	// an error while provisioning; those kind of errors are usually transient and failed provisioning
 	// are automatically re-tried by the controller.
 	CloningFailedReason = "CloningFailed"
+
+	// UpdatingFailedReason (Severity=Warning) documents a ElfMachine controller detecting
+	// an error while updating; those kind of errors are usually transient and failed provisioning
+	// are automatically re-tried by the controller.
+	UpdatingFailedReason = "UpdatingFailed"
 
 	// TaskFailureReason (Severity=Warning) documents a ElfMachine task failure; the reconcile look will automatically
 	// retry the operation, but a user intervention might be required to fix the problem.
