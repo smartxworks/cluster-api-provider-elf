@@ -38,7 +38,6 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/session"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 )
 
 type VMService interface {
@@ -61,6 +60,7 @@ type VMService interface {
 	WaitTask(id string, timeout, interval time.Duration) (*models.Task, error)
 	GetCluster(id string) (*models.Cluster, error)
 	GetHost(id string) (*models.Host, error)
+	GetHostsByCluster(clusterID string) ([]*models.Host, error)
 	GetVlan(id string) (*models.Vlan, error)
 	UpsertLabel(key, value string) (*models.Label, error)
 	DeleteLabel(key, value string, strict bool) (string, error)
@@ -88,24 +88,18 @@ type TowerVMService struct {
 }
 
 func (svr *TowerVMService) UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachine) (*models.WithTaskVM, error) {
-	numCPUs := elfMachine.Spec.NumCPUs
-	if numCPUs <= 0 {
-		numCPUs = config.VMNumCPUs
-	}
-	numCoresPerSocket := elfMachine.Spec.NumCoresPerSocket
-	if numCoresPerSocket <= 0 {
-		numCoresPerSocket = numCPUs
-	}
-	numCPUSockets := numCPUs / numCoresPerSocket
+	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
+	cpuCores := TowerCPUCores(*vCPU, elfMachine.Spec.NumCoresPerSocket)
+	cpuSockets := TowerCPUSockets(*vCPU, *cpuCores)
 
 	updateVMParams := clientvm.NewUpdateVMParams()
 	updateVMParams.RequestBody = &models.VMUpdateParams{
 		Data: &models.VMUpdateParamsData{
-			Vcpu:       util.TowerCPU(numCPUs),
-			CPUCores:   util.TowerCPU(numCoresPerSocket),
-			CPUSockets: util.TowerCPU(numCPUSockets),
+			Vcpu:       vCPU,
+			CPUCores:   cpuCores,
+			CPUSockets: cpuSockets,
 		},
-		Where: &models.VMWhereInput{ID: util.TowerString(*vm.ID)},
+		Where: &models.VMWhereInput{ID: TowerString(*vm.ID)},
 	}
 
 	updateVMResp, err := svr.Session.VM.UpdateVM(updateVMParams)
@@ -132,32 +126,21 @@ func (svr *TowerVMService) Clone(
 		return nil, err
 	}
 
-	numCPUs := elfMachine.Spec.NumCPUs
-	if numCPUs <= 0 {
-		numCPUs = config.VMNumCPUs
-	}
-	numCoresPerSocket := elfMachine.Spec.NumCoresPerSocket
-	if numCoresPerSocket <= 0 {
-		numCoresPerSocket = numCPUs
-	}
-	numCPUSockets := numCPUs / numCoresPerSocket
-
-	memoryMiB := elfMachine.Spec.MemoryMiB
-	if memoryMiB <= 0 {
-		memoryMiB = config.VMMemoryMiB
-	}
+	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
+	cpuCores := TowerCPUCores(*vCPU, elfMachine.Spec.NumCoresPerSocket)
+	cpuSockets := TowerCPUSockets(*vCPU, *cpuCores)
 
 	var mountDisks []*models.MountNewCreateDisksParams
 	if elfMachine.Spec.DiskGiB > 0 {
 		storagePolicy := models.VMVolumeElfStoragePolicyTypeREPLICA2THINPROVISION
 		bus := models.BusVIRTIO
 		mountDisks = append(mountDisks, &models.MountNewCreateDisksParams{
-			Boot: util.TowerInt32(0),
+			Boot: TowerInt32(0),
 			Bus:  &bus,
 			VMVolume: &models.MountNewCreateDisksParamsVMVolume{
 				ElfStoragePolicy: &storagePolicy,
-				Name:             util.TowerString(config.VMDiskName),
-				Size:             util.TowerDisk(elfMachine.Spec.DiskGiB),
+				Name:             TowerString(config.VMDiskName),
+				Size:             TowerDisk(elfMachine.Spec.DiskGiB),
 			},
 		})
 	}
@@ -175,10 +158,10 @@ func (svr *TowerVMService) Clone(
 
 		nics = append(nics, &models.VMNicParams{
 			Model:         models.NewVMNicModel(models.VMNicModelVIRTIO),
-			Enabled:       util.TowerBool(true),
-			Mirror:        util.TowerBool(false),
+			Enabled:       TowerBool(true),
+			Mirror:        TowerBool(false),
 			ConnectVlanID: vlan.ID,
-			MacAddress:    util.TowerString(device.MACAddr),
+			MacAddress:    TowerString(device.MACAddr),
 		})
 
 		if !device.HasNetworkType() {
@@ -208,17 +191,17 @@ func (svr *TowerVMService) Clone(
 			}
 
 			routes = append(routes, &models.CloudInitNetWorkRoute{
-				Gateway: util.TowerString(route.Gateway),
-				Netmask: util.TowerString(netmask),
-				Network: util.TowerString(network),
+				Gateway: TowerString(route.Gateway),
+				Netmask: TowerString(netmask),
+				Network: TowerString(network),
 			})
 		}
 
 		networks = append(networks, &models.CloudInitNetWork{
-			NicIndex:  util.TowerInt32(i),
+			NicIndex:  TowerInt32(i),
 			Type:      &networkType,
-			IPAddress: util.TowerString(ipAddress),
-			Netmask:   util.TowerString(device.Netmask),
+			IPAddress: TowerString(ipAddress),
+			Netmask:   TowerString(device.Netmask),
 			Routes:    routes,
 		})
 	}
@@ -242,17 +225,17 @@ func (svr *TowerVMService) Clone(
 
 	vmCreateVMFromTemplateParams := &models.VMCreateVMFromContentLibraryTemplateParams{
 		ClusterID:   cluster.ID,
-		HostID:      util.TowerString(hostID),
-		Name:        util.TowerString(elfMachine.Name),
-		Description: util.TowerString(config.VMDescription),
-		Vcpu:        util.TowerCPU(numCPUs),
-		CPUCores:    util.TowerCPU(numCoresPerSocket),
-		CPUSockets:  util.TowerCPU(numCPUSockets),
-		Memory:      util.TowerMemory(memoryMiB),
+		HostID:      TowerString(hostID),
+		Name:        TowerString(elfMachine.Name),
+		Description: TowerString(config.VMDescription),
+		Vcpu:        vCPU,
+		CPUCores:    cpuCores,
+		CPUSockets:  cpuSockets,
+		Memory:      TowerMemory(elfMachine.Spec.MemoryMiB),
 		Firmware:    models.NewVMFirmware(models.VMFirmwareBIOS),
 		Status:      models.NewVMStatus(models.VMStatusSTOPPED),
-		Ha:          util.TowerBool(elfMachine.Spec.HA),
-		IsFullCopy:  util.TowerBool(isFullCopy),
+		Ha:          TowerBool(elfMachine.Spec.HA),
+		IsFullCopy:  TowerBool(isFullCopy),
 		TemplateID:  template.ID,
 		GuestOsType: models.NewVMGuestsOperationSystem(models.VMGuestsOperationSystem(elfMachine.Spec.OSType)),
 		VMNics:      nics,
@@ -262,8 +245,8 @@ func (svr *TowerVMService) Clone(
 			},
 		},
 		CloudInit: &models.TemplateCloudInit{
-			Hostname:    util.TowerString(elfMachine.Name),
-			UserData:    util.TowerString(bootstrapData),
+			Hostname:    TowerString(elfMachine.Name),
+			UserData:    TowerString(bootstrapData),
 			Networks:    networks,
 			Nameservers: elfMachine.Spec.Network.Nameservers,
 		},
@@ -283,10 +266,10 @@ func (svr *TowerVMService) Migrate(vmID, hostID string) (*models.WithTaskVM, err
 	migrateVMParams := clientvm.NewMigrateVMParams()
 	migrateVMParams.RequestBody = &models.VMMigrateParams{
 		Data: &models.VMMigrateParamsData{
-			HostID: util.TowerString(hostID),
+			HostID: TowerString(hostID),
 		},
 		Where: &models.VMWhereInput{
-			OR: []*models.VMWhereInput{{LocalID: util.TowerString(vmID)}, {ID: util.TowerString(vmID)}},
+			OR: []*models.VMWhereInput{{LocalID: TowerString(vmID)}, {ID: TowerString(vmID)}},
 		},
 	}
 
@@ -303,7 +286,7 @@ func (svr *TowerVMService) Delete(id string) (*models.Task, error) {
 	deleteVMParams := clientvm.NewDeleteVMParams()
 	deleteVMParams.RequestBody = &models.VMDeleteParams{
 		Where: &models.VMWhereInput{
-			OR: []*models.VMWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+			OR: []*models.VMWhereInput{{LocalID: TowerString(id)}, {ID: TowerString(id)}},
 		},
 	}
 
@@ -324,7 +307,7 @@ func (svr *TowerVMService) PowerOff(id string) (*models.Task, error) {
 	poweroffVMParams := clientvm.NewPoweroffVMParams()
 	poweroffVMParams.RequestBody = &models.VMOperateParams{
 		Where: &models.VMWhereInput{
-			OR: []*models.VMWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+			OR: []*models.VMWhereInput{{LocalID: TowerString(id)}, {ID: TowerString(id)}},
 		},
 	}
 
@@ -345,7 +328,7 @@ func (svr *TowerVMService) PowerOn(id string) (*models.Task, error) {
 	startVMParams := clientvm.NewStartVMParams()
 	startVMParams.RequestBody = &models.VMStartParams{
 		Where: &models.VMWhereInput{
-			OR: []*models.VMWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+			OR: []*models.VMWhereInput{{LocalID: TowerString(id)}, {ID: TowerString(id)}},
 		},
 	}
 
@@ -366,7 +349,7 @@ func (svr *TowerVMService) ShutDown(id string) (*models.Task, error) {
 	shutDownVMParams := clientvm.NewShutDownVMParams()
 	shutDownVMParams.RequestBody = &models.VMOperateParams{
 		Where: &models.VMWhereInput{
-			OR: []*models.VMWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+			OR: []*models.VMWhereInput{{LocalID: TowerString(id)}, {ID: TowerString(id)}},
 		},
 	}
 
@@ -387,7 +370,7 @@ func (svr *TowerVMService) Get(id string) (*models.VM, error) {
 	getVmsParams := clientvm.NewGetVmsParams()
 	getVmsParams.RequestBody = &models.GetVmsRequestBody{
 		Where: &models.VMWhereInput{
-			OR: []*models.VMWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+			OR: []*models.VMWhereInput{{LocalID: TowerString(id)}, {ID: TowerString(id)}},
 		},
 	}
 
@@ -408,7 +391,7 @@ func (svr *TowerVMService) GetByName(name string) (*models.VM, error) {
 	getVmsParams := clientvm.NewGetVmsParams()
 	getVmsParams.RequestBody = &models.GetVmsRequestBody{
 		Where: &models.VMWhereInput{
-			Name: util.TowerString(name),
+			Name: TowerString(name),
 		},
 	}
 
@@ -451,7 +434,7 @@ func (svr *TowerVMService) GetVMNics(vmID string) ([]*models.VMNic, error) {
 	getVMNicsParams.RequestBody = &models.GetVMNicsRequestBody{
 		Where: &models.VMNicWhereInput{
 			VM: &models.VMWhereInput{
-				OR: []*models.VMWhereInput{{LocalID: util.TowerString(vmID)}, {ID: util.TowerString(vmID)}},
+				OR: []*models.VMWhereInput{{LocalID: TowerString(vmID)}, {ID: TowerString(vmID)}},
 			},
 		},
 	}
@@ -469,7 +452,7 @@ func (svr *TowerVMService) GetCluster(id string) (*models.Cluster, error) {
 	getClustersParams := clientcluster.NewGetClustersParams()
 	getClustersParams.RequestBody = &models.GetClustersRequestBody{
 		Where: &models.ClusterWhereInput{
-			OR: []*models.ClusterWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+			OR: []*models.ClusterWhereInput{{LocalID: TowerString(id)}, {ID: TowerString(id)}},
 		},
 	}
 
@@ -489,7 +472,7 @@ func (svr *TowerVMService) GetHost(id string) (*models.Host, error) {
 	getHostsParams := clienthost.NewGetHostsParams()
 	getHostsParams.RequestBody = &models.GetHostsRequestBody{
 		Where: &models.HostWhereInput{
-			OR: []*models.HostWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+			OR: []*models.HostWhereInput{{LocalID: TowerString(id)}, {ID: TowerString(id)}},
 		},
 	}
 
@@ -505,12 +488,34 @@ func (svr *TowerVMService) GetHost(id string) (*models.Host, error) {
 	return getHostsResp.Payload[0], nil
 }
 
+func (svr *TowerVMService) GetHostsByCluster(clusterID string) ([]*models.Host, error) {
+	getHostsParams := clienthost.NewGetHostsParams()
+	getHostsParams.RequestBody = &models.GetHostsRequestBody{
+		Where: &models.HostWhereInput{
+			Cluster: &models.ClusterWhereInput{
+				OR: []*models.ClusterWhereInput{{LocalID: TowerString(clusterID)}, {ID: TowerString(clusterID)}},
+			},
+		},
+	}
+
+	getHostsResp, err := svr.Session.Host.GetHosts(getHostsParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(getHostsResp.Payload) == 0 {
+		return nil, errors.New(HostNotFound)
+	}
+
+	return getHostsResp.Payload, nil
+}
+
 // GetVlan searches for a vlan.
 func (svr *TowerVMService) GetVlan(id string) (*models.Vlan, error) {
 	getVlansParams := clientvlan.NewGetVlansParams()
 	getVlansParams.RequestBody = &models.GetVlansRequestBody{
 		Where: &models.VlanWhereInput{
-			OR: []*models.VlanWhereInput{{LocalID: util.TowerString(id)}, {ID: util.TowerString(id)}},
+			OR: []*models.VlanWhereInput{{LocalID: TowerString(id)}, {ID: TowerString(id)}},
 		},
 	}
 
@@ -531,7 +536,7 @@ func (svr *TowerVMService) GetVMTemplate(id string) (*models.ContentLibraryVMTem
 	getVMTemplatesParams := clientvmtemplate.NewGetContentLibraryVMTemplatesParams()
 	getVMTemplatesParams.RequestBody = &models.GetContentLibraryVMTemplatesRequestBody{
 		Where: &models.ContentLibraryVMTemplateWhereInput{
-			OR: []*models.ContentLibraryVMTemplateWhereInput{{ID: util.TowerString(id)}, {Name: util.TowerString(id)}},
+			OR: []*models.ContentLibraryVMTemplateWhereInput{{ID: TowerString(id)}, {Name: TowerString(id)}},
 		},
 	}
 
@@ -553,7 +558,7 @@ func (svr *TowerVMService) GetTask(id string) (*models.Task, error) {
 	getTasksParams := clienttask.NewGetTasksParams()
 	getTasksParams.RequestBody = &models.GetTasksRequestBody{
 		Where: &models.TaskWhereInput{
-			ID: util.TowerString(id),
+			ID: TowerString(id),
 		},
 	}
 
@@ -598,8 +603,8 @@ func (svr *TowerVMService) UpsertLabel(key, value string) (*models.Label, error)
 	getLabelParams := clientlabel.NewGetLabelsParams()
 	getLabelParams.RequestBody = &models.GetLabelsRequestBody{
 		Where: &models.LabelWhereInput{
-			Key:   util.TowerString(key),
-			Value: util.TowerString(value),
+			Key:   TowerString(key),
+			Value: TowerString(value),
 		},
 	}
 	getLabelResp, err := svr.Session.Label.GetLabels(getLabelParams)
@@ -633,14 +638,14 @@ func (svr *TowerVMService) DeleteLabel(key, value string, strict bool) (string, 
 	deleteLabelParams.RequestBody = &models.LabelDeletionParams{
 		Where: &models.LabelWhereInput{
 			AND: []*models.LabelWhereInput{
-				{Key: util.TowerString(key), Value: util.TowerString(value)},
+				{Key: TowerString(key), Value: TowerString(value)},
 			},
 		},
 	}
 	if strict {
 		deleteLabelParams.RequestBody.Where.AND = append(
 			deleteLabelParams.RequestBody.Where.AND,
-			&models.LabelWhereInput{VMNum: util.TowerInt32(0)},
+			&models.LabelWhereInput{VMNum: TowerInt32(0)},
 		)
 	}
 
@@ -665,7 +670,7 @@ func (svr *TowerVMService) AddLabelsToVM(vmID string, labelIds []string) (*model
 		},
 		Data: &models.AddLabelsToResourcesParamsData{
 			Vms: &models.VMWhereInput{
-				ID: util.TowerString(vmID),
+				ID: TowerString(vmID),
 			},
 		},
 	}
@@ -683,13 +688,13 @@ func (svr *TowerVMService) AddLabelsToVM(vmID string, labelIds []string) (*model
 func (svr *TowerVMService) CreateVMPlacementGroup(name, clusterID string, vmPolicy models.VMVMPolicy) (*models.WithTaskVMPlacementGroup, error) {
 	createVMPlacementGroupParams := clientvmplacementgroup.NewCreateVMPlacementGroupParams()
 	createVMPlacementGroupParams.RequestBody = []*models.VMPlacementGroupCreationParams{{
-		Name:                util.TowerString(name),
-		ClusterID:           util.TowerString(clusterID),
-		Enabled:             util.TowerBool(true),
-		Description:         util.TowerString(VMPlacementGroupDescription),
-		VMHostMustEnabled:   util.TowerBool(false),
-		VMHostPreferEnabled: util.TowerBool(false),
-		VMVMPolicyEnabled:   util.TowerBool(true),
+		Name:                TowerString(name),
+		ClusterID:           TowerString(clusterID),
+		Enabled:             TowerBool(true),
+		Description:         TowerString(VMPlacementGroupDescription),
+		VMHostMustEnabled:   TowerBool(false),
+		VMHostPreferEnabled: TowerBool(false),
+		VMVMPolicyEnabled:   TowerBool(true),
 		VMVMPolicy:          &vmPolicy,
 	}}
 	createVMPlacementGroupResp, err := svr.Session.VMPlacementGroup.CreateVMPlacementGroup(createVMPlacementGroupParams)
@@ -705,7 +710,7 @@ func (svr *TowerVMService) GetVMPlacementGroup(name string) (*models.VMPlacement
 	getVMPlacementGroupsParams := clientvmplacementgroup.NewGetVMPlacementGroupsParams()
 	getVMPlacementGroupsParams.RequestBody = &models.GetVMPlacementGroupsRequestBody{
 		Where: &models.VMPlacementGroupWhereInput{
-			Name: util.TowerString(name),
+			Name: TowerString(name),
 		},
 	}
 
@@ -736,7 +741,7 @@ func (svr *TowerVMService) AddVMsToPlacementGroup(placementGroup *models.VMPlace
 			Vms:                 &models.VMWhereInput{IDIn: vmIDs},
 		},
 		Where: &models.VMPlacementGroupWhereInput{
-			ID: util.TowerString(*placementGroup.ID),
+			ID: TowerString(*placementGroup.ID),
 		},
 	}
 
@@ -753,7 +758,7 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByName(placementGroupName stri
 	deleteVMPlacementGroupParams := clientvmplacementgroup.NewDeleteVMPlacementGroupParams()
 	deleteVMPlacementGroupParams.RequestBody = &models.VMPlacementGroupDeletionParams{
 		Where: &models.VMPlacementGroupWhereInput{
-			NameStartsWith: util.TowerString(placementGroupName),
+			NameStartsWith: TowerString(placementGroupName),
 		},
 	}
 
