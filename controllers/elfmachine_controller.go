@@ -954,7 +954,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 		availableHostSet := service.HostsToSet(availableHosts)
 		unusedHostSet := availableHostSet.Difference(usedHostSet)
 		if unusedHostSet.Len() == 0 {
-			ctx.Logger.Info("The placement group is full, skip adding VM to the placement group", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHosts", usedHostSet.UnsortedList(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+			ctx.Logger.V(2).Info("The placement group is full, skip adding VM to the placement group", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHosts", usedHostSet.UnsortedList(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
 			return true, nil
 		}
@@ -1227,6 +1227,7 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx *context.MachineCon
 	return "", nil
 }
 
+// getHostsInPlacementGroup returns the hosts where all virtual machines of placement group located.
 func (r *ElfMachineReconciler) getHostsInPlacementGroup(ctx *context.MachineContext, placementGroup *models.VMPlacementGroup) (sets.Set[string], error) {
 	placementGroupVMSet := sets.Set[string]{}
 	for i := 0; i < len(placementGroup.Vms); i++ {
