@@ -3,14 +3,14 @@ module github.com/smartxworks/cluster-api-provider-elf
 go 1.19
 
 require (
-	github.com/go-logr/logr v1.2.3
+	github.com/go-logr/logr v1.2.4
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
-	github.com/onsi/ginkgo/v2 v2.9.2
-	github.com/onsi/gomega v1.27.6
+	github.com/onsi/ginkgo/v2 v2.9.5
+	github.com/onsi/gomega v1.27.7
 	github.com/pkg/errors v0.9.1
-	github.com/smartxworks/cloudtower-go-sdk/v2 v2.7.0
-	golang.org/x/mod v0.9.0
+	github.com/smartxworks/cloudtower-go-sdk/v2 v2.0.0-sks1.1-rc.2
+	golang.org/x/mod v0.10.0
 	k8s.io/api v0.26.1
 	k8s.io/apiextensions-apiserver v0.26.1
 	k8s.io/apimachinery v0.26.1
@@ -31,9 +31,10 @@ require (
 	github.com/google/go-github/v48 v48.2.0 // indirect
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/google/safetext v0.0.0-20220905092116-b49f7bc46da2 // indirect
-	go.opentelemetry.io/otel v1.14.0 // indirect
-	go.opentelemetry.io/otel/trace v1.14.0 // indirect
-	golang.org/x/tools v0.7.0 // indirect
+	go.opentelemetry.io/otel v1.16.0 // indirect
+	go.opentelemetry.io/otel/metric v1.16.0 // indirect
+	go.opentelemetry.io/otel/trace v1.16.0 // indirect
+	golang.org/x/tools v0.9.1 // indirect
 )
 
 require (
@@ -56,7 +57,7 @@ require (
 	github.com/docker/distribution v2.8.1+incompatible // indirect
 	github.com/docker/docker v20.10.24+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
-	github.com/docker/go-units v0.4.0 // indirect
+	github.com/docker/go-units v0.5.0 // indirect
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
@@ -66,9 +67,9 @@ require (
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/loads v0.21.2 // indirect
-	github.com/go-openapi/runtime v0.25.0
-	github.com/go-openapi/spec v0.20.8 // indirect
-	github.com/go-openapi/strfmt v0.21.5
+	github.com/go-openapi/runtime v0.26.0
+	github.com/go-openapi/spec v0.20.9 // indirect
+	github.com/go-openapi/strfmt v0.21.7
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/go-openapi/validate v0.22.1 // indirect
 	github.com/gobuffalo/flect v1.0.2 // indirect
@@ -118,13 +119,13 @@ require (
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
 	github.com/valyala/fastjson v1.6.4 // indirect
-	go.mongodb.org/mongo-driver v1.11.3 // indirect
+	go.mongodb.org/mongo-driver v1.11.6 // indirect
 	golang.org/x/crypto v0.3.0 // indirect
-	golang.org/x/net v0.8.0 // indirect
+	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.6.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/term v0.6.0 // indirect
-	golang.org/x/text v0.8.0 // indirect
+	golang.org/x/sys v0.8.0 // indirect
+	golang.org/x/term v0.8.0 // indirect
+	golang.org/x/text v0.9.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

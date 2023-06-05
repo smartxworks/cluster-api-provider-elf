@@ -551,7 +551,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		ctx.Logger.V(1).Info(fmt.Sprintf("Updated VM hostServerName from %s to %s", hostName, *vm.Host.Name))
 	}
 
-	vmLocalID := util.GetTowerString(vm.LocalID)
+	vmLocalID := service.GetTowerString(vm.LocalID)
 	// Before the ELF VM is created, Tower sets a "placeholder-{UUID}" format string to localId, such as "placeholder-7d8b6df1-c623-4750-a771-3ba6b46995fa".
 	// After the ELF VM is created, Tower sets the VM ID in UUID format to localId.
 	if !machineutil.IsUUID(vmLocalID) {
@@ -564,7 +564,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	}
 
 	// The VM was moved to the recycle bin. Treat the VM as deleted, and will not reconganize it even if it's moved back from the recycle bin.
-	if util.IsVMInRecycleBin(vm) {
+	if service.IsVMInRecycleBin(vm) {
 		message := fmt.Sprintf("The VM %s was moved to the Tower recycle bin by users, so treat it as deleted.", ctx.ElfMachine.Status.VMRef)
 		ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.MovedToRecycleBinError)
 		ctx.ElfMachine.Status.FailureMessage = pointer.String(message)
@@ -814,7 +814,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 
 	switch *task.Status {
 	case models.TaskStatusFAILED:
-		errorMessage := util.GetTowerString(task.ErrorMessage)
+		errorMessage := service.GetTowerString(task.ErrorMessage)
 		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, errorMessage)
 
 		if service.IsCloudInitConfigError(errorMessage) {
@@ -822,12 +822,12 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 			ctx.ElfMachine.Status.FailureMessage = pointer.String(fmt.Sprintf("VM cloud-init config error: %s", service.FormatCloudInitError(errorMessage)))
 		}
 
-		ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "taskErrorMessage", errorMessage, "taskErrorCode", util.GetTowerString(task.ErrorCode), "taskDescription", util.GetTowerString(task.Description))
+		ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "taskErrorMessage", errorMessage, "taskErrorCode", service.GetTowerString(task.ErrorCode), "taskDescription", service.GetTowerString(task.Description))
 
 		switch {
-		case util.IsCloneVMTask(task):
+		case service.IsCloneVMTask(task):
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
-		case util.IsVMMigrationTask(task):
+		case service.IsVMMigrationTask(task):
 			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
 			if err != nil {
 				return false, err
@@ -841,13 +841,13 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 			return true, errors.New(message)
 		}
 	case models.TaskStatusSUCCESSED:
-		ctx.Logger.Info("VM task succeeded", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", util.GetTowerString(task.Description))
+		ctx.Logger.Info("VM task succeeded", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", service.GetTowerString(task.Description))
 
 		switch {
-		case util.IsCloneVMTask(task) || util.IsPowerOnVMTask(task):
+		case service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task):
 			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, false)
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
-		case util.IsVMMigrationTask(task):
+		case service.IsVMMigrationTask(task):
 			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
 			if err != nil {
 				return false, err
@@ -855,7 +855,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 			releaseTicketForPlacementGroupVMMigration(placementGroupName)
 		}
 	default:
-		ctx.Logger.Info("Waiting for VM task done", "vmRef", vmRef, "taskRef", taskRef, "taskStatus", util.GetTowerTaskStatus(task.Status), "taskDescription", util.GetTowerString(task.Description))
+		ctx.Logger.Info("Waiting for VM task done", "vmRef", vmRef, "taskRef", taskRef, "taskStatus", service.GetTowerTaskStatus(task.Status), "taskDescription", service.GetTowerString(task.Description))
 	}
 
 	if *task.Status == models.TaskStatusFAILED || *task.Status == models.TaskStatusSUCCESSED {
@@ -920,32 +920,43 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 	}
 
 	if machineutil.IsControlPlaneMachine(ctx.Machine) {
-		if len(placementGroup.Vms) >= int(*towerCluster.HostNum) {
-			ctx.Logger.Info("The placement group is full, skip adding VM to the placement group", "placementGroup", *placementGroup.Name, "placementGroupCapacity", *towerCluster.HostNum, "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
-
-			return true, nil
-		}
-
-		vms, err := ctx.VMService.FindByIDs(placementGroupVMSet.List())
+		usedHostSet, err := r.getHostsInPlacementGroup(ctx, placementGroup)
 		if err != nil {
 			return false, err
 		}
 
-		vmHostSet := sets.NewString()
-		for i := 0; i < len(vms); i++ {
-			vmHostSet.Insert(*vms[i].Host.ID)
+		hosts, err := ctx.VMService.GetHostsByCluster(*towerCluster.ID)
+		if err != nil {
+			return false, err
 		}
 
-		clusterHostSet := sets.NewString()
-		for i := 0; i < len(towerCluster.Hosts); i++ {
-			clusterHostSet.Insert(*towerCluster.Hosts[i].ID)
+		var availableHosts []*models.Host
+		// If the VM is running, and the host where the VM is located
+		// is not used by the placement group, then it is not necessary to
+		// check the memory is sufficient to determine whether the host is available.
+		// Otherwise, the VM may need to be migrated to another host,
+		// and need to check whether the memory is sufficient.
+		if *vm.Status == models.VMStatusRUNNING {
+			availableHosts = service.GetAvailableHosts(hosts, 0)
+			unusedHostSet := service.HostsToSet(availableHosts).Difference(usedHostSet)
+			if !unusedHostSet.Has(*vm.Host.ID) {
+				availableHosts = service.GetAvailableHosts(hosts, *service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
+			}
+		} else {
+			availableHosts = service.GetAvailableHosts(hosts, *service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
 		}
 
-		unusedHostSet := clusterHostSet.Difference(vmHostSet)
+		if len(availableHosts) < len(hosts) {
+			unavailableHostInfo := service.GetUnavailableHostInfo(hosts, *service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
+			ctx.Logger.Info("Unavailable hosts found", "unavailableHosts", unavailableHostInfo, "placementGroup", *placementGroup.Name, "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+		}
+
+		availableHostSet := service.HostsToSet(availableHosts)
+		unusedHostSet := availableHostSet.Difference(usedHostSet)
 		if unusedHostSet.Len() == 0 {
-			ctx.Logger.Info("The placement group still has capacity, but all hosts are already used", "placementGroup", *placementGroup.Name, "placementGroupCapacity", *towerCluster.HostNum, "usedHosts", vmHostSet.List())
+			ctx.Logger.V(2).Info("The placement group is full, skip adding VM to the placement group", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHosts", usedHostSet.UnsortedList(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
-			return false, nil
+			return true, nil
 		}
 
 		if !unusedHostSet.Has(*vm.Host.ID) {
@@ -962,13 +973,13 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 				}
 
 				if ok := acquireTicketForPlacementGroupVMMigration(placementGroupName); !ok {
-					ctx.Logger.V(1).Info("The placement group is performing another VM migration, skip migrate VM", "placementGroup", util.GetTowerString(placementGroup.Name), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+					ctx.Logger.V(1).Info("The placement group is performing another VM migration, skip migrate VM", "placementGroup", service.GetTowerString(placementGroup.Name), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
 					return false, nil
 				}
 
-				targetHost := unusedHostSet.List()[0]
-				withTaskVM, err := ctx.VMService.Migrate(util.GetTowerString(vm.ID), targetHost)
+				targetHost := unusedHostSet.UnsortedList()[0]
+				withTaskVM, err := ctx.VMService.Migrate(service.GetTowerString(vm.ID), targetHost)
 				if err != nil {
 					return false, err
 				}
@@ -1131,13 +1142,38 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx *context.MachineCon
 		return "", err
 	}
 
+	placementGroupVMSet := sets.NewString()
+	for i := 0; i < len(placementGroup.Vms); i++ {
+		placementGroupVMSet.Insert(*placementGroup.Vms[i].ID)
+	}
+
+	usedHostSet, err := r.getHostsInPlacementGroup(ctx, placementGroup)
+	if err != nil {
+		return "", err
+	}
+
 	towerCluster, err := ctx.VMService.GetCluster(ctx.ElfCluster.Spec.Cluster)
 	if err != nil {
 		return "", err
 	}
 
+	hosts, err := ctx.VMService.GetHostsByCluster(*towerCluster.ID)
+	if err != nil {
+		return "", err
+	}
+
+	availableHosts := service.GetAvailableHosts(hosts, *service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
+	if len(availableHosts) < len(hosts) {
+		unavailableHostInfo := service.GetUnavailableHostInfo(hosts, *service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
+		ctx.Logger.Info("Unavailable hosts found", "unavailableHosts", unavailableHostInfo, "placementGroup", *placementGroup.Name, "vmRef", ctx.ElfMachine.Status.VMRef)
+	}
+
+	availableHostSet := service.HostsToSet(availableHosts)
+	unusedHostSet := availableHostSet.Difference(usedHostSet)
 	// Only when the placement group is full does it need to get the latest created machine.
-	if len(placementGroup.Vms) < int(*towerCluster.HostNum) {
+	if unusedHostSet.Len() != 0 {
+		ctx.Logger.V(2).Info("The placement group still has capacity, skip selecting host for rolling update", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "unusedHosts", unusedHostSet.UnsortedList(), "vmRef", ctx.ElfMachine.Status.VMRef)
+
 		return "", nil
 	}
 
@@ -1172,13 +1208,43 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx *context.MachineCon
 		if vm, err := ctx.VMService.Get(vmMap[machine.Name]); err != nil {
 			return "", err
 		} else {
-			ctx.Logger.Info("Set the host server for VM since the placement group is full", "hostID", *vm.Host.ID)
+			host := service.GetHostFromList(*vm.Host.ID, hosts)
+			if host == nil {
+				ctx.Logger.Info("Host not found, skip selecting host for VM", "hostID", *vm.Host.ID, "vmRef", ctx.ElfMachine.Status.VMRef)
+			} else {
+				ok, message := service.IsAvailableHost(host, *service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
+				if ok {
+					ctx.Logger.Info("Selected the host server for VM since the placement group is full", "hostID", *vm.Host.ID, "vmRef", ctx.ElfMachine.Status.VMRef)
 
-			return *vm.Host.ID, nil
+					return *vm.Host.ID, nil
+				}
+
+				ctx.Logger.Info(fmt.Sprintf("Host is unavailable: %s, skip selecting host for VM", message), "hostID", *vm.Host.ID, "vmRef", ctx.ElfMachine.Status.VMRef)
+			}
 		}
 	}
 
 	return "", nil
+}
+
+// getHostsInPlacementGroup returns the hosts where all virtual machines of placement group located.
+func (r *ElfMachineReconciler) getHostsInPlacementGroup(ctx *context.MachineContext, placementGroup *models.VMPlacementGroup) (sets.Set[string], error) {
+	placementGroupVMSet := sets.Set[string]{}
+	for i := 0; i < len(placementGroup.Vms); i++ {
+		placementGroupVMSet.Insert(*placementGroup.Vms[i].ID)
+	}
+
+	vms, err := ctx.VMService.FindByIDs(placementGroupVMSet.UnsortedList())
+	if err != nil {
+		return nil, err
+	}
+
+	hostSet := sets.Set[string]{}
+	for i := 0; i < len(vms); i++ {
+		hostSet.Insert(*vms[i].Host.ID)
+	}
+
+	return hostSet, nil
 }
 
 func (r *ElfMachineReconciler) reconcileProviderID(ctx *context.MachineContext, vm *models.VM) error {
@@ -1286,13 +1352,13 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 	networkStatuses := make([]infrav1.NetworkStatus, 0, len(nics))
 	for i := 0; i < len(nics); i++ {
 		nic := nics[i]
-		if util.GetTowerString(nic.IPAddress) == "" {
+		if service.GetTowerString(nic.IPAddress) == "" {
 			continue
 		}
 
 		networkStatuses = append(networkStatuses, infrav1.NetworkStatus{
-			IPAddrs: []string{util.GetTowerString(nic.IPAddress)},
-			MACAddr: util.GetTowerString(nic.MacAddress),
+			IPAddrs: []string{service.GetTowerString(nic.IPAddress)},
+			MACAddr: service.GetTowerString(nic.MacAddress),
 		})
 	}
 

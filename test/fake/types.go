@@ -90,7 +90,7 @@ func NewMachineObjects(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluste
 			HA:                true,
 			NumCPUs:           1,
 			NumCoresPerSocket: 1,
-			MemoryMiB:         1024,
+			MemoryMiB:         1,
 			Network: infrav1.NetworkSpec{
 				Devices: []infrav1.NetworkDeviceSpec{
 					{},

@@ -24,7 +24,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
 func ID() string {
@@ -45,6 +45,19 @@ func NewTowerCluster() *models.Cluster {
 	}
 }
 
+func NewTowerHost() *models.Host {
+	id := ID()
+	localID := UUID()
+
+	return &models.Host{
+		ID:                     &id,
+		LocalID:                &localID,
+		Name:                   &id,
+		Status:                 models.NewHostStatus(models.HostStatusCONNECTEDHEALTHY),
+		AllocatableMemoryBytes: pointer.Int64(1 * 1024 * 1024),
+	}
+}
+
 func NewTowerVM() *models.VM {
 	id := ID()
 	localID := UUID()
@@ -53,6 +66,7 @@ func NewTowerVM() *models.VM {
 	return &models.VM{
 		ID:                &id,
 		LocalID:           &localID,
+		Name:              &id,
 		Status:            &status,
 		EntityAsyncStatus: (*models.EntityAsyncStatus)(pointer.String("CREATING")),
 	}
@@ -61,13 +75,14 @@ func NewTowerVM() *models.VM {
 func NewTowerVMFromElfMachine(elfMachine *infrav1.ElfMachine) *models.VM {
 	vm := NewTowerVM()
 
-	vm.Vcpu = util.TowerCPU(elfMachine.Spec.NumCPUs)
+	vm.Name = service.TowerString(elfMachine.Name)
+	vm.Vcpu = service.TowerVCPU(elfMachine.Spec.NumCPUs)
 	vm.CPU = &models.NestedCPU{
-		Cores:   util.TowerCPU(elfMachine.Spec.NumCoresPerSocket),
-		Sockets: util.TowerCPU(elfMachine.Spec.NumCPUs / elfMachine.Spec.NumCoresPerSocket),
+		Cores:   service.TowerCPUCores(*vm.Vcpu, elfMachine.Spec.NumCoresPerSocket),
+		Sockets: service.TowerCPUSockets(*vm.Vcpu, *service.TowerCPUCores(*vm.Vcpu, elfMachine.Spec.NumCoresPerSocket)),
 	}
-	vm.Memory = util.TowerMemory(elfMachine.Spec.MemoryMiB)
-	vm.Ha = util.TowerBool(elfMachine.Spec.HA)
+	vm.Memory = service.TowerMemory(elfMachine.Spec.MemoryMiB)
+	vm.Ha = service.TowerBool(elfMachine.Spec.HA)
 
 	return vm
 }
@@ -79,8 +94,8 @@ func NewTowerVMNic(order int) *models.VMNic {
 	return &models.VMNic{
 		ID:        &id,
 		LocalID:   &localID,
-		IPAddress: util.TowerString("192.168.0.1"),
-		Order:     util.TowerInt32(order),
+		IPAddress: service.TowerString("192.168.0.1"),
+		Order:     service.TowerInt32(order),
 	}
 }
 
