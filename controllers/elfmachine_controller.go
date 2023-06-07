@@ -278,7 +278,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 	// Before destroying VM, attempt to delete kubernetes node.
 	err = r.deleteNode(ctx, ctx.ElfMachine.Name)
 	if err != nil {
-		ctx.Logger.V(4).Info("failed to delete node", "err", err)
+		ctx.Logger.Error(err, "")
 	}
 
 	ctx.Logger.Info("Destroying VM",
@@ -1476,7 +1476,7 @@ func (r *ElfMachineReconciler) deleteNode(ctx *context.MachineContext, nodeName 
 	}
 
 	if err != nil {
-		return errors.Wrapf(err, "failed to delete node %s for Cluster %s/%s", nodeName, ctx.Cluster.Namespace, ctx.Cluster.Name)
+		return errors.Wrapf(err, "failed to delete K8s node %s for Cluster %s/%s", nodeName, ctx.Cluster.Namespace, ctx.Cluster.Name)
 	}
 
 	return nil
