@@ -1839,12 +1839,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should delete k8s node before destroying VM.", func() {
 			vm := fake.NewTowerVM()
-			vm.Name = &elfMachine.Name
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
 			vm.Status = &status
 			task := fake.NewTowerTask()
 			elfMachine.Status.VMRef = *vm.LocalID
+			cluster.Status.ControlPlaneReady = true
 
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			ctrlContext.Client = testEnv.Client
@@ -1870,6 +1870,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			result, err := reconciler.reconcileDelete(machineContext)
+			fmt.Println(logBuffer.String())
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ToNot(HaveOccurred())
 
@@ -1883,14 +1884,108 @@ var _ = Describe("ElfMachineReconciler", func() {
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
 		})
 
-		It("should not effected destroying VM when delete k8s node failed", func() {
+		It("should not delete k8s node when cluster is deleting", func() {
 			vm := fake.NewTowerVM()
-			vm.Name = &elfMachine.Name
 			vm.EntityAsyncStatus = nil
 			status := models.VMStatusSTOPPED
 			vm.Status = &status
 			task := fake.NewTowerTask()
 			elfMachine.Status.VMRef = *vm.LocalID
+			cluster.Status.ControlPlaneReady = true
+			cluster.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
+
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			ctrlContext.Client = testEnv.Client
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.VMService = mockVMService
+
+			// before reconcile, create k8s node for VM.
+			node := &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   elfMachine.Name,
+					Labels: map[string]string{},
+				},
+			}
+			Expect(testEnv.CreateAndWait(ctx, node)).To(Succeed())
+			// before reconcile, create kubeconfig secret for cluster.
+			Expect(helpers.CreateKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)).To(Succeed())
+			defer func() {
+				Expect(helpers.DeleteKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)).To(Succeed())
+			}()
+
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().Delete(elfMachine.Status.VMRef).Return(task, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err := reconciler.reconcileDelete(machineContext)
+			fmt.Println(logBuffer.String())
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).ToNot(HaveOccurred())
+
+			// check k8s node still existed.
+			err = ctrlContext.Client.Get(ctx, client.ObjectKeyFromObject(node), node)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be deleted"))
+			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
+			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+		})
+
+		It("should not delete k8s node when control plane is not ready", func() {
+			vm := fake.NewTowerVM()
+			vm.EntityAsyncStatus = nil
+			status := models.VMStatusSTOPPED
+			vm.Status = &status
+			task := fake.NewTowerTask()
+			elfMachine.Status.VMRef = *vm.LocalID
+			cluster.Status.ControlPlaneReady = false
+
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			ctrlContext.Client = testEnv.Client
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.VMService = mockVMService
+
+			// before reconcile, create k8s node for VM.
+			node := &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   elfMachine.Name,
+					Labels: map[string]string{},
+				},
+			}
+			Expect(testEnv.CreateAndWait(ctx, node)).To(Succeed())
+			// before reconcile, create kubeconfig secret for cluster.
+			Expect(helpers.CreateKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)).To(Succeed())
+			defer func() {
+				Expect(helpers.DeleteKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)).To(Succeed())
+			}()
+
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
+			mockVMService.EXPECT().Delete(elfMachine.Status.VMRef).Return(task, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err := reconciler.reconcileDelete(machineContext)
+			fmt.Println(logBuffer.String())
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).ToNot(HaveOccurred())
+
+			// check k8s node still existed.
+			err = ctrlContext.Client.Get(ctx, client.ObjectKeyFromObject(node), node)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be deleted"))
+			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
+			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+		})
+
+		It("should handle error when delete k8s node failed", func() {
+			vm := fake.NewTowerVM()
+			vm.EntityAsyncStatus = nil
+			status := models.VMStatusSTOPPED
+			vm.Status = &status
+			elfMachine.Status.VMRef = *vm.LocalID
+			cluster.Status.ControlPlaneReady = true
 
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			ctrlContext.Client = testEnv.Client
@@ -1907,23 +2002,17 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(testEnv.CreateAndWait(ctx, node)).To(Succeed())
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
-			mockVMService.EXPECT().Delete(elfMachine.Status.VMRef).Return(task, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-			result, err := reconciler.reconcileDelete(machineContext)
-			Expect(result.RequeueAfter).NotTo(BeZero())
-			Expect(err).To(BeZero())
+			_, err := reconciler.reconcileDelete(machineContext)
+			fmt.Println(logBuffer.String())
+			Expect(err).NotTo(BeZero())
 
-			Expect(logBuffer.String()).To(ContainSubstring("failed to get client"))
+			Expect(err.Error()).To(ContainSubstring("failed to get client"))
 
 			// check k8s node still existed.
 			err = ctrlContext.Client.Get(ctx, client.ObjectKeyFromObject(node), node)
 			Expect(err).ShouldNot(HaveOccurred())
-
-			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be deleted"))
-			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
-			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
 		})
 	})
 

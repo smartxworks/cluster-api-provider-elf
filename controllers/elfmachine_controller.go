@@ -278,7 +278,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 	// Before destroying VM, attempt to delete kubernetes node.
 	err = r.deleteNode(ctx, ctx.ElfMachine.Name)
 	if err != nil {
-		ctx.Logger.Error(err, "")
+		return err
 	}
 
 	ctx.Logger.Info("Destroying VM",
@@ -1460,6 +1460,11 @@ func (r *ElfMachineReconciler) isWaitingForStaticIPAllocation(ctx *context.Machi
 func (r *ElfMachineReconciler) deleteNode(ctx *context.MachineContext, nodeName string) error {
 	// When the cluster needs to be deleted, there is no need to delete the k8s node.
 	if ctx.Cluster.DeletionTimestamp != nil {
+		return nil
+	}
+
+	// when the control plane is not ready, there is no need to delete the k8s node.
+	if !ctx.Cluster.Status.ControlPlaneReady {
 		return nil
 	}
 
