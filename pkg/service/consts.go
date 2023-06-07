@@ -19,4 +19,7 @@ package service
 const (
 	// VMPlacementGroupDescription is the description of vm placement group.
 	VMPlacementGroupDescription = "This is VM placement group created by CAPE, don't delete it!"
+
+	// SKSVMTemplateUIDLabel is the label used to find the virtual machine template.
+	SKSVMTemplateUIDLabel = "system.cloudtower/sks-template-uid"
 )

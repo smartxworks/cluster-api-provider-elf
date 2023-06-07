@@ -55,7 +55,7 @@ type VMService interface {
 	GetByName(name string) (*models.VM, error)
 	FindByIDs(ids []string) ([]*models.VM, error)
 	GetVMNics(vmID string) ([]*models.VMNic, error)
-	GetVMTemplate(id string) (*models.ContentLibraryVMTemplate, error)
+	GetVMTemplate(template string) (*models.ContentLibraryVMTemplate, error)
 	GetTask(id string) (*models.Task, error)
 	WaitTask(id string, timeout, interval time.Duration) (*models.Task, error)
 	GetCluster(id string) (*models.Cluster, error)
@@ -532,11 +532,21 @@ func (svr *TowerVMService) GetVlan(id string) (*models.Vlan, error) {
 }
 
 // GetVMTemplate searches for a virtual machine template.
-func (svr *TowerVMService) GetVMTemplate(id string) (*models.ContentLibraryVMTemplate, error) {
+// 1.0 or earlier versions use the template ID or name to find the virtual machine template,
+// and other versions prefer to use SKSVMTemplateUIDLabel to find the virtual machine template.
+func (svr *TowerVMService) GetVMTemplate(template string) (*models.ContentLibraryVMTemplate, error) {
 	getVMTemplatesParams := clientvmtemplate.NewGetContentLibraryVMTemplatesParams()
 	getVMTemplatesParams.RequestBody = &models.GetContentLibraryVMTemplatesRequestBody{
 		Where: &models.ContentLibraryVMTemplateWhereInput{
-			OR: []*models.ContentLibraryVMTemplateWhereInput{{ID: TowerString(id)}, {Name: TowerString(id)}},
+			OR: []*models.ContentLibraryVMTemplateWhereInput{
+				{ID: TowerString(template)},
+				{Name: TowerString(template)},
+				{LabelsSome: &models.LabelWhereInput{
+					AND: []*models.LabelWhereInput{
+						{Key: TowerString(SKSVMTemplateUIDLabel), Value: TowerString(template)},
+					},
+				}},
+			},
 		},
 	}
 
@@ -548,6 +558,13 @@ func (svr *TowerVMService) GetVMTemplate(id string) (*models.ContentLibraryVMTem
 	vmTemplates := getVMTemplatesResp.Payload
 	if len(vmTemplates) == 0 {
 		return nil, errors.New(VMTemplateNotFound)
+	}
+
+	for i := 0; i < len(vmTemplates); i++ {
+		// Match SKSVMTemplateUIDLabel.
+		if template != *vmTemplates[i].ID && template != *vmTemplates[i].Name {
+			return vmTemplates[i], nil
+		}
 	}
 
 	return vmTemplates[0], nil
