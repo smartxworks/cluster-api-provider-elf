@@ -55,3 +55,21 @@ func GetKubeConfigSecret(testEnv *TestEnvironment, namespace, clusterName string
 	}
 	return &secret, nil
 }
+
+// DeleteKubeConfigSecret delete the workload cluster kubeconfig secret.
+func DeleteKubeConfigSecret(testEnv *TestEnvironment, namespace, clusterName string) error {
+	deleteSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      capisecret.Name(clusterName, capisecret.Kubeconfig),
+		},
+	}
+
+	if err := testEnv.Delete(goctx.Background(), deleteSecret); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return errors.Wrapf(err, "failed to delete kubeconfig secret %s/%s", deleteSecret.Namespace, deleteSecret.Name)
+	}
+	return nil
+}
