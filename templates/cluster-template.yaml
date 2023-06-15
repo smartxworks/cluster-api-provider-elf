@@ -124,11 +124,11 @@ spec:
             - name: vip_leaderelection
               value: "true"
             - name: vip_leaseduration
-              value: "15"
+              value: "5"
             - name: vip_renewdeadline
-              value: "10"
+              value: "3"
             - name: vip_retryperiod
-              value: "2"
+              value: "1"
             image: ghcr.io/kube-vip/kube-vip:v0.5.12
             imagePullPolicy: IfNotPresent
             name: kube-vip
