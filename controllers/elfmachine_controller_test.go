@@ -1094,7 +1094,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(ok).To(BeTrue())
 				Expect(err).To(BeZero())
 				Expect(logBuffer.String()).To(ContainSubstring("Unavailable hosts found"))
-				Expect(logBuffer.String()).To(ContainSubstring("KCP rolling update in progress, skip migrate VM"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP rolling update in progress, skip migrating VM"))
 			})
 
 			It("should migrate VM to another host when the VM is running and the host of VM is not in unused hosts", func() {

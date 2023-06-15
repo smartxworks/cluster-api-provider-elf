@@ -997,13 +997,13 @@ func (r *ElfMachineReconciler) migrateVMForPlacementGroup(ctx *context.MachineCo
 	}
 
 	if *kcp.Spec.Replicas != kcp.Status.UpdatedReplicas {
-		ctx.Logger.Info("KCP rolling update in progress, skip migrate VM", "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+		ctx.Logger.Info("KCP rolling update in progress, skip migrating VM", "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
 		return true, nil
 	}
 
 	if ok := acquireTicketForPlacementGroupVMMigration(*placementGroup.Name); !ok {
-		ctx.Logger.V(1).Info("The placement group is performing another VM migration, skip migrate VM", "placementGroup", service.GetTowerString(placementGroup.Name), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+		ctx.Logger.V(1).Info("The placement group is performing another VM migration, skip migrating VM", "placementGroup", service.GetTowerString(placementGroup.Name), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
 		return false, nil
 	}
