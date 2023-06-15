@@ -95,6 +95,30 @@ func GetUnavailableHostInfo(hosts []*models.Host, memory int64) map[string]strin
 	return info
 }
 
+func ContainsUnavailableHost(hosts []*models.Host, hostIDs []string, memory int64) bool {
+	if len(hosts) == 0 || len(hostIDs) == 0 {
+		return true
+	}
+
+	hostMap := make(map[string]*models.Host)
+	for i := 0; i < len(hosts); i++ {
+		hostMap[*hosts[i].ID] = hosts[i]
+	}
+
+	for i := 0; i < len(hostIDs); i++ {
+		host, ok := hostMap[hostIDs[i]]
+		if !ok {
+			return true
+		}
+
+		if ok, _ := IsAvailableHost(host, memory); !ok {
+			return true
+		}
+	}
+
+	return false
+}
+
 func GetHostFromList(hostID string, hosts []*models.Host) *models.Host {
 	for i := 0; i < len(hosts); i++ {
 		if *hosts[i].ID == hostID {
