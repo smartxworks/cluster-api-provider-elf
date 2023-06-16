@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -121,6 +122,43 @@ var _ = Describe("Placement Group Operation Limiter", func() {
 
 		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
 		Expect(placementGroupOperationMap).To(HaveKey(groupName))
+	})
+})
+
+var _ = Describe("Placement Group Operation Limiter", func() {
+	var groupName string
+
+	BeforeEach(func() {
+		groupName = fake.UUID()
+	})
+
+	It("acquireTicketForPlacementGroupOperation", func() {
+		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
+		Expect(placementGroupOperationMap).To(HaveKey(groupName))
+
+		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeFalse())
+		releaseTicketForPlacementGroupOperation(groupName)
+
+		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
+		Expect(placementGroupOperationMap).To(HaveKey(groupName))
+	})
+
+	It("canCreatePlacementGroup", func() {
+		key := fmt.Sprintf("%s:creation", groupName)
+
+		Expect(placementGroupOperationMap).NotTo(HaveKey(key))
+		Expect(canCreatePlacementGroup(groupName)).To(BeTrue())
+
+		setPlacementGroupDuplicate(groupName)
+		Expect(placementGroupOperationMap).To(HaveKey(key))
+		Expect(canCreatePlacementGroup(groupName)).To(BeFalse())
+
+		placementGroupOperationMap[key] = placementGroupOperationMap[key].Add(-placementGroupSilenceTime)
+		Expect(placementGroupOperationMap).To(HaveKey(key))
+		Expect(canCreatePlacementGroup(groupName)).To(BeTrue())
+		Expect(placementGroupOperationMap).NotTo(HaveKey(key))
+
+		Expect(canCreatePlacementGroup(groupName)).To(BeTrue())
 	})
 })
 
