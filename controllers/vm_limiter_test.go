@@ -144,7 +144,7 @@ var _ = Describe("Placement Group Operation Limiter", func() {
 	})
 
 	It("canCreatePlacementGroup", func() {
-		key := fmt.Sprintf("%s:creation", groupName)
+		key := fmt.Sprintf(placementGroupCreationKey, groupName)
 
 		Expect(placementGroupOperationMap).NotTo(HaveKey(key))
 		Expect(canCreatePlacementGroup(groupName)).To(BeTrue())
