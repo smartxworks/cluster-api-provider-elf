@@ -835,6 +835,25 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(pg).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to wait for placement group creation task done timed out in %s: placementName %s, taskID %s", config.WaitTaskTimeout, *placementGroup.Name, *withTaskVMPlacementGroup.TaskID)))
+
+			logBuffer = new(bytes.Buffer)
+			klog.SetOutput(logBuffer)
+			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
+			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
+			task.ErrorMessage = pointer.String(service.VMPlacementGroupDuplicate)
+			mockVMService.EXPECT().WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval).Return(task, nil)
+			pg, err = reconciler.createPlacementGroup(machineContext, *placementGroup.Name, *towerCluster.ID)
+			Expect(pg).To(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to create placement group"))
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Duplicate placement group detected, will try again in %s", placementGroupSilenceTime)))
+
+			logBuffer = new(bytes.Buffer)
+			klog.SetOutput(logBuffer)
+			pg, err = reconciler.createPlacementGroup(machineContext, *placementGroup.Name, *towerCluster.ID)
+			Expect(pg).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Tower has duplicate placement group, skip creating placement group %s", *placementGroup.Name)))
 		})
 
 		It("addVMsToPlacementGroup", func() {
@@ -1894,8 +1913,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// check k8s node has been deleted.
-			err = ctrlContext.Client.Get(ctx, client.ObjectKeyFromObject(node), node)
-			Expect(apierrors.IsNotFound(err)).Should(BeTrue())
+			Eventually(func() bool {
+				err := ctrlContext.Client.Get(ctx, client.ObjectKeyFromObject(node), node)
+				return apierrors.IsNotFound(err)
+			}, timeout).Should(BeTrue())
 
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be deleted"))
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))

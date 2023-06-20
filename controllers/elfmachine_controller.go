@@ -1021,6 +1021,13 @@ func (r *ElfMachineReconciler) migrateVMForPlacementGroup(ctx *context.MachineCo
 }
 
 func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext, placementGroupName, towerClusterID string) (*models.VMPlacementGroup, error) {
+	// TODO: This will be removed when Tower fixes issue with placement group data syncing.
+	if ok := canCreatePlacementGroup(placementGroupName); !ok {
+		ctx.Logger.V(2).Info(fmt.Sprintf("Tower has duplicate placement group, skip creating placement group %s", placementGroupName))
+
+		return nil, nil
+	}
+
 	placementGroupPolicy := towerresources.GetVMPlacementGroupPolicy(ctx.Machine)
 	withTaskVMPlacementGroup, err := ctx.VMService.CreateVMPlacementGroup(placementGroupName, towerClusterID, placementGroupPolicy)
 	if err != nil {
@@ -1033,6 +1040,12 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
+		if service.IsVMPlacementGroupDuplicate(service.GetTowerString(task.ErrorMessage)) {
+			setPlacementGroupDuplicate(placementGroupName)
+
+			ctx.Logger.Info(fmt.Sprintf("Duplicate placement group detected, will try again in %s", placementGroupSilenceTime), "placementGroup", placementGroupName)
+		}
+
 		return nil, errors.Errorf("failed to create placement group %s in task %s", placementGroupName, *task.ID)
 	}
 

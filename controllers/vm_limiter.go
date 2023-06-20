@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -24,9 +25,11 @@ import (
 )
 
 const (
-	creationTimeout      = time.Minute * 6
-	vmOperationRateLimit = time.Second * 6
-	vmMigrationTimeout   = time.Minute * 20
+	creationTimeout               = time.Minute * 6
+	vmOperationRateLimit          = time.Second * 6
+	vmMigrationTimeout            = time.Minute * 20
+	placementGroupSilenceTime     = time.Minute * 30
+	placementGroupCreationLockKey = "%s:creation"
 )
 
 var vmStatusMap = make(map[string]time.Time)
@@ -135,4 +138,29 @@ func releaseTicketForPlacementGroupOperation(groupName string) {
 	defer placementGroupOperationLock.Unlock()
 
 	delete(placementGroupOperationMap, groupName)
+}
+
+// setPlacementGroupDuplicate sets whether placement group is duplicated.
+func setPlacementGroupDuplicate(groupName string) {
+	placementGroupOperationLock.Lock()
+	defer placementGroupOperationLock.Unlock()
+
+	placementGroupOperationMap[fmt.Sprintf(placementGroupCreationLockKey, groupName)] = time.Now()
+}
+
+// canCreatePlacementGroup returns whether placement group creation can be performed.
+func canCreatePlacementGroup(groupName string) bool {
+	placementGroupOperationLock.Lock()
+	defer placementGroupOperationLock.Unlock()
+
+	key := fmt.Sprintf(placementGroupCreationLockKey, groupName)
+	if timestamp, ok := placementGroupOperationMap[key]; ok {
+		if time.Now().Before(timestamp.Add(placementGroupSilenceTime)) {
+			return false
+		}
+
+		delete(placementGroupOperationMap, key)
+	}
+
+	return true
 }
