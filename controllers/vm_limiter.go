@@ -25,11 +25,11 @@ import (
 )
 
 const (
-	creationTimeout           = time.Minute * 6
-	vmOperationRateLimit      = time.Second * 6
-	vmMigrationTimeout        = time.Minute * 20
-	placementGroupSilenceTime = time.Minute * 30
-	placementGroupCreationKey = "%s:creation"
+	creationTimeout               = time.Minute * 6
+	vmOperationRateLimit          = time.Second * 6
+	vmMigrationTimeout            = time.Minute * 20
+	placementGroupSilenceTime     = time.Minute * 30
+	placementGroupCreationLockKey = "%s:creation"
 )
 
 var vmStatusMap = make(map[string]time.Time)
@@ -145,7 +145,7 @@ func setPlacementGroupDuplicate(groupName string) {
 	placementGroupOperationLock.Lock()
 	defer placementGroupOperationLock.Unlock()
 
-	placementGroupOperationMap[fmt.Sprintf(placementGroupCreationKey, groupName)] = time.Now()
+	placementGroupOperationMap[fmt.Sprintf(placementGroupCreationLockKey, groupName)] = time.Now()
 }
 
 // canCreatePlacementGroup returns whether placement group creation can be performed.
@@ -153,7 +153,7 @@ func canCreatePlacementGroup(groupName string) bool {
 	placementGroupOperationLock.Lock()
 	defer placementGroupOperationLock.Unlock()
 
-	key := fmt.Sprintf(placementGroupCreationKey, groupName)
+	key := fmt.Sprintf(placementGroupCreationLockKey, groupName)
 	if timestamp, ok := placementGroupOperationMap[key]; ok {
 		if time.Now().Before(timestamp.Add(placementGroupSilenceTime)) {
 			return false
