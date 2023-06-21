@@ -91,6 +91,9 @@ const (
 	// an error while joining placement group; those kind of errors are usually transient and failed provisioning
 	// are automatically re-tried by the controller.
 	JoiningPlacementGroupFailedReason = "JoiningPlacementGroupFailed"
+
+	// WaitingForAvailableHostReason (Severity=Info) documents a ElfMachine waiting for a available host to create VM.
+	WaitingForAvailableHostReason = "WaitingForAvailableHost"
 )
 
 // Conditions and Reasons related to make connections to a Tower. Can currently be used by ElfCluster and ElfMachine
