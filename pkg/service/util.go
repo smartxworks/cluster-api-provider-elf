@@ -138,6 +138,16 @@ func HostsToSet(hosts []*models.Host) sets.Set[string] {
 	return hostSet
 }
 
+// GetVMsInPlacementGroup returns a Set of IDs of the virtual machines in the placement group.
+func GetVMsInPlacementGroup(placementGroup *models.VMPlacementGroup) sets.Set[string] {
+	placementGroupVMSet := sets.Set[string]{}
+	for i := 0; i < len(placementGroup.Vms); i++ {
+		placementGroupVMSet.Insert(*placementGroup.Vms[i].ID)
+	}
+
+	return placementGroupVMSet
+}
+
 func TowerMemory(memoryMiB int64) *int64 {
 	memory := memoryMiB
 	if memory <= 0 {

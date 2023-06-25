@@ -25,6 +25,10 @@ var (
 	// requeueing a CAPE operation.
 	DefaultRequeueTimeout = 10 * time.Second
 
+	// VMPlacementGroupDuplicateTimeout is the time for how long to wait when
+	// requeueing a CAPE operation after encountering VMPlacementGroupDuplicate error.
+	VMPlacementGroupDuplicateTimeout = 10 * time.Minute
+
 	// WaitTaskInterval is the default interval time polling task.
 	WaitTaskInterval = 1 * time.Second
 

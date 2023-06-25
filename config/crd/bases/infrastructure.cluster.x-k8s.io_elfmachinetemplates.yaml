@@ -37,7 +37,7 @@ spec:
             properties:
               template:
                 description: ElfMachineTemplateResource describes the data needed
-                  to create a ElfMachine from a template.
+                  to create an ElfMachine from a template.
                 properties:
                   spec:
                     description: Spec is the specification of the desired behavior

@@ -27,7 +27,7 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
-// MachineContext is a Go context used with a ElfMachine.
+// MachineContext is a Go context used with an ElfMachine.
 type MachineContext struct {
 	*ControllerContext
 	Cluster     *clusterv1.Cluster
