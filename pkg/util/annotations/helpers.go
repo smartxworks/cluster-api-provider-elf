@@ -22,6 +22,17 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
+// HasAnnotation returns true if the object has the specified annotation.
+func HasAnnotation(o metav1.Object, annotationKey string) bool {
+	annotations := o.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+
+	_, ok := annotations[annotationKey]
+	return ok
+}
+
 func GetPlacementGroupName(o metav1.Object) string {
 	annotations := o.GetAnnotations()
 	if annotations == nil {

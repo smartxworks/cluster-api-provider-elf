@@ -64,7 +64,7 @@ import (
 //+kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=*,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machinedeployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machinedeployments;machinedeployments/status,verbs=get;list;watch
-//+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
+//+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch;patch
 //+kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch;create;update;patch
 
 // ElfMachineReconciler reconciles an ElfMachine object.
@@ -174,7 +174,7 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 	}
 
 	logger := r.Logger.WithValues("namespace", elfMachine.Namespace,
-		"elfCluster", elfCluster.Name, "elfMachine", elfMachine.Name)
+		"elfCluster", elfCluster.Name, "elfMachine", elfMachine.Name, "machine", machine.Name)
 
 	// Create the machine context for this request.
 	machineContext := &context.MachineContext{

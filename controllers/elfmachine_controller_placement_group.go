@@ -27,8 +27,10 @@ import (
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capiutil "sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/collections"
 	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
@@ -36,6 +38,7 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
+	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 	kcputil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/kcp"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 )
@@ -159,29 +162,61 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 
 	availableHostSet := service.HostsToSet(availableHosts)
 	unusedHostSet := availableHostSet.Difference(usedHostSet)
+	if unusedHostSet.Len() != 0 {
+		ctx.Logger.V(2).Info("The placement group still has capacity", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "unusedHosts", unusedHostSet.UnsortedList())
+
+		return pointer.String(""), nil
+	}
 
 	kcp, err := machineutil.GetKCPByMachine(ctx, ctx.Client, ctx.Machine)
 	if err != nil {
 		return nil, err
 	}
 
-	if !kcputil.IsKCPInRollingUpdate(kcp) {
-		if unusedHostSet.Len() != 0 {
-			return pointer.String(""), nil
-		}
-
+	// KCP is not in scaling down/rolling update.
+	if !(kcputil.IsKCPInRollingUpdate(kcp) || kcputil.IsKCPInScalingDown(kcp)) {
 		ctx.Logger.V(2).Info("The placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHosts", usedHostSet.UnsortedList())
 
 		return nil, nil
 	}
 
-	// KCP is in rolling update.
+	// KCP is in scaling down.
+	//
+	// If the placement group is full during KCP scaling up, and then scale down,
+	// the Machine being created cannot pass the Preflight checks(https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20191017-kubeadm-based-control-plane.md#preflight-checks),
+	// so the Machine will not be deleted.
+	// We can set delete annotation on the Machine and KCP will delete it.
+	if kcputil.IsKCPInScalingDown(kcp) {
+		if annotationsutil.HasAnnotation(ctx.Machine, clusterv1.DeleteMachineAnnotation) {
+			return nil, nil
+		}
 
-	if unusedHostSet.Len() != 0 {
-		ctx.Logger.V(2).Info("The placement group still has capacity, skip selecting host for rolling update", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "unusedHosts", unusedHostSet.UnsortedList(), "vmRef", ctx.ElfMachine.Status.VMRef)
+		newMachine := ctx.Machine.DeepCopy()
+		patchHelper, err := patch.NewHelper(ctx.Machine, r.Client)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to init patch helper for %s %s/%s", ctx.Machine.GroupVersionKind(), ctx.Machine.Namespace, ctx.Machine.Name)
+		}
 
-		return pointer.String(""), nil
+		// Allow scaling down of KCP with the possibility of marking specific control plane machine(s) to be deleted with delete annotation key.
+		// The presence of the annotation will affect the rollout strategy in a way that, it implements the following prioritization logic in descending order,
+		// while selecting machines for scale down:
+		//   1.outdatedMachines with the delete annotation
+		//   2.machines with the delete annotation
+		//   3.outdated machines
+		//   4.all machines
+		//
+		// Refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20191017-kubeadm-based-control-plane.md#scale-down
+		annotations.AddAnnotations(newMachine, map[string]string{clusterv1.DeleteMachineAnnotation: ""})
+		if err := patchHelper.Patch(r, newMachine); err != nil {
+			return nil, errors.Wrapf(err, "failed to patch Machine %s to set delete annotation key %s.", newMachine.Name, clusterv1.DeleteMachineAnnotation)
+		}
+
+		ctx.Logger.Info("Setted the delete annotation key on Machine for KCP delete it, because the placement group is full and KCP scale up first then scale down", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList())
+
+		return nil, nil
 	}
+
+	// KCP is in rolling update.
 
 	if !service.ContainsUnavailableHost(hosts, usedHostSet.UnsortedList(), *service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB)) &&
 		int(*kcp.Spec.Replicas) == usedHostSet.Len() {

@@ -26,5 +26,10 @@ import (
 // If *kcp.Spec.Replicas > kcp.Status.Replicas, it means KCP is not in rolling update,
 // but scaling out or being created.
 func IsKCPInRollingUpdate(kcp *controlplanev1.KubeadmControlPlane) bool {
-	return *kcp.Spec.Replicas <= kcp.Status.Replicas
+	return *kcp.Spec.Replicas <= kcp.Status.Replicas && kcp.Status.UpdatedReplicas == 1
+}
+
+// IsKCPInRollingUpdate returns whether KCP is in scaling down.
+func IsKCPInScalingDown(kcp *controlplanev1.KubeadmControlPlane) bool {
+	return *kcp.Spec.Replicas < kcp.Status.Replicas && kcp.Status.Replicas == kcp.Status.UpdatedReplicas
 }
