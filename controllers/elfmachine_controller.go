@@ -67,7 +67,7 @@ import (
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch;create;update;patch
 
-// ElfMachineReconciler reconciles a ElfMachine object.
+// ElfMachineReconciler reconciles an ElfMachine object.
 type ElfMachineReconciler struct {
 	*context.ControllerContext
 	NewVMService service.NewVMServiceFunc

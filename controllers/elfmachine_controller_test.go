@@ -1320,7 +1320,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(err).To(BeZero())
 				Expect(hostID).To(BeNil())
 				Expect(logBuffer.String()).To(ContainSubstring("The placement group is full, wait for enough available hosts"))
-				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForAvailableHostReason}})
+				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForAvailableHostRequiredByPlacementGroupReason}})
 
 				elfMachine.Status.Conditions = nil
 				mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
@@ -1460,7 +1460,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 	})
 
-	Context("Delete a ElfMachine", func() {
+	Context("Delete an ElfMachine", func() {
 		BeforeEach(func() {
 			cluster.Status.InfrastructureReady = true
 			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)

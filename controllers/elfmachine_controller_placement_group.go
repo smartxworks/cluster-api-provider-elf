@@ -116,14 +116,14 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 
 // preCheckPlacementGroup checks whether there are still available hosts before creating the virtual machine.
 //
-// rethost:
+// The return value:
 // 1. nil means there are not enough hosts.
 // 2. An empty string indicates that there is an available host.
 // 3. A non-empty string indicates that the specified host ID was returned.
 func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContext) (rethost *string, reterr error) {
 	defer func() {
 		if rethost == nil {
-			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForAvailableHostReason, clusterv1.ConditionSeverityInfo, "")
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForAvailableHostRequiredByPlacementGroupReason, clusterv1.ConditionSeverityInfo, "")
 		}
 	}()
 
@@ -258,7 +258,7 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx *context.MachineCon
 
 // getHostsInPlacementGroup returns the hosts where all virtual machines of placement group located.
 func (r *ElfMachineReconciler) getHostsInPlacementGroup(ctx *context.MachineContext, placementGroup *models.VMPlacementGroup) (sets.Set[string], error) {
-	placementGroupVMSet := service.GetPlacementGroupVMSet(placementGroup)
+	placementGroupVMSet := service.GetVMsInPlacementGroup(placementGroup)
 	vms, err := ctx.VMService.FindByIDs(placementGroupVMSet.UnsortedList())
 	if err != nil {
 		return nil, err
@@ -335,7 +335,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 		return false, err
 	}
 
-	placementGroupVMSet := service.GetPlacementGroupVMSet(placementGroup)
+	placementGroupVMSet := service.GetVMsInPlacementGroup(placementGroup)
 	if placementGroupVMSet.Has(*vm.ID) {
 		return true, nil
 	}

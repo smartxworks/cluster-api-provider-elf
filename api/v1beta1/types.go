@@ -59,7 +59,7 @@ type Tower struct {
 	SkipTLSVerify bool `json:"skipTLSVerify,omitempty"`
 }
 
-// ElfMachineTemplateResource describes the data needed to create a ElfMachine from a template.
+// ElfMachineTemplateResource describes the data needed to create an ElfMachine from a template.
 type ElfMachineTemplateResource struct {
 	// Spec is the specification of the desired behavior of the machine.
 	Spec ElfMachineSpec `json:"spec"`
