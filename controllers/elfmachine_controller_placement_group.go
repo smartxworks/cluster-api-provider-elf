@@ -174,7 +174,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 	}
 
 	// KCP is not in scaling down/rolling update.
-	if !(kcputil.IsKCPInRollingUpdate(kcp) || kcputil.IsKCPInScalingDown(kcp)) {
+	if !(kcputil.IsKCPRollingUpdateFirstMachine(kcp) || kcputil.IsKCPInScalingDown(kcp)) {
 		ctx.Logger.V(2).Info("The placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHosts", usedHostSet.UnsortedList())
 
 		return nil, nil
@@ -182,10 +182,10 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 
 	// KCP is in scaling down.
 	//
-	// If the placement group is full during KCP scaling up, and then scale down,
-	// the Machine being created cannot pass the Preflight checks(https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20191017-kubeadm-based-control-plane.md#preflight-checks),
+	// KCP scaling up will fail if the placement group is full, then the user will trigger KCP scaling down.
+	// The Machine being created cannot pass the Preflight checks(https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20191017-kubeadm-based-control-plane.md#preflight-checks),
 	// so the Machine will not be deleted.
-	// We can set delete annotation on the Machine and KCP will delete it.
+	// We can add delete machine annotation on the Machine and KCP will delete it.
 	if kcputil.IsKCPInScalingDown(kcp) {
 		if annotationsutil.HasAnnotation(ctx.Machine, clusterv1.DeleteMachineAnnotation) {
 			return nil, nil
@@ -196,6 +196,8 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to init patch helper for %s %s/%s", ctx.Machine.GroupVersionKind(), ctx.Machine.Namespace, ctx.Machine.Name)
 		}
+
+		ctx.Logger.Info("Add the delete machine annotation on KCP Machine in order to delete it, because KCP is being scaled down after a failed scaling up", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList())
 
 		// Allow scaling down of KCP with the possibility of marking specific control plane machine(s) to be deleted with delete annotation key.
 		// The presence of the annotation will affect the rollout strategy in a way that, it implements the following prioritization logic in descending order,
@@ -208,10 +210,8 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 		// Refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20191017-kubeadm-based-control-plane.md#scale-down
 		annotations.AddAnnotations(newMachine, map[string]string{clusterv1.DeleteMachineAnnotation: ""})
 		if err := patchHelper.Patch(r, newMachine); err != nil {
-			return nil, errors.Wrapf(err, "failed to patch Machine %s to set delete annotation key %s.", newMachine.Name, clusterv1.DeleteMachineAnnotation)
+			return nil, errors.Wrapf(err, "failed to patch Machine %s to add delete machine annotation %s.", newMachine.Name, clusterv1.DeleteMachineAnnotation)
 		}
-
-		ctx.Logger.Info("Setted the delete annotation key on Machine for KCP delete it, because the placement group is full and KCP scale up first then scale down", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList())
 
 		return nil, nil
 	}
@@ -403,7 +403,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			// Only when the KCP is in rolling update, the VM is stopped, and all the hosts used by the placement group are available,
 			// will the upgrade be allowed with the same number of hosts and CP nodes.
 			// In this case first machine created by KCP rolling update can be powered on without being added to the placement group.
-			if kcputil.IsKCPInRollingUpdate(kcp) &&
+			if kcputil.IsKCPRollingUpdateFirstMachine(kcp) &&
 				*vm.Status == models.VMStatusSTOPPED &&
 				!service.ContainsUnavailableHost(hosts, usedHostSet.UnsortedList(), *service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB)) &&
 				int(*kcp.Spec.Replicas) == usedHostSet.Len() {

@@ -20,16 +20,22 @@ import (
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 )
 
-// IsKCPInRollingUpdate returns whether KCP is in rolling update.
-// IMPORTANT: This function can only be used when creating a new Machine.
+// IsKCPRollingUpdateFirstMachine returns whether KCP is creating the first rolling update CP machine.
 //
-// If *kcp.Spec.Replicas > kcp.Status.Replicas, it means KCP is not in rolling update,
-// but scaling out or being created.
-func IsKCPInRollingUpdate(kcp *controlplanev1.KubeadmControlPlane) bool {
-	return *kcp.Spec.Replicas <= kcp.Status.Replicas && kcp.Status.UpdatedReplicas == 1
+// If kcp.Status.Replicas > kcp.Spec.Replicas and kcp.Status.UpdatedReplicas == 1,
+// it means KCP is creating the first rolling update CP Machine.
+//
+// For more information about KCP replicas, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/controlplane/kubeadm/api/v1beta1/kubeadm_control_plane_types.go
+func IsKCPRollingUpdateFirstMachine(kcp *controlplanev1.KubeadmControlPlane) bool {
+	return *kcp.Spec.Replicas < kcp.Status.Replicas && kcp.Status.UpdatedReplicas == 1
 }
 
-// IsKCPInRollingUpdate returns whether KCP is in scaling down.
+// IsKCPInScalingDown returns whether KCP is in scaling down.
+//
+// If kcp.Spec.Replicas < kcp.Status.Replicas and kcp.Status.Replicas == kcp.Status.UpdatedReplicas,
+// it means KCP is in scaling down.
+//
+// For more information about KCP replicas, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/controlplane/kubeadm/api/v1beta1/kubeadm_control_plane_types.go
 func IsKCPInScalingDown(kcp *controlplanev1.KubeadmControlPlane) bool {
 	return *kcp.Spec.Replicas < kcp.Status.Replicas && kcp.Status.Replicas == kcp.Status.UpdatedReplicas
 }

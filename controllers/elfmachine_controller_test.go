@@ -915,7 +915,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				vm2.Host = &models.NestedHost{ID: host.ID, Name: host.Name}
 				placementGroup := fake.NewVMPlacementGroup([]string{*vm2.ID})
 				kcp.Spec.Replicas = pointer.Int32(1)
-				kcp.Status.Replicas = 1
+				kcp.Status.Replicas = 2
 				kcp.Status.UpdatedReplicas = 1
 				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
 				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -1161,7 +1161,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 					{ID: vm3.ID, Name: vm3.Name},
 				}
 				kcp.Spec.Replicas = pointer.Int32(3)
-				kcp.Status.Replicas = 3
+				kcp.Status.Replicas = 4
 				kcp.Status.UpdatedReplicas = 1
 				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2, elfMachine3, machine3)
 				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -1375,7 +1375,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				hostID, err := reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(hostID).To(BeNil())
-				Expect(logBuffer.String()).To(ContainSubstring("Setted the delete annotation key on Machine for KCP delete it"))
+				Expect(logBuffer.String()).To(ContainSubstring("Add the delete machine annotation on KCP Machine in order to delete it"))
 				Expect(reconciler.Client.Get(reconciler, capiutil.ObjectKey(machine), machine)).To(Succeed())
 				Expect(machine.Annotations).Should(HaveKey(clusterv1.DeleteMachineAnnotation))
 			})
