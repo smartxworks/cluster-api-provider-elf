@@ -53,6 +53,7 @@ rules:
   verbs:
   - get
   - list
+  - patch
   - watch
 - apiGroups:
   - controlplane.cluster.x-k8s.io

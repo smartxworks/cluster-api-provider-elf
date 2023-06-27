@@ -20,11 +20,31 @@ import (
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 )
 
-// IsKCPInRollingUpdate returns whether KCP is in rolling update.
-// IMPORTANT: This function can only be used when creating a new Machine.
+// IsKCPRollingUpdateFirstMachine returns true if KCP is in rolling update and creating the first CP Machine.
 //
-// If *kcp.Spec.Replicas > kcp.Status.Replicas, it means KCP is not in rolling update,
-// but scaling out or being created.
-func IsKCPInRollingUpdate(kcp *controlplanev1.KubeadmControlPlane) bool {
-	return *kcp.Spec.Replicas <= kcp.Status.Replicas
+// KCP rollout algorithm is as follows:
+// Find Machines that have an outdated spec, If there is a machine requiring rollout
+// 1.Scale up control plane creating a machine with the new spec
+// 2.Scale down control plane by removing one of the machine that needs rollout (the oldest out-of date machine in the failure domain that has the most control-plane machines on it)
+//
+// kcp.Status.UpdatedReplicas is the total number of machines that are up to date with the control
+// plane's configuration and therefore do not require rollout.
+//
+// So when KCP is in rolling update and creating the first CP Machine,
+// kcp.Status.Replicas is greater than kcp.Spec.Replicas and kcp.Status.UpdatedReplicas equals 1.
+//
+// For more information about KCP replicas, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/controlplane/kubeadm/api/v1beta1/kubeadm_control_plane_types.go
+// For more information about KCP rollout, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20191017-kubeadm-based-control-plane.md#kubeadmcontrolplane-rollout
+func IsKCPRollingUpdateFirstMachine(kcp *controlplanev1.KubeadmControlPlane) bool {
+	return *kcp.Spec.Replicas < kcp.Status.Replicas && kcp.Status.UpdatedReplicas == 1
+}
+
+// IsKCPInScalingDown returns whether KCP is in scaling down.
+//
+// When KCP is in scaling down, machines managed by KCP is greater than kcp.Spec.Replicas,
+// and these machines are up to date with the control plane's configuration.
+//
+// For more information about KCP replicas, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/controlplane/kubeadm/api/v1beta1/kubeadm_control_plane_types.go
+func IsKCPInScalingDown(kcp *controlplanev1.KubeadmControlPlane) bool {
+	return *kcp.Spec.Replicas < kcp.Status.Replicas && kcp.Status.Replicas == kcp.Status.UpdatedReplicas
 }

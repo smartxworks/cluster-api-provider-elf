@@ -915,7 +915,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				vm2.Host = &models.NestedHost{ID: host.ID, Name: host.Name}
 				placementGroup := fake.NewVMPlacementGroup([]string{*vm2.ID})
 				kcp.Spec.Replicas = pointer.Int32(1)
-				kcp.Status.Replicas = 1
+				kcp.Status.Replicas = 2
+				kcp.Status.UpdatedReplicas = 1
 				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
 				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
@@ -1160,7 +1161,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 					{ID: vm3.ID, Name: vm3.Name},
 				}
 				kcp.Spec.Replicas = pointer.Int32(3)
-				kcp.Status.Replicas = 3
+				kcp.Status.Replicas = 4
+				kcp.Status.UpdatedReplicas = 1
 				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2, elfMachine3, machine3)
 				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
@@ -1343,6 +1345,39 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(err).To(BeZero())
 				Expect(*hostID).To(Equal(""))
 				expectConditions(elfMachine, []conditionAssertion{})
+			})
+
+			It("kcp scale down", func() {
+				kcp.Spec.Replicas = pointer.Int32(1)
+				kcp.Status.Replicas = 2
+				kcp.Status.UpdatedReplicas = kcp.Status.Replicas
+				host := fake.NewTowerHost()
+				elfMachine1, machine1 := fake.NewMachineObjects(elfCluster, cluster)
+				fake.ToControlPlaneMachine(machine1, kcp)
+				fake.ToControlPlaneMachine(elfMachine1, kcp)
+				vm1 := fake.NewTowerVMFromElfMachine(elfMachine1)
+				vm1.Host = &models.NestedHost{ID: service.TowerString(*host.ID)}
+				elfMachine.Status.VMRef = *vm1.LocalID
+				placementGroup := fake.NewVMPlacementGroup([]string{})
+				placementGroup.Vms = []*models.NestedVM{
+					{ID: vm1.ID, Name: vm1.Name},
+				}
+				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp)
+				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+				placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctrlContext.Client, machine, cluster)
+				Expect(err).NotTo(HaveOccurred())
+				mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
+				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return([]*models.Host{host}, nil)
+				mockVMService.EXPECT().FindByIDs(gomock.InAnyOrder([]string{*vm1.ID})).Return([]*models.VM{vm1}, nil)
+
+				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				hostID, err := reconciler.preCheckPlacementGroup(machineContext)
+				Expect(err).To(BeZero())
+				Expect(hostID).To(BeNil())
+				Expect(logBuffer.String()).To(ContainSubstring("Add the delete machine annotation on KCP Machine in order to delete it"))
+				Expect(reconciler.Client.Get(reconciler, capiutil.ObjectKey(machine), machine)).To(Succeed())
+				Expect(machine.Annotations).Should(HaveKey(clusterv1.DeleteMachineAnnotation))
 			})
 		})
 	})
