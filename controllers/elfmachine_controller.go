@@ -960,6 +960,8 @@ func (r *ElfMachineReconciler) reconcileNode(ctx *context.MachineContext, vm *mo
 
 // If the VM is powered on then issue requeues until all of the VM's
 // networks have IP addresses.
+// In a scenario with many virtual machines, it will be slow for SMTX OS to synchronize VM information,
+// so preferred to obtain the VM network status from k8s node.
 func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
 	defer func() {
 		if reterr != nil {
@@ -970,38 +972,50 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 		}
 	}()
 
+	networkStatusMap := make(map[string]infrav1.NetworkStatus)
+
+	nodeIP, err := r.getK8sNodeIP(ctx, ctx.ElfMachine.Name)
+	if err != nil {
+		return false, err
+	}
+
+	if nodeIP != "" {
+		networkStatusMap[nodeIP] = infrav1.NetworkStatus{
+			IPAddrs: []string{nodeIP},
+		}
+	}
+
 	nics, err := ctx.VMService.GetVMNics(*vm.ID)
 	if err != nil {
 		return false, err
 	}
 
-	networkStatuses := make([]infrav1.NetworkStatus, 0, len(nics))
 	for i := 0; i < len(nics); i++ {
 		nic := nics[i]
 		if service.GetTowerString(nic.IPAddress) == "" {
 			continue
 		}
 
-		networkStatuses = append(networkStatuses, infrav1.NetworkStatus{
+		networkStatusMap[service.GetTowerString(nic.IPAddress)] = infrav1.NetworkStatus{
 			IPAddrs: []string{service.GetTowerString(nic.IPAddress)},
 			MACAddr: service.GetTowerString(nic.MacAddress),
-		})
+		}
 	}
 
-	ctx.ElfMachine.Status.Network = networkStatuses
-	if len(networkStatuses) < len(ctx.ElfMachine.Spec.Network.Devices) {
+	if len(networkStatusMap) < len(ctx.ElfMachine.Spec.Network.Devices) {
 		return false, nil
 	}
 
-	ipAddrs := make([]clusterv1.MachineAddress, 0, len(ctx.ElfMachine.Status.Network))
-	for _, netStatus := range ctx.ElfMachine.Status.Network {
-		ipAddrs = append(ipAddrs, clusterv1.MachineAddress{
+	ctx.ElfMachine.Status.Network = []infrav1.NetworkStatus{}
+	ctx.ElfMachine.Status.Addresses = []clusterv1.MachineAddress{}
+
+	for _, networkStatus := range networkStatusMap {
+		ctx.ElfMachine.Status.Network = append(ctx.ElfMachine.Status.Network, networkStatus)
+		ctx.ElfMachine.Status.Addresses = append(ctx.ElfMachine.Status.Addresses, clusterv1.MachineAddress{
 			Type:    clusterv1.MachineInternalIP,
-			Address: netStatus.IPAddrs[0],
+			Address: networkStatus.IPAddrs[0],
 		})
 	}
-
-	ctx.ElfMachine.Status.Addresses = ipAddrs
 
 	return true, nil
 }
@@ -1105,4 +1119,34 @@ func (r *ElfMachineReconciler) deleteNode(ctx *context.MachineContext, nodeName 
 	}
 
 	return nil
+}
+
+// getK8sNodeIP get the default network IP of k8s node.
+func (r *ElfMachineReconciler) getK8sNodeIP(ctx *context.MachineContext, nodeName string) (string, error) {
+	// Return early if control plane is not initialized.
+	if !conditions.IsTrue(ctx.Cluster, clusterv1.ControlPlaneInitializedCondition) {
+		return "", nil
+	}
+
+	kubeClient, err := util.NewKubeClient(ctx, ctx.Client, ctx.Cluster)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to get client for Cluster %s/%s", ctx.Cluster.Namespace, ctx.Cluster.Name)
+	}
+
+	k8sNode, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil && apierrors.IsNotFound(err) {
+		return "", nil
+	}
+
+	if len(k8sNode.Status.Addresses) == 0 {
+		return "", nil
+	}
+
+	for _, address := range k8sNode.Status.Addresses {
+		if address.Type == corev1.NodeInternalIP {
+			return address.Address, nil
+		}
+	}
+
+	return "", nil
 }
