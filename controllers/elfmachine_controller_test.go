@@ -1423,10 +1423,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Times(10).Return(vm, nil)
-			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Times(20).Return(placementGroup, nil)
-			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(30).Return(fake.NewTowerLabel(), nil)
-			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(10)
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Times(11).Return(vm, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Times(22).Return(placementGroup, nil)
+			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(33).Return(fake.NewTowerLabel(), nil)
+			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(11)
 
 			// k8s node IP is null, VM has no nic info
 			k8sNode.Status.Addresses = nil
@@ -1534,7 +1534,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			// test elfMachine has two network device.
 			elfMachine.Spec.Network.Devices = append(elfMachine.Spec.Network.Devices, infrav1.NetworkDeviceSpec{})
-			fmt.Println(len(elfMachine.Spec.Network.Devices))
 			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -1555,6 +1554,23 @@ var _ = Describe("ElfMachineReconciler", func() {
 			nic1 := fake.NewTowerVMNic(0)
 			nic1.IPAddress = service.TowerString("127.0.0.1")
 			nic2 := fake.NewTowerVMNic(1)
+			nic2.IPAddress = service.TowerString("127.0.0.2")
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{nic1, nic2}, nil)
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).To(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+
+			// test elfMachine has 3 network device, one networkType is None
+			elfMachine.Spec.Network.Devices = append(elfMachine.Spec.Network.Devices, infrav1.NetworkDeviceSpec{NetworkType: infrav1.NetworkTypeNone})
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+
+			// k8s node does not has node IP, VM has 3 nic info, one nic networkType is None
+			nic1 = fake.NewTowerVMNic(0)
+			nic1.IPAddress = service.TowerString("127.0.0.1")
+			nic2 = fake.NewTowerVMNic(1)
 			nic2.IPAddress = service.TowerString("127.0.0.2")
 			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{nic1, nic2}, nil)
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})

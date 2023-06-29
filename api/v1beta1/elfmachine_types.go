@@ -228,6 +228,20 @@ func (m *ElfMachine) SetVMDisconnectionTimestamp(timestamp *metav1.Time) {
 	}
 }
 
+func (m *ElfMachine) GetNetworkDevicesNeededIPAllocation() []NetworkDeviceSpec {
+	networkDevices := []NetworkDeviceSpec{}
+
+	for index := range m.Spec.Network.Devices {
+		if m.Spec.Network.Devices[index].NetworkType == NetworkTypeNone {
+			continue
+		}
+
+		networkDevices = append(networkDevices, m.Spec.Network.Devices[index])
+	}
+
+	return networkDevices
+}
+
 func (m *ElfMachine) GetVMDisconnectionTimestamp() *metav1.Time {
 	if m.Annotations == nil {
 		return nil
