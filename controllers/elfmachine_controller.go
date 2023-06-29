@@ -249,6 +249,13 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 		return nil
 	}
 
+	if service.IsShutDownTimeout(conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)) {
+		ctrlutil.RemoveFinalizer(ctx.ElfMachine, infrav1.MachineFinalizer)
+		ctx.Logger.Info("ShutDown timeout detected, skipping delete vm")
+
+		return nil
+	}
+
 	// Shut down the VM
 	if *vm.Status == models.VMStatusRUNNING {
 		var task *models.Task
