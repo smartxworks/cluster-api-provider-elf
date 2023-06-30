@@ -30,6 +30,9 @@ const (
 const (
 	// PlacementGroupNameAnnotation is the annotation identifying the name of placement group.
 	PlacementGroupNameAnnotation = "cape.infrastructure.cluster.x-k8s.io/placement-group-name"
+
+	// CAPEVersionAnnotation is the annotation identifying the version of CAPE that the resource created by.
+	CAPEVersionAnnotation = "cape.infrastructure.cluster.x-k8s.io/cape-version"
 )
 
 // Labels.

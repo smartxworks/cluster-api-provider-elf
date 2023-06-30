@@ -41,6 +41,7 @@ import (
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 	kcputil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/kcp"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/version"
 )
 
 // reconcilePlacementGroup makes sure that the placement group exist.
@@ -346,6 +347,12 @@ func (r *ElfMachineReconciler) getPlacementGroup(ctx *context.MachineContext, pl
 
 // joinPlacementGroup puts the virtual machine into the placement group.
 func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
+	if machineutil.IsControlPlaneMachine(ctx.Machine) && !version.IsCompatiblePlacementGroup(ctx.ElfMachine) {
+		ctx.Logger.V(2).Info(fmt.Sprintf("The capeVersion of ElfMachine is lower than %s, skip adding VM to the placement group", version.CAPEVersion1_2_0), "capeVersion", version.GetCAPEVersion(ctx.ElfMachine))
+
+		return true, nil
+	}
+
 	defer func() {
 		if reterr != nil {
 			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.JoiningPlacementGroupFailedReason, clusterv1.ConditionSeverityWarning, reterr.Error())

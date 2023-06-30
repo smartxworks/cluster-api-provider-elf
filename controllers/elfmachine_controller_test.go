@@ -751,6 +751,21 @@ var _ = Describe("ElfMachineReconciler", func() {
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
 		})
 
+		It("should skip adding VM to the placement group when capeVersion of ElfMachine is lower than v1.2.0", func() {
+			fake.ToControlPlaneMachine(machine, kcp)
+			fake.ToControlPlaneMachine(elfMachine, kcp)
+			delete(elfMachine.Annotations, infrav1.CAPEVersionAnnotation)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err := reconciler.joinPlacementGroup(machineContext, nil)
+			Expect(ok).To(BeTrue())
+			Expect(err).To(BeZero())
+			Expect(logBuffer.String()).To(ContainSubstring("The capeVersion of ElfMachine is lower than"))
+		})
+
 		It("should add vm to the placement group", func() {
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil

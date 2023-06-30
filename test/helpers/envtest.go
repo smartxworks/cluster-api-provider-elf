@@ -57,6 +57,7 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/manager"
+	"github.com/smartxworks/cluster-api-provider-elf/webhooks"
 )
 
 func init() {
@@ -143,6 +144,13 @@ func NewTestEnvironment() *TestEnvironment {
 		KubeConfig: env.Config,
 	}
 	managerOpts.AddToManager = func(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
+		if err := (&webhooks.ElfMachineMutation{
+			Client: mgr.GetClient(),
+			Logger: mgr.GetLogger().WithName("ElfMachineMutation"),
+		}).SetupWebhookWithManager(mgr); err != nil {
+			return err
+		}
+
 		return nil
 	}
 

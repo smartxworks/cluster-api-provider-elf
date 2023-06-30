@@ -33,4 +33,8 @@ const (
 
 	// DefaultLeaderElectionID is the default value for the eponymous manager option.
 	DefaultLeaderElectionID = DefaultPodName + "-runtime"
+
+	// DefaultWebhookServiceContainerPort is the default value for the eponymous
+	// manager option.
+	DefaultWebhookServiceContainerPort = 0
 )

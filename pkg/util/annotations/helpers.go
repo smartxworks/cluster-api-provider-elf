@@ -18,6 +18,7 @@ package annotations
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/cluster-api/util/annotations"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
@@ -40,4 +41,9 @@ func GetPlacementGroupName(o metav1.Object) string {
 	}
 
 	return annotations[infrav1.PlacementGroupNameAnnotation]
+}
+
+// AddAnnotations sets the desired annotations on the object and returns true if the annotations have changed.
+func AddAnnotations(o metav1.Object, desired map[string]string) bool {
+	return annotations.AddAnnotations(o, desired)
 }
