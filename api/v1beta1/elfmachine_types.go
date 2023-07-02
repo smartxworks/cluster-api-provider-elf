@@ -228,7 +228,8 @@ func (m *ElfMachine) SetVMDisconnectionTimestamp(timestamp *metav1.Time) {
 	}
 }
 
-func (m *ElfMachine) GetNetworkDevicesNeededIPAllocation() []NetworkDeviceSpec {
+// GetNetworkDevicesRequiringIP returns a slice of NetworkDeviceSpec which requires DHCP IP or static IP.
+func (m *ElfMachine) GetNetworkDevicesRequiringIP() []NetworkDeviceSpec {
 	networkDevices := []NetworkDeviceSpec{}
 
 	for index := range m.Spec.Network.Devices {
