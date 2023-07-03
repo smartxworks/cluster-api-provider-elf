@@ -22,6 +22,7 @@ import (
 )
 
 var (
+	buildVersion string // TAG_NAME var or git branch tag name
 	gitMajor     string // major version, always numeric
 	gitMinor     string // minor version, numeric possibly followed by "+"
 	gitVersion   string // semantic version, derived by build scripts
@@ -30,7 +31,27 @@ var (
 	buildDate    string // build date in ISO8601 format, output of $(date -u +'%Y-%m-%dT%H:%M:%SZ')
 )
 
+var (
+	// The full CAPE version.
+	capeVersion string
+)
+
+func init() {
+	// buildVersion will be set at compiling phase.
+	// When executing 'go run main.go' in local env, it will be empty. So set it to "latest" same as building against main branch.
+	if buildVersion == "" {
+		buildVersion = CAPEVersionLatest
+	}
+
+	if IsSemanticVersion(buildVersion) {
+		capeVersion = buildVersion
+	} else {
+		capeVersion = CAPEVersionDefault
+	}
+}
+
 type Info struct {
+	BuildVersion string `json:"buildVersion,omitempty"`
 	Major        string `json:"major,omitempty"`
 	Minor        string `json:"minor,omitempty"`
 	GitVersion   string `json:"gitVersion,omitempty"`
@@ -44,6 +65,7 @@ type Info struct {
 
 func Get() Info {
 	return Info{
+		BuildVersion: buildVersion,
 		Major:        gitMajor,
 		Minor:        gitMinor,
 		GitVersion:   gitVersion,
@@ -58,5 +80,11 @@ func Get() Info {
 
 // String returns info as a human-friendly version string.
 func (info Info) String() string {
-	return info.GitVersion
+	return fmt.Sprintf("Version: %s, BuildDate: %s, GitVersion: %s, GitCommit: %s, GoVersion: %s",
+		info.BuildVersion, info.BuildDate, info.GitVersion, info.GitCommit, info.GoVersion)
+}
+
+// CAPEVersion returns the full CAPE version, e.g. v1.1.0 or v1.1.0-rc.1.
+func CAPEVersion() string {
+	return capeVersion
 }

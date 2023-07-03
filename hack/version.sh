@@ -85,10 +85,11 @@ version::ldflags() {
         local key=${1}
         local val=${2}
         ldflags+=(
-            "-X 'github.com/smartxworks/cluster-api-provider-elf/version.${key}=${val}'"
+            "-X 'github.com/smartxworks/cluster-api-provider-elf/pkg/version.${key}=${val}'"
         )
     }
 
+    add_ldflag "buildVersion" $1
     add_ldflag "buildDate" "$(date ${SOURCE_DATE_EPOCH:+"--date=@${SOURCE_DATE_EPOCH}"} -u +'%Y-%m-%dT%H:%M:%SZ')"
     add_ldflag "gitCommit" "${GIT_COMMIT}"
     add_ldflag "gitTreeState" "${GIT_TREE_STATE}"
@@ -101,4 +102,4 @@ version::ldflags() {
     echo "${ldflags[*]-}"
 }
 
-version::ldflags
+version::ldflags $1

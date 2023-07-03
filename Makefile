@@ -86,7 +86,7 @@ ARCH ?= amd64
 ALL_ARCH = amd64 arm64
 
 # Set build time variables including version details
-LDFLAGS := $(shell hack/version.sh)
+LDFLAGS := $(shell hack/version.sh $(IMAGE_TAG))
 
 # Common docker variables
 IMAGE_NAME ?= cape-manager
@@ -123,7 +123,7 @@ e2e-templates: kustomize ## Generate e2e cluster templates
 	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization/conformance > $(E2E_TEMPLATE_DIR)/cluster-template-conformance.yaml
 
 test: generate ## Run tests.
-	source ./hack/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v ./api/... ./controllers/... ./pkg/... -coverprofile=cover.out
+	source ./hack/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v ./api/... ./webhooks/... ./controllers/... ./pkg/... -coverprofile=cover.out
 
 .PHONY: e2e-image
 e2e-image: docker-pull-prerequisites ## Build the e2e manager image. Docker ignores docker.io causing CAPI to fail to load local e2e image.
@@ -190,12 +190,14 @@ generate-go: controller-gen ## Runs Go related generate targets
 	go generate ./...
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
+		paths=./webhooks/... \
 		object:headerFile=./hack/boilerplate.go.txt
 
 .PHONY: generate-manifests
 generate-manifests: controller-gen ## Generate manifests e.g. CRD, RBAC etc.
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
+		paths=./webhooks/... \
 		crd:crdVersions=v1 \
 		output:crd:dir=$(CRD_ROOT) \
 		webhook

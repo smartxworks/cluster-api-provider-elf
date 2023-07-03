@@ -77,27 +77,7 @@ func NewClusterObjects() (*infrav1.ElfCluster, *clusterv1.Cluster) {
 }
 
 func NewMachineObjects(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster) (*infrav1.ElfMachine, *clusterv1.Machine) {
-	elfMachine := &infrav1.ElfMachine{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      names.SimpleNameGenerator.GenerateName("elfmachine-"),
-			Namespace: Namespace,
-			Labels: map[string]string{
-				clusterv1.ClusterNameLabel: elfCluster.Name,
-			},
-			CreationTimestamp: metav1.Now(),
-		},
-		Spec: infrav1.ElfMachineSpec{
-			HA:                true,
-			NumCPUs:           1,
-			NumCoresPerSocket: 1,
-			MemoryMiB:         1,
-			Network: infrav1.NetworkSpec{
-				Devices: []infrav1.NetworkDeviceSpec{
-					{},
-				},
-			},
-		},
-	}
+	elfMachine := NewElfMachine(elfCluster)
 
 	machine := &clusterv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
@@ -120,6 +100,36 @@ func NewMachineObjects(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluste
 	}
 
 	return elfMachine, machine
+}
+
+func NewElfMachine(elfCluster *infrav1.ElfCluster) *infrav1.ElfMachine {
+	elfMachine := &infrav1.ElfMachine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              names.SimpleNameGenerator.GenerateName("elfmachine-"),
+			Namespace:         Namespace,
+			CreationTimestamp: metav1.Now(),
+			Annotations:       map[string]string{infrav1.CAPEVersionAnnotation: "latest"},
+		},
+		Spec: infrav1.ElfMachineSpec{
+			HA:                true,
+			NumCPUs:           1,
+			NumCoresPerSocket: 1,
+			MemoryMiB:         1,
+			Network: infrav1.NetworkSpec{
+				Devices: []infrav1.NetworkDeviceSpec{
+					{},
+				},
+			},
+		},
+	}
+
+	if elfCluster != nil {
+		elfMachine.Labels = map[string]string{
+			clusterv1.ClusterNameLabel: elfCluster.Name,
+		}
+	}
+
+	return elfMachine
 }
 
 func NewClusterAndMachineObjects() (*infrav1.ElfCluster, *clusterv1.Cluster, *infrav1.ElfMachine, *clusterv1.Machine, *corev1.Secret) {

@@ -24,7 +24,6 @@ import (
 
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
 	ctrlsig "sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -33,7 +32,8 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/manager"
-	"github.com/smartxworks/cluster-api-provider-elf/version"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/version"
+	"github.com/smartxworks/cluster-api-provider-elf/webhooks"
 )
 
 var (
@@ -44,6 +44,8 @@ var (
 
 	defaultSyncPeriod       = manager.DefaultSyncPeriod
 	defaultLeaderElectionID = manager.DefaultLeaderElectionID
+
+	defaultWebhookPort = manager.DefaultWebhookServiceContainerPort
 )
 
 func main() {
@@ -91,6 +93,11 @@ func main() {
 		"max-concurrent-reconciles",
 		10,
 		"The maximum number of allowed, concurrent reconciles.")
+	flag.IntVar(
+		&managerOpts.Port,
+		"webhook-port",
+		defaultWebhookPort,
+		"Webhook Server port (set to 0 to disable)")
 	flag.StringVar(
 		&managerOpts.HealthProbeBindAddress,
 		"health-addr",
@@ -115,6 +122,15 @@ func main() {
 
 	// Create a function that adds all of the controllers and webhooks to the manager.
 	addToManager := func(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
+		if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+			if err := (&webhooks.ElfMachineMutation{
+				Client: mgr.GetClient(),
+				Logger: mgr.GetLogger().WithName("ElfMachineMutation"),
+			}).SetupWebhookWithManager(mgr); err != nil {
+				return err
+			}
+		}
+
 		if err := controllers.AddClusterControllerToManager(ctx, mgr); err != nil {
 			return err
 		}
@@ -126,7 +142,7 @@ func main() {
 		return nil
 	}
 
-	setupLog.Info("creating controller manager", "version", version.Get().String())
+	setupLog.Info("creating controller manager", "capeVersion", version.CAPEVersion(), "version", version.Get().String())
 	managerOpts.AddToManager = addToManager
 	mgr, err := manager.New(managerOpts)
 	if err != nil {
@@ -145,12 +161,11 @@ func main() {
 }
 
 func setupChecks(mgr ctrlmgr.Manager) {
-	if err := mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
+	if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
 		setupLog.Error(err, "unable to create ready check")
 		os.Exit(1)
 	}
-
-	if err := mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
+	if err := mgr.AddHealthzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
 		setupLog.Error(err, "unable to create health check")
 		os.Exit(1)
 	}
