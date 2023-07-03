@@ -20,24 +20,12 @@ func CreateKubeConfigSecret(testEnv *TestEnvironment, namespace, clusterName str
 		return err
 	}
 
-	bs, err := os.ReadFile(testEnv.Kubeconfig)
+	secret, err := NewKubeConfigSecret(testEnv, namespace, clusterName)
 	if err != nil {
 		return err
 	}
 
-	return testEnv.CreateAndWait(goctx.Background(), &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      capisecret.Name(clusterName, capisecret.Kubeconfig),
-			Namespace: namespace,
-			Labels: map[string]string{
-				clusterv1.ClusterNameLabel: clusterName,
-			},
-		},
-		Data: map[string][]byte{
-			capisecret.KubeconfigDataName: bs,
-		},
-		Type: clusterv1.ClusterSecretType,
-	})
+	return testEnv.CreateAndWait(goctx.Background(), secret)
 }
 
 // GetKubeConfigSecret uses kubeconfig of testEnv to get the workload cluster kubeconfig secret.
@@ -72,4 +60,26 @@ func DeleteKubeConfigSecret(testEnv *TestEnvironment, namespace, clusterName str
 		return errors.Wrapf(err, "failed to delete kubeconfig secret %s/%s", deleteSecret.Namespace, deleteSecret.Name)
 	}
 	return nil
+}
+
+// NewKubeConfigSecret uses kubeconfig of testEnv to generate the workload cluster kubeconfig secret.
+func NewKubeConfigSecret(testEnv *TestEnvironment, namespace, clusterName string) (*corev1.Secret, error) {
+	bs, err := os.ReadFile(testEnv.Kubeconfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      capisecret.Name(clusterName, capisecret.Kubeconfig),
+			Namespace: namespace,
+			Labels: map[string]string{
+				clusterv1.ClusterNameLabel: clusterName,
+			},
+		},
+		Data: map[string][]byte{
+			capisecret.KubeconfigDataName: bs,
+		},
+		Type: clusterv1.ClusterSecretType,
+	}, nil
 }

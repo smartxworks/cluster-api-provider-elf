@@ -65,10 +65,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 		elfCluster       *infrav1.ElfCluster
 		cluster          *clusterv1.Cluster
 		elfMachine       *infrav1.ElfMachine
+		k8sNode          *corev1.Node
 		machine          *clusterv1.Machine
 		kcp              *controlplanev1.KubeadmControlPlane
 		md               *clusterv1.MachineDeployment
 		secret           *corev1.Secret
+		kubeConfigSecret *corev1.Secret
 		logBuffer        *bytes.Buffer
 		mockCtrl         *gomock.Controller
 		mockVMService    *mock_services.MockVMService
@@ -78,6 +80,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 	ctx := goctx.Background()
 
 	BeforeEach(func() {
+		var err error
+
 		// set log
 		if err := flag.Set("logtostderr", "false"); err != nil {
 			_ = fmt.Errorf("Error setting logtostderr flag")
@@ -100,6 +104,24 @@ var _ = Describe("ElfMachineReconciler", func() {
 		mockNewVMService = func(_ goctx.Context, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
 			return mockVMService, nil
 		}
+
+		k8sNode = &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   elfMachine.Name,
+				Labels: map[string]string{},
+			},
+			Status: corev1.NodeStatus{
+				Addresses: []corev1.NodeAddress{
+					{
+						Address: "127.0.0.1",
+						Type:    corev1.NodeInternalIP,
+					},
+				},
+			},
+		}
+
+		kubeConfigSecret, err = helpers.NewKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)
+		Expect(err).ShouldNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -317,8 +339,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.SetVMDisconnectionTimestamp(&now)
 			nic := fake.NewTowerVMNic(0)
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			Expect(testEnv.CreateAndWait(ctx, k8sNode)).To(Succeed())
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{nic}, nil)
@@ -1396,8 +1420,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.LocalID
 			vm.EntityAsyncStatus = nil
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+
+			// before reconcile, create k8s node for VM.
+			Expect(testEnv.CreateAndWait(ctx, k8sNode)).To(Succeed())
+
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			// before reconcile, create kubeconfig secret for cluster.
+			Expect(helpers.CreateKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)).To(Succeed())
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
@@ -1425,15 +1455,18 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.EntityAsyncStatus = nil
 			elfMachine.Status.VMRef = *vm.LocalID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Times(3).Return(vm, nil)
-			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
-			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Times(6).Return(placementGroup, nil)
-			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(9).Return(fake.NewTowerLabel(), nil)
-			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(3)
+			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Times(11).Return(vm, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Times(22).Return(placementGroup, nil)
+			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(33).Return(fake.NewTowerLabel(), nil)
+			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(11)
 
+			// k8s node IP is null, VM has no nic info
+			k8sNode.Status.Addresses = nil
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
+			Expect(testEnv.CreateAndWait(ctx, k8sNode)).To(Succeed())
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
@@ -1444,10 +1477,16 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
 
-			nic := fake.NewTowerVMNic(0)
-			nic.IPAddress = service.TowerString("")
+			patchHelper, err := patch.NewHelper(k8sNode, testEnv.Client)
+			Expect(err).ShouldNot(HaveOccurred())
+			k8sNode.Status.Addresses = []corev1.NodeAddress{
+				{
+					Address: "test",
+					Type:    corev1.NodeHostName,
+				},
+			}
+			Expect(patchHelper.Patch(ctx, k8sNode)).To(Succeed())
 			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
-
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ShouldNot(HaveOccurred())
@@ -1456,15 +1495,123 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
 
-			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, errors.New("error"))
+			k8sNode.Status.Addresses = []corev1.NodeAddress{
+				{
+					Address: "",
+					Type:    corev1.NodeInternalIP,
+				},
+			}
+			Expect(patchHelper.Patch(ctx, k8sNode)).To(Succeed())
 
+			// k8s node IP is null, VM has no nic info
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
-			Expect(result.RequeueAfter).To(BeZero())
-			Expect(err).Should(HaveOccurred())
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.WaitingForNetworkAddressesReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+
+			// k8s node IP is null, VM has nic info
+			nic := fake.NewTowerVMNic(0)
+			nic.IPAddress = service.TowerString("127.0.0.1")
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{nic}, nil)
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).To(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+
+			// k8s node IP is null, VM has error nic info
+			nic = fake.NewTowerVMNic(0)
+			nic.IPAddress = service.TowerString("")
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{nic}, nil)
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+
+			k8sNode.Status.Addresses = []corev1.NodeAddress{
+				{
+					Address: "127.0.0.1",
+					Type:    corev1.NodeInternalIP,
+				},
+			}
+			Expect(patchHelper.Patch(ctx, k8sNode)).To(Succeed())
+
+			// k8s node has node IP, VM has no nic info
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).To(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+
+			// k8s node has node IP, VM has error nic info
+			nic = fake.NewTowerVMNic(0)
+			nic.IPAddress = service.TowerString("")
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{nic}, nil)
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).To(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+
+			// k8s node has node IP, VM has one nic info
+			nic = fake.NewTowerVMNic(0)
+			nic.IPAddress = service.TowerString("127.0.0.1")
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{nic}, nil)
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).To(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+
+			// test elfMachine has two network device.
+			elfMachine.Spec.Network.Devices = append(elfMachine.Spec.Network.Devices, infrav1.NetworkDeviceSpec{})
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+
+			// k8s node has node IP, VM has no nic info
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
+			elfMachine = &infrav1.ElfMachine{}
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+
+			// k8s node does not has node IP, VM has two nic info
+			k8sNode.Status.Addresses = nil
+			Expect(patchHelper.Patch(ctx, k8sNode)).To(Succeed())
+			nic1 := fake.NewTowerVMNic(0)
+			nic1.IPAddress = service.TowerString("127.0.0.1")
+			nic2 := fake.NewTowerVMNic(1)
+			nic2.IPAddress = service.TowerString("127.0.0.2")
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{nic1, nic2}, nil)
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).To(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+
+			// test elfMachine has 3 network device, one networkType is None
+			elfMachine.Spec.Network.Devices = append(elfMachine.Spec.Network.Devices, infrav1.NetworkDeviceSpec{NetworkType: infrav1.NetworkTypeNone})
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+
+			// k8s node does not has node IP, VM has 3 nic info, one nic networkType is None
+			nic1 = fake.NewTowerVMNic(0)
+			nic1.IPAddress = service.TowerString("127.0.0.1")
+			nic2 = fake.NewTowerVMNic(1)
+			nic2.IPAddress = service.TowerString("127.0.0.2")
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{nic1, nic2}, nil)
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).To(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 		})
 
 		It("should set ElfMachine to ready when VM network is ready", func() {
@@ -1472,10 +1619,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.EntityAsyncStatus = nil
 			elfMachine.Status.VMRef = *vm.LocalID
 			nic := fake.NewTowerVMNic(0)
+			nic.IPAddress = service.TowerString("127.0.0.1")
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
+			Expect(testEnv.CreateAndWait(ctx, k8sNode)).To(Succeed())
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{nic}, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Times(2).Return(placementGroup, nil)
@@ -1949,7 +2098,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			result, err := reconciler.reconcileDelete(machineContext)
-			fmt.Println(logBuffer.String())
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ToNot(HaveOccurred())
 
@@ -1999,7 +2147,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			result, err := reconciler.reconcileDelete(machineContext)
-			fmt.Println(logBuffer.String())
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ToNot(HaveOccurred())
 
@@ -2046,7 +2193,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			result, err := reconciler.reconcileDelete(machineContext)
-			fmt.Println(logBuffer.String())
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ToNot(HaveOccurred())
 
@@ -2086,7 +2232,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			_, err := reconciler.reconcileDelete(machineContext)
-			fmt.Println(logBuffer.String())
 			Expect(err).NotTo(BeZero())
 
 			Expect(err.Error()).To(ContainSubstring("failed to get client"))
