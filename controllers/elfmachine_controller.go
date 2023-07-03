@@ -1018,6 +1018,9 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 				return false, nil
 			}
 		} else {
+			if err != nil {
+				ctx.Logger.Error(err, "failed to get VM NIC IP address from the K8s Node", "Node", ctx.ElfMachine.Name)
+			}
 			return false, nil
 		}
 	}
@@ -1130,7 +1133,7 @@ func (r *ElfMachineReconciler) deleteNode(ctx *context.MachineContext, nodeName 
 	return nil
 }
 
-// getK8sNodeIP get the default network IP of k8s node.
+// getK8sNodeIP get the default network IP of K8s Node.
 func (r *ElfMachineReconciler) getK8sNodeIP(ctx *context.MachineContext, nodeName string) (string, error) {
 	// Return early if control plane is not initialized.
 	if !conditions.IsTrue(ctx.Cluster, clusterv1.ControlPlaneInitializedCondition) {
@@ -1145,6 +1148,10 @@ func (r *ElfMachineReconciler) getK8sNodeIP(ctx *context.MachineContext, nodeNam
 	k8sNode, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 	if err != nil && apierrors.IsNotFound(err) {
 		return "", nil
+	}
+
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to get K8s Node %s for Cluster %s/%s", nodeName, ctx.Cluster.Namespace, ctx.Cluster.Name)
 	}
 
 	if len(k8sNode.Status.Addresses) == 0 {

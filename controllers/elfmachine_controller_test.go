@@ -2063,7 +2063,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			result, err := reconciler.reconcileDelete(machineContext)
-			fmt.Println(logBuffer.String())
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ToNot(HaveOccurred())
 
@@ -2113,7 +2112,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			result, err := reconciler.reconcileDelete(machineContext)
-			fmt.Println(logBuffer.String())
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ToNot(HaveOccurred())
 
@@ -2160,7 +2158,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			result, err := reconciler.reconcileDelete(machineContext)
-			fmt.Println(logBuffer.String())
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ToNot(HaveOccurred())
 
@@ -2200,7 +2197,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			_, err := reconciler.reconcileDelete(machineContext)
-			fmt.Println(logBuffer.String())
 			Expect(err).NotTo(BeZero())
 
 			Expect(err.Error()).To(ContainSubstring("failed to get client"))
