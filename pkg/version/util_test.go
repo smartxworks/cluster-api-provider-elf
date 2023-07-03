@@ -25,40 +25,40 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
 
-func TestIsCompatiblePlacementGroup(t *testing.T) {
+func TestIsCompatibleWithPlacementGroup(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 
 	t.Run("", func(t *testing.T) {
 		elfMachine := newElfMachineWithoutCAPEVersion()
-		g.Expect(IsCompatiblePlacementGroup(elfMachine)).To(gomega.BeFalse())
+		g.Expect(IsCompatibleWithPlacementGroup(elfMachine)).To(gomega.BeFalse())
 
 		elfMachine = newElfMachineWithoutCAPEVersion()
 		SetCAPEVersion(elfMachine, "")
-		g.Expect(IsCompatiblePlacementGroup(elfMachine)).To(gomega.BeFalse())
+		g.Expect(IsCompatibleWithPlacementGroup(elfMachine)).To(gomega.BeFalse())
 
 		elfMachine = newElfMachineWithoutCAPEVersion()
 		SetCAPEVersion(elfMachine, "a")
-		g.Expect(IsCompatiblePlacementGroup(elfMachine)).To(gomega.BeFalse())
+		g.Expect(IsCompatibleWithPlacementGroup(elfMachine)).To(gomega.BeFalse())
 
 		elfMachine = newElfMachineWithoutCAPEVersion()
 		SetCAPEVersion(elfMachine, CAPEVersion1_1_0)
-		g.Expect(IsCompatiblePlacementGroup(elfMachine)).To(gomega.BeFalse())
+		g.Expect(IsCompatibleWithPlacementGroup(elfMachine)).To(gomega.BeFalse())
 
 		elfMachine = newElfMachineWithoutCAPEVersion()
 		SetCAPEVersion(elfMachine, "v1.1.9")
-		g.Expect(IsCompatiblePlacementGroup(elfMachine)).To(gomega.BeFalse())
+		g.Expect(IsCompatibleWithPlacementGroup(elfMachine)).To(gomega.BeFalse())
 
 		elfMachine = newElfMachineWithoutCAPEVersion()
 		SetCurrentCAPEVersion(elfMachine)
-		g.Expect(IsCompatiblePlacementGroup(elfMachine)).To(gomega.BeTrue())
+		g.Expect(IsCompatibleWithPlacementGroup(elfMachine)).To(gomega.BeTrue())
 
 		elfMachine = newElfMachineWithoutCAPEVersion()
 		SetCAPEVersion(elfMachine, CAPEVersion1_2_0+"-alpha.0")
-		g.Expect(IsCompatiblePlacementGroup(elfMachine)).To(gomega.BeTrue())
+		g.Expect(IsCompatibleWithPlacementGroup(elfMachine)).To(gomega.BeTrue())
 
 		elfMachine = newElfMachineWithoutCAPEVersion()
 		SetCAPEVersion(elfMachine, CAPEVersionLatest)
-		g.Expect(IsCompatiblePlacementGroup(elfMachine)).To(gomega.BeTrue())
+		g.Expect(IsCompatibleWithPlacementGroup(elfMachine)).To(gomega.BeTrue())
 	})
 }
 

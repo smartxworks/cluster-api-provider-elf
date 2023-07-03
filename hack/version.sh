@@ -85,7 +85,7 @@ version::ldflags() {
         local key=${1}
         local val=${2}
         ldflags+=(
-            "-X 'github.com/smartxworks/cluster-api-provider-elf/version.${key}=${val}'"
+            "-X 'github.com/smartxworks/cluster-api-provider-elf/pkg/version.${key}=${val}'"
         )
     }
 

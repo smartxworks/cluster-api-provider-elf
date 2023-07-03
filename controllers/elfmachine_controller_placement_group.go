@@ -176,7 +176,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 
 	// KCP is not in scaling down/rolling update.
 	if !(kcputil.IsKCPRollingUpdateFirstMachine(kcp) || kcputil.IsKCPInScalingDown(kcp)) {
-		ctx.Logger.V(2).Info("The placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHosts", usedHostSet.UnsortedList())
+		ctx.Logger.V(1).Info("The placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHosts", usedHostSet.UnsortedList())
 
 		return nil, nil
 	}
@@ -231,7 +231,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 		return pointer.String(hostID), err
 	}
 
-	ctx.Logger.V(2).Info("The placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHosts", usedHostSet.UnsortedList())
+	ctx.Logger.V(1).Info("The placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHosts", usedHostSet.UnsortedList())
 
 	return nil, nil
 }
@@ -347,8 +347,8 @@ func (r *ElfMachineReconciler) getPlacementGroup(ctx *context.MachineContext, pl
 
 // joinPlacementGroup puts the virtual machine into the placement group.
 func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
-	if machineutil.IsControlPlaneMachine(ctx.Machine) && !version.IsCompatiblePlacementGroup(ctx.ElfMachine) {
-		ctx.Logger.V(2).Info(fmt.Sprintf("The capeVersion of ElfMachine is lower than %s, skip adding VM to the placement group", version.CAPEVersion1_2_0), "capeVersion", version.GetCAPEVersion(ctx.ElfMachine))
+	if machineutil.IsControlPlaneMachine(ctx.Machine) && !version.IsCompatibleWithPlacementGroup(ctx.ElfMachine) {
+		ctx.Logger.V(1).Info(fmt.Sprintf("The capeVersion of ElfMachine is lower than %s, skip adding VM to the placement group", version.CAPEVersion1_2_0), "capeVersion", version.GetCAPEVersion(ctx.ElfMachine))
 
 		return true, nil
 	}
@@ -426,7 +426,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			}
 
 			// KCP is scaling out or being created.
-			ctx.Logger.V(2).Info("The placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHosts", usedHostSet.UnsortedList(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+			ctx.Logger.V(1).Info("The placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHosts", usedHostSet.UnsortedList(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
 			return false, nil
 		}

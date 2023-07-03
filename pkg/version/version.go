@@ -43,7 +43,7 @@ func init() {
 		buildVersion = CAPEVersionLatest
 	}
 
-	if IsSemverVersion(buildVersion) {
+	if IsSemanticVersion(buildVersion) {
 		capeVersion = buildVersion
 	} else {
 		capeVersion = CAPEVersionDefault
