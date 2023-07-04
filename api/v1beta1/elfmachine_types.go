@@ -167,6 +167,12 @@ type ElfMachineStatus struct {
 	// modified by users.
 	// +optional
 	HostServerName string `json:"hostServerName,omitempty"`
+
+	// PlacementGroupRef is the reference to the Tower PlacementGroup which this ElfMachine belongs to.
+	// This value is set automatically at runtime and should not be set or
+	// modified by users.
+	// +optional
+	PlacementGroupRef string `json:"placementGroupRef,omitempty"`
 }
 
 //+kubebuilder:object:root=true

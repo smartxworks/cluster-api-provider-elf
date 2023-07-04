@@ -315,6 +315,11 @@ spec:
                   - macAddr
                   type: object
                 type: array
+              placementGroupRef:
+                description: PlacementGroupRef is the reference to the Tower PlacementGroup
+                  which this ElfMachine belongs to. This value is set automatically
+                  at runtime and should not be set or modified by users.
+                type: string
               ready:
                 description: Ready is true when the provider resource is ready.
                 type: boolean
