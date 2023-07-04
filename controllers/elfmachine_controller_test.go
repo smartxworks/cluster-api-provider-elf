@@ -1103,6 +1103,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				withTaskVM := fake.NewWithTaskVM(vm1, task)
 				kcp.Spec.Replicas = pointer.Int32(3)
 				kcp.Status.Replicas = 4
+				kcp.Status.UpdatedReplicas = *kcp.Spec.Replicas
 				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2)
 				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
