@@ -315,6 +315,11 @@ spec:
                   - macAddr
                   type: object
                 type: array
+              placementGroupRef:
+                description: placementGroupRef is used to lookup the VM placement
+                  group. This value is set automatically at runtime and should not
+                  be set or modified by users.
+                type: string
               ready:
                 description: Ready is true when the provider resource is ready.
                 type: boolean

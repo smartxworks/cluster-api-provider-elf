@@ -1033,7 +1033,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(logBuffer.String()).To(ContainSubstring("Updating placement group succeeded"))
 			})
 
-			It("should not migrate VM when VM is running and kcp.Spec.Replicas != kcp.Status.UpdatedReplicas", func() {
+			It("should not migrate VM when VM is running and KCP is in rolling update", func() {
 				host1 := fake.NewTowerHost()
 				host2 := fake.NewTowerHost()
 				host3 := fake.NewTowerHost()
@@ -1069,26 +1069,49 @@ var _ = Describe("ElfMachineReconciler", func() {
 			It("should migrate VM to another host when the VM is running and the host of VM is not in unused hosts", func() {
 				host1 := fake.NewTowerHost()
 				host2 := fake.NewTowerHost()
-				vm := fake.NewTowerVM()
-				status := models.VMStatusRUNNING
-				vm.Status = &status
-				vm.EntityAsyncStatus = nil
+				host3 := fake.NewTowerHost()
+				elfMachine1, machine1 := fake.NewMachineObjects(elfCluster, cluster)
+				elfMachine2, machine2 := fake.NewMachineObjects(elfCluster, cluster)
+				elfMachine.CreationTimestamp = metav1.Now()
+				elfMachine1.CreationTimestamp = metav1.NewTime(time.Now().Add(1 * time.Minute))
+				elfMachine2.CreationTimestamp = metav1.NewTime(time.Now().Add(2 * time.Minute))
+				fake.ToControlPlaneMachine(machine, kcp)
+				fake.ToControlPlaneMachine(elfMachine, kcp)
+				fake.ToControlPlaneMachine(machine1, kcp)
+				fake.ToControlPlaneMachine(elfMachine1, kcp)
+				fake.ToControlPlaneMachine(machine2, kcp)
+				fake.ToControlPlaneMachine(elfMachine2, kcp)
+				vm := fake.NewTowerVMFromElfMachine(elfMachine)
 				vm.Host = &models.NestedHost{ID: service.TowerString(*host2.ID)}
+				vm.Status = models.NewVMStatus(models.VMStatusRUNNING)
+				vm1 := fake.NewTowerVMFromElfMachine(elfMachine1)
+				vm1.Host = &models.NestedHost{ID: service.TowerString(*host2.ID)}
+				vm2 := fake.NewTowerVMFromElfMachine(elfMachine2)
+				vm2.Host = &models.NestedHost{ID: service.TowerString(*host3.ID)}
 				elfMachine.Status.VMRef = *vm.LocalID
-				vm2 := fake.NewTowerVM()
-				vm2.Host = &models.NestedHost{ID: service.TowerString(*host2.ID)}
+				elfMachine1.Status.VMRef = *vm1.LocalID
+				elfMachine2.Status.VMRef = *vm2.LocalID
+				elfMachine.Status.VMRef = *vm.LocalID
+				placementGroup := fake.NewVMPlacementGroup([]string{})
+				placementGroup.Vms = []*models.NestedVM{
+					{ID: vm1.ID, Name: vm1.Name},
+					{ID: vm2.ID, Name: vm2.Name},
+				}
+				elfMachine1.Status.PlacementGroupRef = *placementGroup.ID
+				elfMachine2.Status.PlacementGroupRef = *placementGroup.ID
 				task := fake.NewTowerTask()
-				withTaskVM := fake.NewWithTaskVM(vm, task)
-				placementGroup := fake.NewVMPlacementGroup([]string{*vm2.ID})
-				kcp.Spec.Replicas = pointer.Int32(2)
-				kcp.Status.UpdatedReplicas = 2
-				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
+				withTaskVM := fake.NewWithTaskVM(vm1, task)
+				kcp.Spec.Replicas = pointer.Int32(3)
+				kcp.Status.Replicas = 4
+				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2)
 				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine1, machine1)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine2, machine2)
 
 				mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
-				mockVMService.EXPECT().FindByIDs([]string{*vm2.ID}).Return([]*models.VM{vm2}, nil)
-				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return([]*models.Host{host1, host2}, nil)
+				mockVMService.EXPECT().FindByIDs(gomock.InAnyOrder([]string{*vm1.ID, *vm2.ID})).Return([]*models.VM{vm1, vm2}, nil)
+				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return([]*models.Host{host1, host2, host3}, nil)
 				mockVMService.EXPECT().Migrate(*vm.ID, *host1.ID).Return(withTaskVM, nil)
 
 				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}

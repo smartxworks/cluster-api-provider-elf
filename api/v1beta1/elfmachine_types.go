@@ -167,6 +167,12 @@ type ElfMachineStatus struct {
 	// modified by users.
 	// +optional
 	HostServerName string `json:"hostServerName,omitempty"`
+
+	// placementGroupRef is used to lookup the VM placement group.
+	// This value is set automatically at runtime and should not be set or
+	// modified by users.
+	// +optional
+	PlacementGroupRef string `json:"placementGroupRef,omitempty"`
 }
 
 //+kubebuilder:object:root=true

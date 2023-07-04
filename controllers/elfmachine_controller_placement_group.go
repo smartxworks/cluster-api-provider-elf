@@ -379,6 +379,8 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 
 	placementGroupVMSet := service.GetVMsInPlacementGroup(placementGroup)
 	if placementGroupVMSet.Has(*vm.ID) {
+		ctx.ElfMachine.Status.PlacementGroupRef = *placementGroup.ID
+
 		return true, nil
 	}
 
@@ -431,6 +433,10 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			return false, nil
 		}
 
+		// If the virtual machine is not on a host that is not used by the placement group
+		// and the virtual machine is not STOPPED, we need to migrate the virtual machine to a host that
+		// is not used by the placement group before adding the virtual machine to the placement group.
+		// Otherwise, just add the virtual machine to the placement group directly.
 		if !unusedHostSet.Has(*vm.Host.ID) && *vm.Status != models.VMStatusSTOPPED {
 			return r.migrateVMForPlacementGroup(ctx, vm, placementGroup, unusedHostSet.UnsortedList()[0])
 		}
@@ -453,28 +459,57 @@ func (r *ElfMachineReconciler) migrateVMForPlacementGroup(ctx *context.MachineCo
 		return false, err
 	}
 
-	if *kcp.Spec.Replicas != kcp.Status.UpdatedReplicas {
+	// KCP is in rolling update.
+	if *kcp.Spec.Replicas != kcp.Status.Replicas {
+		cpElfMachines, err := machineutil.GetControlPlaneElfMachinesInCluster(ctx, ctx.Client, ctx.Cluster.Namespace, ctx.Cluster.Name)
+		if err != nil {
+			return false, err
+		}
+
+		var newCPElfMachinesInPG []*infrav1.ElfMachine
+		for i := 0; i < len(cpElfMachines); i++ {
+			if ctx.ElfMachine.Name != cpElfMachines[i].Name &&
+				cpElfMachines[i].Status.PlacementGroupRef == *placementGroup.ID &&
+				cpElfMachines[i].CreationTimestamp.After(ctx.ElfMachine.CreationTimestamp.Time) {
+				newCPElfMachinesInPG = append(newCPElfMachinesInPG, cpElfMachines[i])
+			}
+		}
+
+		if len(newCPElfMachinesInPG) == int(*kcp.Spec.Replicas-1) {
+			return false, r.migrateVM(ctx, vm, placementGroup, targetHost)
+		}
+
+		// During rolling update, the first CP needs to wait for other CP nodes
+		// to added to the placement group first.
+
 		ctx.Logger.Info("KCP rolling update in progress, skip migrating VM", "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
 		return true, nil
 	}
 
+	// KCP is not in rolling update, migrates the virtual machine to target host directly
+	// and then adds it to placement group.
+
+	return false, r.migrateVM(ctx, vm, placementGroup, targetHost)
+}
+
+func (r *ElfMachineReconciler) migrateVM(ctx *context.MachineContext, vm *models.VM, placementGroup *models.VMPlacementGroup, targetHost string) error {
 	if ok := acquireTicketForPlacementGroupVMMigration(*placementGroup.Name); !ok {
 		ctx.Logger.V(1).Info("The placement group is performing another VM migration, skip migrating VM", "placementGroup", service.GetTowerString(placementGroup.Name), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
-		return false, nil
+		return nil
 	}
 
 	withTaskVM, err := ctx.VMService.Migrate(service.GetTowerString(vm.ID), targetHost)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	ctx.ElfMachine.SetTask(*withTaskVM.TaskID)
 
 	ctx.Logger.Info(fmt.Sprintf("Waiting for the VM to be migrated from %s to %s", *vm.Host.ID, targetHost), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID, "taskRef", ctx.ElfMachine.Status.TaskRef)
 
-	return false, nil
+	return nil
 }
 
 func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContext, placementGroup *models.VMPlacementGroup, vmIDs []string) error {
@@ -492,6 +527,8 @@ func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContex
 	if *task.Status == models.TaskStatusFAILED {
 		return errors.Errorf("failed to update placement group %s in task %s", *placementGroup.Name, taskID)
 	}
+
+	ctx.ElfMachine.Status.PlacementGroupRef = *placementGroup.ID
 
 	ctx.Logger.Info("Updating placement group succeeded", "taskID", taskID, "placementGroup", *placementGroup.Name, "vmIDs", vmIDs)
 
