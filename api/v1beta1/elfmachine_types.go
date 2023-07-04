@@ -168,7 +168,7 @@ type ElfMachineStatus struct {
 	// +optional
 	HostServerName string `json:"hostServerName,omitempty"`
 
-	// placementGroupRef is used to lookup the VM placement group.
+	// PlacementGroupRef is the reference to the Tower PlacementGroup which this ElfMachine belongs to.
 	// This value is set automatically at runtime and should not be set or
 	// modified by users.
 	// +optional
