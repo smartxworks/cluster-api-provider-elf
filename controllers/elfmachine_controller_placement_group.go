@@ -483,10 +483,13 @@ func (r *ElfMachineReconciler) migrateVMForPlacementGroup(ctx *context.MachineCo
 			}
 		}
 
-		if len(newCPElfMachinesInPG) == int(*kcp.Spec.Replicas-1) {
+		remainingCP := int(*kcp.Spec.Replicas-1) - len(newCPElfMachinesInPG)
+		if remainingCP == 0 {
 			// This is the last CP ElfMachine (i.e. the 1st new CP ElfMachine) which has not been added into the target PlacementGroup.
 			// Migrate this VM to the target host, then it will be added into the target PlacementGroup.
 			return false, r.migrateVM(ctx, vm, placementGroup, targetHost)
+		} else {
+			ctx.Logger.V(1).Info(fmt.Sprintf("%d new CP joined the target PlacementGroup, waiting for other %d CP to join", len(newCPElfMachinesInPG), remainingCP))
 		}
 
 		return true, nil
