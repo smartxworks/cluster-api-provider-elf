@@ -347,7 +347,7 @@ func (r *ElfMachineReconciler) getPlacementGroup(ctx *context.MachineContext, pl
 
 // joinPlacementGroup puts the virtual machine into the placement group.
 func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
-	if machineutil.IsControlPlaneMachine(ctx.Machine) && !version.IsCompatibleWithPlacementGroup(ctx.ElfMachine) {
+	if !version.IsCompatibleWithPlacementGroup(ctx.ElfMachine) {
 		ctx.Logger.V(1).Info(fmt.Sprintf("The capeVersion of ElfMachine is lower than %s, skip adding VM to the placement group", version.CAPEVersion1_2_0), "capeVersion", version.GetCAPEVersion(ctx.ElfMachine))
 
 		return true, nil
