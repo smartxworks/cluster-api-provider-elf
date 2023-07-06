@@ -1035,29 +1035,31 @@ var _ = Describe("ElfMachineReconciler", func() {
 				host1 := fake.NewTowerHost()
 				host2 := fake.NewTowerHost()
 				host3 := fake.NewTowerHost()
-				host3.AllocatableMemoryBytes = service.TowerMemory(elfMachine.Spec.MemoryMiB)
-				*host3.AllocatableMemoryBytes -= 1
-				vm := fake.NewTowerVM()
+				oldCP3 := fake.NewTowerVM()
+				oldCP3.Host = &models.NestedHost{ID: service.TowerString(*host3.ID)}
+				newCP1 := fake.NewTowerVM()
 				status := models.VMStatusRUNNING
-				vm.Status = &status
-				vm.EntityAsyncStatus = nil
-				vm.Host = &models.NestedHost{ID: service.TowerString(*host2.ID)}
-				elfMachine.Status.VMRef = *vm.LocalID
-				vm2 := fake.NewTowerVM()
-				vm2.Host = &models.NestedHost{ID: service.TowerString(*host2.ID)}
-				placementGroup := fake.NewVMPlacementGroup([]string{*vm2.ID})
+				newCP1.Status = &status
+				newCP1.EntityAsyncStatus = nil
+				newCP1.Host = &models.NestedHost{ID: service.TowerString(*host3.ID)}
+
+				elfMachine.Status.VMRef = *newCP1.LocalID
+				newCP2 := fake.NewTowerVM()
+				newCP2.Host = &models.NestedHost{ID: service.TowerString(*host1.ID)}
+				placementGroup := fake.NewVMPlacementGroup([]string{*oldCP3.ID, *newCP2.ID})
 				kcp.Spec.Replicas = pointer.Int32(3)
-				kcp.Status.UpdatedReplicas = 1
+				kcp.Status.UpdatedReplicas = 3
+				kcp.Status.Replicas = 4
 				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
 				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 				mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return([]*models.Host{host1, host2, host3}, nil)
-				mockVMService.EXPECT().FindByIDs([]string{*vm2.ID}).Return([]*models.VM{vm2}, nil)
+				mockVMService.EXPECT().FindByIDs([]string{*oldCP3.ID, *newCP2.ID}).Return([]*models.VM{oldCP3, newCP2}, nil)
 
 				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-				ok, err := reconciler.joinPlacementGroup(machineContext, vm)
+				ok, err := reconciler.joinPlacementGroup(machineContext, newCP1)
 				Expect(ok).To(BeTrue())
 				Expect(err).To(BeZero())
 				Expect(logBuffer.String()).To(ContainSubstring("KCP rolling update in progress, skip migrating VM"))
