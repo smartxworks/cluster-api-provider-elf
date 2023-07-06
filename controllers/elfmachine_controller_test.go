@@ -35,6 +35,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -1121,7 +1122,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.JoiningPlacementGroupReason}})
 			})
 
-			It("should not migrate VM to target host when VM is already on the target host or used by placement group", func() {
+			It("should not migrate VM to target host when VM is already on the target host or or the host is used by placement group", func() {
 				host := fake.NewTowerHost()
 				vm := fake.NewTowerVMFromElfMachine(elfMachine)
 				vm.Host = &models.NestedHost{ID: service.TowerString(*host.ID)}
@@ -1472,6 +1473,81 @@ var _ = Describe("ElfMachineReconciler", func() {
 	})
 
 	Context("Get Available Hosts For VM", func() {
+		It("should return the available hosts when the virtual machine has not been created or is not powered on", func() {
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm.Status = models.NewVMStatus(models.VMStatusSTOPPED)
+			host1 := fake.NewTowerHost()
+			host1.AllocatableMemoryBytes = service.TowerMemory(0)
+			host2 := fake.NewTowerHost()
+			host3 := fake.NewTowerHost()
+
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			availableHosts := reconciler.getAvailableHostsForVM(machineContext, nil, sets.Set[string]{}, nil)
+			Expect(availableHosts).To(HaveLen(0))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, nil, sets.Set[string]{}.Insert(*host2.ID), nil)
+			Expect(availableHosts).To(HaveLen(0))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host3.ID), vm)
+			Expect(availableHosts).To(ContainElements(host2))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host1.ID, *host2.ID, *host3.ID), vm)
+			Expect(availableHosts).To(HaveLen(0))
+		})
+
+		It("should return the available hosts when the virtual machine is running", func() {
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm.Status = models.NewVMStatus(models.VMStatusRUNNING)
+			vm.Host = &models.NestedHost{ID: service.TowerString(fake.ID())}
+			host1 := fake.NewTowerHost()
+			host1.Status = models.NewHostStatus(models.HostStatusSESSIONEXPIRED)
+			host2 := fake.NewTowerHost()
+			host3 := fake.NewTowerHost()
+
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+
+			vm.Host.ID = host2.ID
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			availableHosts := reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}, vm)
+			Expect(availableHosts).To(ContainElements(host2, host3))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host1.ID), vm)
+			Expect(availableHosts).To(ContainElements(host2, host3))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host2.ID), vm)
+			Expect(availableHosts).To(ContainElements(host3))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host3.ID), vm)
+			Expect(availableHosts).To(ContainElements(host2))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host1.ID, *host2.ID), vm)
+			Expect(availableHosts).To(ContainElements(host3))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host1.ID, *host3.ID), vm)
+			Expect(availableHosts).To(ContainElements(host2))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host2.ID, *host3.ID), vm)
+			Expect(availableHosts).To(HaveLen(0))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host1.ID, *host2.ID, *host3.ID), vm)
+			Expect(availableHosts).To(HaveLen(0))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2}, sets.Set[string]{}.Insert(*host2.ID, *host3.ID), vm)
+			Expect(availableHosts).To(HaveLen(0))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host2, host3}, sets.Set[string]{}.Insert(*host2.ID, *host3.ID), vm)
+			Expect(availableHosts).To(HaveLen(0))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, nil, sets.Set[string]{}, vm)
+			Expect(availableHosts).To(HaveLen(0))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, nil, sets.Set[string]{}.Insert(*host3.ID), vm)
+			Expect(availableHosts).To(HaveLen(0))
+		})
 	})
 
 	Context("Reconcile ElfMachine providerID", func() {

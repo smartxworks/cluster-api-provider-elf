@@ -302,11 +302,11 @@ func (r *ElfMachineReconciler) getHostsInPlacementGroup(ctx *context.MachineCont
 	return hostSet, nil
 }
 
-// getAvailableHostsForVM returns the available hosts for the specified VM.
+// getAvailableHostsForVM returns the available hosts for running the specified VM.
 //
-// Available indicates that the specified VM can run on these hosts.
-// This includes hosts that are not faulted, have sufficient memory,
-// and are not used by placement groups.
+// The 'Available' means that the specified VM can run on these hosts.
+// It returns hosts that are not in faulted state, not in the given 'usedHostsByPG',
+// and have sufficient memory for running this VM.
 func (r *ElfMachineReconciler) getAvailableHostsForVM(ctx *context.MachineContext, hosts []*models.Host, usedHostsByPG sets.Set[string], vm *models.VM) []*models.Host {
 	// If the VM is running, and the host where the VM is located
 	// is not used by the placement group, then it is not necessary to
@@ -430,7 +430,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			}
 
 			if *vm.Status == models.VMStatusRUNNING || *vm.Status == models.VMStatusSUSPENDED {
-				ctx.Logger.V(2).Info(fmt.Sprintf("The placement group is full and VM is in %s status, skip adding VM to the placement group", *vm.Status), "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHostsByPG", usedHostsByPG.UnsortedList(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+				ctx.Logger.V(1).Info(fmt.Sprintf("The placement group is full and VM is in %s status, skip adding VM to the placement group", *vm.Status), "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList(), "usedHostsByPG", usedHostsByPG.UnsortedList(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
 				return true, nil
 			}
@@ -499,7 +499,7 @@ func (r *ElfMachineReconciler) migrateVMForJoiningPlacementGroup(ctx *context.Ma
 	}
 	ctx.Logger.V(1).Info("The hosts used by the PlacementGroup", "hosts", usedHostsByPG, "targetHost", targetHost)
 	if usedHostsByPG.Has(targetHost) {
-		ctx.Logger.V(1).Info("The recommended target host for VM migrattion is used by the PlacementGroup, skip migrating VM")
+		ctx.Logger.V(1).Info("The recommended target host for VM migration is used by the PlacementGroup, skip migrating VM")
 		return false, nil
 	}
 
