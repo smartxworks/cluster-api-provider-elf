@@ -395,6 +395,8 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 
 	placementGroupVMSet := service.GetVMsInPlacementGroup(placementGroup)
 	if placementGroupVMSet.Has(*vm.ID) {
+		// Ensure PlacementGroupRef is set or up to date.
+		ctx.ElfMachine.Status.PlacementGroupRef = *placementGroup.ID
 		return true, nil
 	}
 
