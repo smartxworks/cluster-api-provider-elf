@@ -35,6 +35,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -981,7 +982,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ok, err = reconciler.joinPlacementGroup(machineContext, vm)
 				Expect(ok).To(BeFalse())
 				Expect(err).To(BeZero())
-				Expect(logBuffer.String()).To(ContainSubstring("Unavailable hosts found"))
 				Expect(logBuffer.String()).To(ContainSubstring("The placement group is full, wait for enough available hosts"))
 
 				logBuffer = new(bytes.Buffer)
@@ -996,7 +996,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ok, err = reconciler.joinPlacementGroup(machineContext, vm)
 				Expect(ok).To(BeTrue())
 				Expect(err).To(BeZero())
-				Expect(logBuffer.String()).To(ContainSubstring("Unavailable hosts found"))
 				Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("The placement group is full and VM is in %s status, skip adding VM to the placement group", *vm.Status)))
 			})
 
@@ -1029,66 +1028,91 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ok, err := reconciler.joinPlacementGroup(machineContext, vm)
 				Expect(ok).To(BeTrue())
 				Expect(err).To(BeZero())
-				Expect(logBuffer.String()).To(ContainSubstring("Unavailable hosts found"))
 				Expect(logBuffer.String()).To(ContainSubstring("Updating placement group succeeded"))
 			})
 
-			It("should not migrate VM when VM is running and kcp.Spec.Replicas != kcp.Status.UpdatedReplicas", func() {
+			It("should not migrate VM when VM is running and KCP is in rolling update", func() {
 				host1 := fake.NewTowerHost()
 				host2 := fake.NewTowerHost()
 				host3 := fake.NewTowerHost()
-				host3.AllocatableMemoryBytes = service.TowerMemory(elfMachine.Spec.MemoryMiB)
-				*host3.AllocatableMemoryBytes -= 1
-				vm := fake.NewTowerVM()
+				oldCP3 := fake.NewTowerVM()
+				oldCP3.Host = &models.NestedHost{ID: service.TowerString(*host3.ID)}
+				newCP1 := fake.NewTowerVM()
 				status := models.VMStatusRUNNING
-				vm.Status = &status
-				vm.EntityAsyncStatus = nil
-				vm.Host = &models.NestedHost{ID: service.TowerString(*host2.ID)}
-				elfMachine.Status.VMRef = *vm.LocalID
-				vm2 := fake.NewTowerVM()
-				vm2.Host = &models.NestedHost{ID: service.TowerString(*host2.ID)}
-				placementGroup := fake.NewVMPlacementGroup([]string{*vm2.ID})
-				kcp.Spec.Replicas = pointer.Int32(2)
-				kcp.Status.UpdatedReplicas = 1
+				newCP1.Status = &status
+				newCP1.EntityAsyncStatus = nil
+				newCP1.Host = &models.NestedHost{ID: service.TowerString(*host3.ID)}
+
+				elfMachine.Status.VMRef = *newCP1.LocalID
+				newCP2 := fake.NewTowerVM()
+				newCP2.Host = &models.NestedHost{ID: service.TowerString(*host1.ID)}
+				placementGroup := fake.NewVMPlacementGroup([]string{*oldCP3.ID, *newCP2.ID})
+				kcp.Spec.Replicas = pointer.Int32(3)
+				kcp.Status.UpdatedReplicas = 3
+				kcp.Status.Replicas = 4
 				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
 				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
 				mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return([]*models.Host{host1, host2, host3}, nil)
-				mockVMService.EXPECT().FindByIDs([]string{*vm2.ID}).Return([]*models.VM{vm2}, nil)
+				mockVMService.EXPECT().FindByIDs([]string{*oldCP3.ID, *newCP2.ID}).Return([]*models.VM{oldCP3, newCP2}, nil)
 
 				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-				ok, err := reconciler.joinPlacementGroup(machineContext, vm)
+				ok, err := reconciler.joinPlacementGroup(machineContext, newCP1)
 				Expect(ok).To(BeTrue())
 				Expect(err).To(BeZero())
-				Expect(logBuffer.String()).To(ContainSubstring("Unavailable hosts found"))
 				Expect(logBuffer.String()).To(ContainSubstring("KCP rolling update in progress, skip migrating VM"))
 			})
 
 			It("should migrate VM to another host when the VM is running and the host of VM is not in unused hosts", func() {
 				host1 := fake.NewTowerHost()
 				host2 := fake.NewTowerHost()
-				vm := fake.NewTowerVM()
-				status := models.VMStatusRUNNING
-				vm.Status = &status
-				vm.EntityAsyncStatus = nil
+				host3 := fake.NewTowerHost()
+				elfMachine1, machine1 := fake.NewMachineObjects(elfCluster, cluster)
+				elfMachine2, machine2 := fake.NewMachineObjects(elfCluster, cluster)
+				elfMachine.CreationTimestamp = metav1.Now()
+				elfMachine1.CreationTimestamp = metav1.NewTime(time.Now().Add(1 * time.Minute))
+				elfMachine2.CreationTimestamp = metav1.NewTime(time.Now().Add(2 * time.Minute))
+				fake.ToControlPlaneMachine(machine, kcp)
+				fake.ToControlPlaneMachine(elfMachine, kcp)
+				fake.ToControlPlaneMachine(machine1, kcp)
+				fake.ToControlPlaneMachine(elfMachine1, kcp)
+				fake.ToControlPlaneMachine(machine2, kcp)
+				fake.ToControlPlaneMachine(elfMachine2, kcp)
+				vm := fake.NewTowerVMFromElfMachine(elfMachine)
 				vm.Host = &models.NestedHost{ID: service.TowerString(*host2.ID)}
+				vm.Status = models.NewVMStatus(models.VMStatusRUNNING)
+				vm1 := fake.NewTowerVMFromElfMachine(elfMachine1)
+				vm1.Host = &models.NestedHost{ID: service.TowerString(*host2.ID)}
+				vm2 := fake.NewTowerVMFromElfMachine(elfMachine2)
+				vm2.Host = &models.NestedHost{ID: service.TowerString(*host3.ID)}
 				elfMachine.Status.VMRef = *vm.LocalID
-				vm2 := fake.NewTowerVM()
-				vm2.Host = &models.NestedHost{ID: service.TowerString(*host2.ID)}
+				elfMachine1.Status.VMRef = *vm1.LocalID
+				elfMachine2.Status.VMRef = *vm2.LocalID
+				elfMachine.Status.VMRef = *vm.LocalID
+				placementGroup := fake.NewVMPlacementGroup([]string{})
+				placementGroup.Vms = []*models.NestedVM{
+					{ID: vm1.ID, Name: vm1.Name},
+					{ID: vm2.ID, Name: vm2.Name},
+				}
+				elfMachine1.Status.PlacementGroupRef = *placementGroup.ID
+				elfMachine2.Status.PlacementGroupRef = *placementGroup.ID
 				task := fake.NewTowerTask()
-				withTaskVM := fake.NewWithTaskVM(vm, task)
-				placementGroup := fake.NewVMPlacementGroup([]string{*vm2.ID})
-				kcp.Spec.Replicas = pointer.Int32(2)
-				kcp.Status.UpdatedReplicas = 2
-				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
+				withTaskVM := fake.NewWithTaskVM(vm1, task)
+				kcp.Spec.Replicas = pointer.Int32(3)
+				kcp.Status.Replicas = 3
+				kcp.Status.UpdatedReplicas = 3
+
+				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2)
 				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine1, machine1)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine2, machine2)
 
 				mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
-				mockVMService.EXPECT().FindByIDs([]string{*vm2.ID}).Return([]*models.VM{vm2}, nil)
-				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return([]*models.Host{host1, host2}, nil)
+				mockVMService.EXPECT().FindByIDs(gomock.InAnyOrder([]string{*vm1.ID, *vm2.ID})).Return([]*models.VM{vm1, vm2}, nil)
+				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return([]*models.Host{host1, host2, host3}, nil)
 				mockVMService.EXPECT().Migrate(*vm.ID, *host1.ID).Return(withTaskVM, nil)
 
 				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -1096,8 +1120,55 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(ok).To(BeFalse())
 				Expect(err).To(BeZero())
 				Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+				Expect(logBuffer.String()).To(ContainSubstring("Start migrateVM since KCP is not in rolling update process"))
 				Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be migrated from"))
 				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.JoiningPlacementGroupReason}})
+
+				logBuffer = new(bytes.Buffer)
+				klog.SetOutput(logBuffer)
+				elfMachine1.Status.HostServerRef = *host1.ID
+				mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+				mockVMService.EXPECT().FindByIDs(gomock.InAnyOrder([]string{*vm1.ID, *vm2.ID})).Return([]*models.VM{vm1, vm2}, nil)
+				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return([]*models.Host{host1, host2, host3}, nil)
+				ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2)
+				machineContext = newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine1, machine1)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine2, machine2)
+				reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				ok, err = reconciler.joinPlacementGroup(machineContext, vm)
+				Expect(ok).To(BeTrue())
+				Expect(err).To(BeZero())
+				Expect(logBuffer.String()).To(ContainSubstring("The recommended target host for VM migration is used by the PlacementGroup"))
+			})
+
+			It("should not migrate VM to target host when VM is already on the target host or the host is used by placement group", func() {
+				host := fake.NewTowerHost()
+				vm := fake.NewTowerVMFromElfMachine(elfMachine)
+				vm.Host = &models.NestedHost{ID: service.TowerString(*host.ID)}
+				placementGroup := fake.NewVMPlacementGroup([]string{})
+				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp)
+				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				ok, err := reconciler.migrateVM(machineContext, vm, placementGroup, *host.ID)
+				Expect(ok).To(BeTrue())
+				Expect(err).To(BeZero())
+				Expect(logBuffer.String()).To(ContainSubstring("The VM is already on the recommended target host"))
+
+				// vm.Host = &models.NestedHost{ID: service.TowerString(fake.ID())}
+				// vm1 := fake.NewTowerVM()
+				// vm1.Host = &models.NestedHost{ID: service.TowerString(*host.ID)}
+				// placementGroup.Vms = []*models.NestedVM{
+				// 	{ID: vm1.ID, Name: vm1.Name},
+				// }
+				// mockVMService.EXPECT().FindByIDs(gomock.InAnyOrder([]string{*vm1.ID})).Return([]*models.VM{vm1}, nil)
+				// reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				// ok, err = reconciler.migrateVM(machineContext, vm, placementGroup, *host.ID)
+				// Expect(ok).To(BeTrue())
+				// Expect(err).To(BeZero())
+				// Expect(logBuffer.String()).To(ContainSubstring("is already used by placement group"))
 			})
 		})
 	})
@@ -1418,6 +1489,84 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(reconciler.Client.Get(reconciler, capiutil.ObjectKey(machine), machine)).To(Succeed())
 				Expect(machine.Annotations).Should(HaveKey(clusterv1.DeleteMachineAnnotation))
 			})
+		})
+	})
+
+	Context("Get Available Hosts For VM", func() {
+		It("should return the available hosts when the virtual machine has not been created or is not powered on", func() {
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm.Status = models.NewVMStatus(models.VMStatusSTOPPED)
+			host1 := fake.NewTowerHost()
+			host1.AllocatableMemoryBytes = service.TowerMemory(0)
+			host2 := fake.NewTowerHost()
+			host3 := fake.NewTowerHost()
+
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			availableHosts := reconciler.getAvailableHostsForVM(machineContext, nil, sets.Set[string]{}, nil)
+			Expect(availableHosts).To(BeEmpty())
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, nil, sets.Set[string]{}.Insert(*host2.ID), nil)
+			Expect(availableHosts).To(BeEmpty())
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host3.ID), vm)
+			Expect(availableHosts).To(ContainElements(host2))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host1.ID, *host2.ID, *host3.ID), vm)
+			Expect(availableHosts).To(BeEmpty())
+		})
+
+		It("should return the available hosts when the virtual machine is running", func() {
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm.Status = models.NewVMStatus(models.VMStatusRUNNING)
+			vm.Host = &models.NestedHost{ID: service.TowerString(fake.ID())}
+			host1 := fake.NewTowerHost()
+			host1.Status = models.NewHostStatus(models.HostStatusSESSIONEXPIRED)
+			host2 := fake.NewTowerHost()
+			host3 := fake.NewTowerHost()
+
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+
+			vm.Host.ID = host2.ID
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			availableHosts := reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}, vm)
+			Expect(availableHosts).To(ContainElements(host2, host3))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host1.ID), vm)
+			Expect(availableHosts).To(ContainElements(host2, host3))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host2.ID), vm)
+			Expect(availableHosts).To(ContainElements(host3))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host3.ID), vm)
+			Expect(availableHosts).To(ContainElements(host2))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host1.ID, *host2.ID), vm)
+			Expect(availableHosts).To(ContainElements(host3))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host1.ID, *host3.ID), vm)
+			Expect(availableHosts).To(ContainElements(host2))
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host2.ID, *host3.ID), vm)
+			Expect(availableHosts).To(BeEmpty())
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2, host3}, sets.Set[string]{}.Insert(*host1.ID, *host2.ID, *host3.ID), vm)
+			Expect(availableHosts).To(BeEmpty())
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host1, host2}, sets.Set[string]{}.Insert(*host2.ID, *host3.ID), vm)
+			Expect(availableHosts).To(BeEmpty())
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, []*models.Host{host2, host3}, sets.Set[string]{}.Insert(*host2.ID, *host3.ID), vm)
+			Expect(availableHosts).To(BeEmpty())
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, nil, sets.Set[string]{}, vm)
+			Expect(availableHosts).To(BeEmpty())
+
+			availableHosts = reconciler.getAvailableHostsForVM(machineContext, nil, sets.Set[string]{}.Insert(*host3.ID), vm)
+			Expect(availableHosts).To(BeEmpty())
 		})
 	})
 

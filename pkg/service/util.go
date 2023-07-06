@@ -49,6 +49,11 @@ func GetUpdatedVMRestrictedFields(vm *models.VM, elfMachine *infrav1.ElfMachine)
 	return fieldMap
 }
 
+// IsAvailableHost returns whether the host is available.
+//
+// Available means the host is not faulted, is not in maintenance mode,
+// and has sufficient memory.
+// If memory parameter is 0, it does not check whether the host's memory is sufficient.
 func IsAvailableHost(host *models.Host, memory int64) (bool, string) {
 	if host == nil || host.Status == nil {
 		return false, ""
@@ -72,6 +77,7 @@ func IsAvailableHost(host *models.Host, memory int64) (bool, string) {
 	return true, ""
 }
 
+// GetAvailableHosts returns the available hosts.
 func GetAvailableHosts(hosts []*models.Host, memory int64) []*models.Host {
 	var availableHosts []*models.Host
 	for i := 0; i < len(hosts); i++ {
@@ -136,6 +142,17 @@ func HostsToSet(hosts []*models.Host) sets.Set[string] {
 	}
 
 	return hostSet
+}
+
+func FilterHosts(hosts []*models.Host, needFilteredHosts sets.Set[string]) []*models.Host {
+	var filteredHosts []*models.Host
+	for i := 0; i < len(hosts); i++ {
+		if !needFilteredHosts.Has(*hosts[i].ID) {
+			filteredHosts = append(filteredHosts, hosts[i])
+		}
+	}
+
+	return filteredHosts
 }
 
 // GetVMsInPlacementGroup returns a Set of IDs of the virtual machines in the placement group.

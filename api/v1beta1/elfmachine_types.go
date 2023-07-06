@@ -167,6 +167,12 @@ type ElfMachineStatus struct {
 	// modified by users.
 	// +optional
 	HostServerName string `json:"hostServerName,omitempty"`
+
+	// PlacementGroupRef is the reference to the Tower PlacementGroup which this ElfMachine belongs to.
+	// This value is set automatically at runtime and should not be set or
+	// modified by users.
+	// +optional
+	PlacementGroupRef string `json:"placementGroupRef,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -175,6 +181,7 @@ type ElfMachineStatus struct {
 //+kubebuilder:printcolumn:name="ProviderID",type="string",JSONPath=".spec.providerID",description="ElfMachine instance ID"
 //+kubebuilder:printcolumn:name="IP",type="string",JSONPath=".status.addresses[0].address",description="IP address of the first network device of the virtual machine"
 //+kubebuilder:printcolumn:name="HOST",type="string",JSONPath=".status.hostServerName",description="Name of host server where the virtual machine runs on"
+//+kubebuilder:printcolumn:name="PLACEMENTGROUP",type="string",JSONPath=".status.placementGroupRef",description="ID of Tower placement group which this ElfMachine belongs to"
 //+kubebuilder:printcolumn:name="Machine",type="string",JSONPath=".metadata.ownerReferences[?(@.kind==\"Machine\")].name",description="Machine object which owns with this ElfMachine"
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of ElfMachine"
 

@@ -31,6 +31,10 @@ spec:
       jsonPath: .status.hostServerName
       name: HOST
       type: string
+    - description: ID of Tower placement group which this ElfMachine belongs to
+      jsonPath: .status.placementGroupRef
+      name: PLACEMENTGROUP
+      type: string
     - description: Machine object which owns with this ElfMachine
       jsonPath: .metadata.ownerReferences[?(@.kind=="Machine")].name
       name: Machine
@@ -315,6 +319,11 @@ spec:
                   - macAddr
                   type: object
                 type: array
+              placementGroupRef:
+                description: PlacementGroupRef is the reference to the Tower PlacementGroup
+                  which this ElfMachine belongs to. This value is set automatically
+                  at runtime and should not be set or modified by users.
+                type: string
               ready:
                 description: Ready is true when the provider resource is ready.
                 type: boolean
