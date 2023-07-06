@@ -158,7 +158,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 	availableHosts := r.getAvailableHostsForVM(ctx, hosts, usedHostsByPG, nil)
 	availableHostSet := service.HostsToSet(availableHosts)
 	if availableHostSet.Len() != 0 {
-		ctx.Logger.V(2).Info("The placement group still has capacity", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList())
+		ctx.Logger.V(1).Info("The placement group still has capacity", "placementGroup", *placementGroup.Name, "availableHosts", availableHostSet.UnsortedList())
 
 		return pointer.String(""), nil
 	}
@@ -500,7 +500,7 @@ func (r *ElfMachineReconciler) migrateVMForJoiningPlacementGroup(ctx *context.Ma
 	ctx.Logger.V(1).Info("The hosts used by the PlacementGroup", "hosts", usedHostsByPG, "targetHost", targetHost)
 	if usedHostsByPG.Has(targetHost) {
 		ctx.Logger.V(1).Info("The recommended target host for VM migration is used by the PlacementGroup, skip migrating VM")
-		return false, nil
+		return true, nil
 	}
 
 	// KCP is not in rolling update process.
@@ -518,16 +518,6 @@ func (r *ElfMachineReconciler) migrateVMForJoiningPlacementGroup(ctx *context.Ma
 func (r *ElfMachineReconciler) migrateVM(ctx *context.MachineContext, vm *models.VM, placementGroup *models.VMPlacementGroup, targetHost string) (bool, error) {
 	if *vm.Host.ID == targetHost {
 		ctx.Logger.V(1).Info(fmt.Sprintf("The VM is already on the recommended target host %s, skip migrating VM", targetHost))
-		return true, nil
-	}
-
-	usedHostsByPG, err := r.getHostsInPlacementGroup(ctx, placementGroup)
-	if err != nil {
-		return false, err
-	}
-
-	if usedHostsByPG.Has(targetHost) {
-		ctx.Logger.V(1).Info(fmt.Sprintf("The recommended target Host %s is already used by placement group, skip migrating VM", targetHost), "placementGroup", service.GetTowerString(placementGroup.Name), "usedHostsByPG", usedHostsByPG.UnsortedList())
 		return true, nil
 	}
 
