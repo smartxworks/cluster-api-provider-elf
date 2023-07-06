@@ -319,8 +319,14 @@ func (r *ElfMachineReconciler) getAvailableHosts(ctx *context.MachineContext, ho
 	if *vm.Status == models.VMStatusRUNNING {
 		availableHosts = service.GetAvailableHosts(hosts, 0)
 		unusedHostSet := service.HostsToSet(availableHosts).Difference(usedHostSet)
+		var unusedHosts []*models.Host
+		for _, host := range availableHosts {
+			if !usedHostSet.Has(*host.ID) {
+				unusedHosts = append(unusedHosts, host)
+			}
+		}
 		if !unusedHostSet.Has(*vm.Host.ID) {
-			availableHosts = service.GetAvailableHosts(hosts, *service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
+			availableHosts = service.GetAvailableHosts(unusedHosts, *service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
 		}
 	} else {
 		availableHosts = service.GetAvailableHosts(hosts, *service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
