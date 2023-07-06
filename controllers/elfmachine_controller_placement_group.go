@@ -469,49 +469,36 @@ func (r *ElfMachineReconciler) migrateVMForPlacementGroup(ctx *context.MachineCo
 	// 2) It's at the end of a KCP rolling update process, and the last KCP replica (i.e the last KCP ElfMachine) is created just now.
 	//    There is still an old KCP ElfMachine, so kcp.Spec.Replicas + 1 == kcp.Status.Replicas.
 
-	if *kcp.Spec.Replicas != kcp.Status.UpdatedReplicas {
+	if *kcp.Spec.Replicas != kcp.Status.UpdatedReplicas || *kcp.Spec.Replicas != kcp.Status.Replicas {
 		ctx.Logger.Info("KCP rolling update in progress, skip migrating VM", "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 		return true, nil
 	}
 
 	// The 1st new CP ElfMachine should wait for other new CP ElfMachines to join the target PlacementGroup.
+	// The code below double checks the recommended target host for migration is valid.
 	cpElfMachines, err := machineutil.GetControlPlaneElfMachinesInCluster(ctx, ctx.Client, ctx.Cluster.Namespace, ctx.Cluster.Name)
 	if err != nil {
 		return false, err
 	}
-	var newCPElfMachinesInPG []*infrav1.ElfMachine
 	usedHostsByPG := sets.Set[string]{}
 	for i := 0; i < len(cpElfMachines); i++ {
 		if ctx.ElfMachine.Name != cpElfMachines[i].Name &&
 			cpElfMachines[i].Status.PlacementGroupRef == *placementGroup.ID &&
 			cpElfMachines[i].CreationTimestamp.After(ctx.ElfMachine.CreationTimestamp.Time) {
-			newCPElfMachinesInPG = append(newCPElfMachinesInPG, cpElfMachines[i])
 			usedHostsByPG.Insert(cpElfMachines[i].Status.HostServerRef)
 		}
 	}
-	remainingCP := int(*kcp.Spec.Replicas-1) - len(newCPElfMachinesInPG)
-	// In case the recommended target host is not valid.
+	ctx.Logger.V(1).Info("The hosts used by the PlacementGroup", "hosts", usedHostsByPG, "targetHost", targetHost)
 	if usedHostsByPG.Has(targetHost) {
-		ctx.Logger.V(1).Info("The recommended target host for VM migrattion is used by the PlacementGroup, skip migrating VM", "targetHost", targetHost)
+		ctx.Logger.V(1).Info("The recommended target host for VM migrattion is used by the PlacementGroup, skip migrating VM")
 		return false, nil
 	}
 
-	if *kcp.Spec.Replicas != kcp.Status.Replicas {
-		if remainingCP == 0 {
-			// This is the last CP ElfMachine (i.e. the 1st new CP ElfMachine) which has not been added into the target PlacementGroup.
-			// Migrate this VM to the target host, then it will be added into the target PlacementGroup.
-			ctx.Logger.V(1).Info("Trigger migrateVM when remainingCP == 0", "targetHost", targetHost)
-			return false, r.migrateVM(ctx, vm, placementGroup, targetHost)
-		} else {
-			ctx.Logger.V(1).Info(fmt.Sprintf("%d new CP joined the target PlacementGroup, waiting for other %d CP to join", len(newCPElfMachinesInPG), remainingCP))
-			return true, nil
-		}
-	} else {
-		// KCP is not in rolling update process.
-		// Migrate this VM to the target host, then it will be added into the target PlacementGroup.
-		ctx.Logger.V(1).Info("Trigger migrateVM when kcp.Status.Replicas == 3", "targetHost", targetHost)
-		return false, r.migrateVM(ctx, vm, placementGroup, targetHost)
-	}
+	// KCP is not in rolling update process.
+	// This is the last CP ElfMachine (i.e. the 1st new CP ElfMachine) which has not been added into the target PlacementGroup.
+	// Migrate this VM to the target host, then it will be added into the target PlacementGroup.
+	ctx.Logger.V(1).Info("Start migrateVM since KCP is not in rolling update process", "targetHost", targetHost)
+	return false, r.migrateVM(ctx, vm, placementGroup, targetHost)
 }
 
 func (r *ElfMachineReconciler) migrateVM(ctx *context.MachineContext, vm *models.VM, placementGroup *models.VMPlacementGroup, targetHost string) error {
