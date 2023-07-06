@@ -474,31 +474,37 @@ func (r *ElfMachineReconciler) migrateVMForPlacementGroup(ctx *context.MachineCo
 		return true, nil
 	}
 
-	if *kcp.Spec.Replicas != kcp.Status.Replicas {
-		// The 1st new CP ElfMachine should wait for other new CP ElfMachines to join the target PlacementGroup.
-		cpElfMachines, err := machineutil.GetControlPlaneElfMachinesInCluster(ctx, ctx.Client, ctx.Cluster.Namespace, ctx.Cluster.Name)
-		if err != nil {
-			return false, err
+	// The 1st new CP ElfMachine should wait for other new CP ElfMachines to join the target PlacementGroup.
+	cpElfMachines, err := machineutil.GetControlPlaneElfMachinesInCluster(ctx, ctx.Client, ctx.Cluster.Namespace, ctx.Cluster.Name)
+	if err != nil {
+		return false, err
+	}
+	var newCPElfMachinesInPG []*infrav1.ElfMachine
+	usedHostsByPG := sets.Set[string]{}
+	for i := 0; i < len(cpElfMachines); i++ {
+		if ctx.ElfMachine.Name != cpElfMachines[i].Name &&
+			cpElfMachines[i].Status.PlacementGroupRef == *placementGroup.ID &&
+			cpElfMachines[i].CreationTimestamp.After(ctx.ElfMachine.CreationTimestamp.Time) {
+			newCPElfMachinesInPG = append(newCPElfMachinesInPG, cpElfMachines[i])
+			usedHostsByPG.Insert(cpElfMachines[i].Status.HostServerRef)
 		}
-		var newCPElfMachinesInPG []*infrav1.ElfMachine
-		for i := 0; i < len(cpElfMachines); i++ {
-			if ctx.ElfMachine.Name != cpElfMachines[i].Name &&
-				cpElfMachines[i].Status.PlacementGroupRef == *placementGroup.ID &&
-				cpElfMachines[i].CreationTimestamp.After(ctx.ElfMachine.CreationTimestamp.Time) {
-				newCPElfMachinesInPG = append(newCPElfMachinesInPG, cpElfMachines[i])
-			}
-		}
+	}
+	remainingCP := int(*kcp.Spec.Replicas-1) - len(newCPElfMachinesInPG)
+	// In case the recommended target host is not valid.
+	if usedHostsByPG.Has(targetHost) {
+		ctx.Logger.V(1).Info("The recommended target host for VM migrattion is used by the PlacementGroup, skip migrating VM", "host", targetHost)
+		return false, nil
+	}
 
-		remainingCP := int(*kcp.Spec.Replicas-1) - len(newCPElfMachinesInPG)
+	if *kcp.Spec.Replicas != kcp.Status.Replicas {
 		if remainingCP == 0 {
 			// This is the last CP ElfMachine (i.e. the 1st new CP ElfMachine) which has not been added into the target PlacementGroup.
 			// Migrate this VM to the target host, then it will be added into the target PlacementGroup.
 			return false, r.migrateVM(ctx, vm, placementGroup, targetHost)
 		} else {
 			ctx.Logger.V(1).Info(fmt.Sprintf("%d new CP joined the target PlacementGroup, waiting for other %d CP to join", len(newCPElfMachinesInPG), remainingCP))
+			return true, nil
 		}
-
-		return true, nil
 	} else {
 		// KCP is not in rolling update process.
 		// Migrate this VM to the target host, then it will be added into the target PlacementGroup.
