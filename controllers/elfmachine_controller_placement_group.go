@@ -492,7 +492,7 @@ func (r *ElfMachineReconciler) migrateVMForPlacementGroup(ctx *context.MachineCo
 	remainingCP := int(*kcp.Spec.Replicas-1) - len(newCPElfMachinesInPG)
 	// In case the recommended target host is not valid.
 	if usedHostsByPG.Has(targetHost) {
-		ctx.Logger.V(1).Info("The recommended target host for VM migrattion is used by the PlacementGroup, skip migrating VM", "host", targetHost)
+		ctx.Logger.V(1).Info("The recommended target host for VM migrattion is used by the PlacementGroup, skip migrating VM", "targetHost", targetHost)
 		return false, nil
 	}
 
@@ -500,6 +500,7 @@ func (r *ElfMachineReconciler) migrateVMForPlacementGroup(ctx *context.MachineCo
 		if remainingCP == 0 {
 			// This is the last CP ElfMachine (i.e. the 1st new CP ElfMachine) which has not been added into the target PlacementGroup.
 			// Migrate this VM to the target host, then it will be added into the target PlacementGroup.
+			ctx.Logger.V(1).Info("Trigger migrateVM when remainingCP == 0", "targetHost", targetHost)
 			return false, r.migrateVM(ctx, vm, placementGroup, targetHost)
 		} else {
 			ctx.Logger.V(1).Info(fmt.Sprintf("%d new CP joined the target PlacementGroup, waiting for other %d CP to join", len(newCPElfMachinesInPG), remainingCP))
@@ -508,6 +509,7 @@ func (r *ElfMachineReconciler) migrateVMForPlacementGroup(ctx *context.MachineCo
 	} else {
 		// KCP is not in rolling update process.
 		// Migrate this VM to the target host, then it will be added into the target PlacementGroup.
+		ctx.Logger.V(1).Info("Trigger migrateVM when kcp.Status.Replicas == 3", "targetHost", targetHost)
 		return false, r.migrateVM(ctx, vm, placementGroup, targetHost)
 	}
 }
