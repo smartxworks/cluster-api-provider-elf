@@ -31,6 +31,10 @@ spec:
       jsonPath: .status.hostServerName
       name: HOST
       type: string
+    - description: ID of Tower placement group which this ElfMachine belongs to
+      jsonPath: .status.placementGroupRef
+      name: PLACEMENTGROUP
+      type: string
     - description: Machine object which owns with this ElfMachine
       jsonPath: .metadata.ownerReferences[?(@.kind=="Machine")].name
       name: Machine
