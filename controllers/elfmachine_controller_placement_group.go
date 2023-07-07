@@ -447,6 +447,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 		// and the virtual machine is not STOPPED, we need to migrate the virtual machine to a host that
 		// is not used by the placement group before adding the virtual machine to the placement group.
 		// Otherwise, just add the virtual machine to the placement group directly.
+		ctx.Logger.V(1).Info("The availableHosts for migrating the VM", "hosts", availableHostSet, "vmHost", *vm.Host.ID)
 		if !availableHostSet.Has(*vm.Host.ID) && *vm.Status != models.VMStatusSTOPPED {
 			return r.migrateVMForJoiningPlacementGroup(ctx, vm, placementGroup, availableHostSet.UnsortedList()[0])
 		}
@@ -469,6 +470,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 // 1. true means that the virtual machine does not need to be migrated.
 // 2. false and error is nil means the virtual machine is being migrated.
 func (r *ElfMachineReconciler) migrateVMForJoiningPlacementGroup(ctx *context.MachineContext, vm *models.VM, placementGroup *models.VMPlacementGroup, targetHost string) (bool, error) {
+	ctx.Logger.V(1).Info("Try to migrate the virtual machine to the specified target host if needed")
 	kcp, err := machineutil.GetKCPByMachine(ctx, ctx.Client, ctx.Machine)
 	if err != nil {
 		return false, err
@@ -499,7 +501,12 @@ func (r *ElfMachineReconciler) migrateVMForJoiningPlacementGroup(ctx *context.Ma
 			usedHostsByPG.Insert(cpElfMachines[i].Status.HostServerRef)
 		}
 	}
-	ctx.Logger.V(1).Info("The hosts used by the PlacementGroup", "hosts", usedHostsByPG, "targetHost", targetHost)
+	usedHostsCount := usedHostsByPG.Len()
+	ctx.Logger.V(1).Info("The hosts used by the PlacementGroup", "usedHosts", usedHostsByPG, "count", usedHostsCount, "targetHost", targetHost)
+	if usedHostsCount < int(*kcp.Spec.Replicas-1) {
+		ctx.Logger.V(1).Info("Not all other CPs joined the PlacementGroup, skip migrating VM")
+		return true, nil
+	}
 	if usedHostsByPG.Has(targetHost) {
 		ctx.Logger.V(1).Info("The recommended target host for VM migration is used by the PlacementGroup, skip migrating VM")
 		return true, nil
