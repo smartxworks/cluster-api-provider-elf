@@ -1464,6 +1464,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				kcp.Spec.Replicas = pointer.Int32(1)
 				kcp.Status.Replicas = 2
 				kcp.Status.UpdatedReplicas = kcp.Status.Replicas
+				conditions.MarkFalse(kcp, controlplanev1.ResizedCondition, controlplanev1.ScalingDownReason, clusterv1.ConditionSeverityWarning, "")
 				host := fake.NewTowerHost()
 				elfMachine1, machine1 := fake.NewMachineObjects(elfCluster, cluster)
 				fake.ToControlPlaneMachine(machine1, kcp)
