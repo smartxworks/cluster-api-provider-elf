@@ -294,6 +294,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should recover from lost task", func() {
 			vm := fake.NewTowerVM()
 			vm.Name = &elfMachine.Name
+			vm.LocalID = pointer.String("placeholder-%s" + *vm.LocalID)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -1876,7 +1877,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should delete the VM that in creating status and have not been saved to ElfMachine", func() {
 			vm := fake.NewTowerVM()
-			vm.LocalID = nil
+			vm.LocalID = pointer.String("placeholder-%s" + *vm.LocalID)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
