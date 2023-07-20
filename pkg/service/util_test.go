@@ -100,21 +100,3 @@ func TestIsAvailableHost(t *testing.T) {
 		g.Expect(message).To(gomega.ContainSubstring("3"))
 	})
 }
-
-func TestContainsUnavailableHost(t *testing.T) {
-	g := gomega.NewGomegaWithT(t)
-
-	t.Run("should return false when has unavailable host", func(t *testing.T) {
-		hosts := []*models.Host{{ID: pointer.String("1"), AllocatableMemoryBytes: pointer.Int64(1), Status: models.NewHostStatus(models.HostStatusCONNECTEDHEALTHY)}}
-
-		g.Expect(ContainsUnavailableHost(nil, []string{"0"}, 2)).To(gomega.BeTrue())
-
-		g.Expect(ContainsUnavailableHost(hosts, nil, 2)).To(gomega.BeTrue())
-
-		g.Expect(ContainsUnavailableHost(hosts, []string{"0"}, 2)).To(gomega.BeTrue())
-
-		g.Expect(ContainsUnavailableHost(hosts, []string{"1"}, 2)).To(gomega.BeTrue())
-
-		g.Expect(ContainsUnavailableHost(hosts, []string{"1"}, 1)).To(gomega.BeFalse())
-	})
-}

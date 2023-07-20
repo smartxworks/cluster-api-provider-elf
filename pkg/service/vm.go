@@ -60,7 +60,7 @@ type VMService interface {
 	WaitTask(id string, timeout, interval time.Duration) (*models.Task, error)
 	GetCluster(id string) (*models.Cluster, error)
 	GetHost(id string) (*models.Host, error)
-	GetHostsByCluster(clusterID string) ([]*models.Host, error)
+	GetHostsByCluster(clusterID string) (Hosts, error)
 	GetVlan(id string) (*models.Vlan, error)
 	UpsertLabel(key, value string) (*models.Label, error)
 	DeleteLabel(key, value string, strict bool) (string, error)
@@ -488,7 +488,7 @@ func (svr *TowerVMService) GetHost(id string) (*models.Host, error) {
 	return getHostsResp.Payload[0], nil
 }
 
-func (svr *TowerVMService) GetHostsByCluster(clusterID string) ([]*models.Host, error) {
+func (svr *TowerVMService) GetHostsByCluster(clusterID string) (Hosts, error) {
 	getHostsParams := clienthost.NewGetHostsParams()
 	getHostsParams.RequestBody = &models.GetHostsRequestBody{
 		Where: &models.HostWhereInput{
@@ -507,7 +507,7 @@ func (svr *TowerVMService) GetHostsByCluster(clusterID string) ([]*models.Host, 
 		return nil, errors.New(HostNotFound)
 	}
 
-	return getHostsResp.Payload, nil
+	return NewHostsFromList(getHostsResp.Payload), nil
 }
 
 // GetVlan searches for a vlan.

@@ -842,12 +842,6 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		switch {
 		case service.IsCloneVMTask(task):
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
-		case service.IsVMMigrationTask(task):
-			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
-			if err != nil {
-				return false, err
-			}
-			releaseTicketForPlacementGroupVMMigration(placementGroupName)
 		case service.IsMemoryInsufficientError(errorMessage):
 			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, true)
 			message := fmt.Sprintf("Insufficient memory detected for ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
@@ -858,16 +852,9 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 	case models.TaskStatusSUCCESSED:
 		ctx.Logger.Info("VM task succeeded", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", service.GetTowerString(task.Description))
 
-		switch {
-		case service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task):
+		if service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) {
 			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, false)
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
-		case service.IsVMMigrationTask(task):
-			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
-			if err != nil {
-				return false, err
-			}
-			releaseTicketForPlacementGroupVMMigration(placementGroupName)
 		}
 	default:
 		ctx.Logger.Info("Waiting for VM task done", "vmRef", vmRef, "taskRef", taskRef, "taskStatus", service.GetTowerTaskStatus(task.Status), "taskDescription", service.GetTowerString(task.Description))
