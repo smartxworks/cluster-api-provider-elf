@@ -330,11 +330,7 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 			return reconcile.Result{}, nil
 		}
 
-		if vm.LocalID != nil && len(*vm.LocalID) > 0 {
-			ctx.ElfMachine.SetVM(*vm.LocalID)
-		} else {
-			ctx.ElfMachine.SetVM(*vm.ID)
-		}
+		ctx.ElfMachine.SetVM(util.GetVMRef(vm))
 	}
 
 	err := r.reconcileDeleteVM(ctx)
@@ -517,7 +513,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 					return nil, err
 				}
 
-				ctx.ElfMachine.SetVM(*vm.ID)
+				ctx.ElfMachine.SetVM(util.GetVMRef(vm))
 			} else {
 				ctx.Logger.Error(err, "failed to create VM",
 					"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
@@ -559,16 +555,15 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		ctx.Logger.V(1).Info(fmt.Sprintf("Updated VM hostServerName from %s to %s", hostName, *vm.Host.Name))
 	}
 
-	vmLocalID := service.GetTowerString(vm.LocalID)
-	// Before the ELF VM is created, Tower sets a "placeholder-{UUID}" format string to localId, such as "placeholder-7d8b6df1-c623-4750-a771-3ba6b46995fa".
-	// After the ELF VM is created, Tower sets the VM ID in UUID format to localId.
-	if !machineutil.IsUUID(vmLocalID) {
+	vmRef := util.GetVMRef(vm)
+	// If vmRef is in UUID format, it means that the ELF VM created.
+	if !machineutil.IsUUID(vmRef) {
 		return vm, nil
 	}
 
 	// When ELF VM created, set UUID to VMRef
 	if !machineutil.IsUUID(ctx.ElfMachine.Status.VMRef) {
-		ctx.ElfMachine.SetVM(vmLocalID)
+		ctx.ElfMachine.SetVM(vmRef)
 	}
 
 	// The VM was moved to the recycle bin. Treat the VM as deleted, and will not reconganize it even if it's moved back from the recycle bin.
