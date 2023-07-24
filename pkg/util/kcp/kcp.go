@@ -48,18 +48,7 @@ func IsKCPRollingUpdateFirstMachine(kcp *controlplanev1.KubeadmControlPlane) boo
 //
 // For more information about KCP ResizedCondition and ScalingDownReason, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/api/v1beta1/condition_consts.go
 func IsKCPInScalingDown(kcp *controlplanev1.KubeadmControlPlane) bool {
-	// When KCP is in rolling update, KCP controller marks
-	// MachinesSpecUpToDateCondition to false and RollingUpdateInProgressReason as Reason.
-	//
-	// When all machines are up to date, KCP controller marks MachinesSpecUpToDateCondition to true.
-	//
-	// For more information about KCP MachinesSpecUpToDateCondition and RollingUpdateInProgressReason, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/api/v1beta1/condition_consts.go
-	if conditions.IsFalse(kcp, controlplanev1.MachinesSpecUpToDateCondition) &&
-		conditions.GetReason(kcp, controlplanev1.MachinesSpecUpToDateCondition) == controlplanev1.RollingUpdateInProgressReason {
-		// If KCP rolling update and then scale down, then kcp.Spec.Replicas < kcp.Status.UpdatedReplicas.
-		return *kcp.Spec.Replicas < kcp.Status.UpdatedReplicas
-	}
-
 	return conditions.IsFalse(kcp, clusterv1.ResizedCondition) &&
-		conditions.GetReason(kcp, controlplanev1.ResizedCondition) == controlplanev1.ScalingDownReason
+		conditions.GetReason(kcp, controlplanev1.ResizedCondition) == controlplanev1.ScalingDownReason &&
+		*kcp.Spec.Replicas < kcp.Status.UpdatedReplicas
 }
