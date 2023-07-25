@@ -459,7 +459,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 //  4. Returning the real-time state of the VM to the caller
 //
 // The return bool value:
-// 1. true means that the VM is running and is joined to a placement group (if needed).
+// 1. true means that the VM is running and joined a placement group (if needed).
 // 2. false and error is nil means the VM is not running or wait to join the placement group.
 func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models.VM, bool, error) {
 	// If there is no vmRef then no VM exists, create one
