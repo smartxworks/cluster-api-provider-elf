@@ -400,10 +400,11 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 		return reconcile.Result{}, nil
 	}
 
-	vm, err := r.reconcileVM(ctx)
-	if ctx.ElfMachine.IsFailed() {
+	vm, ok, err := r.reconcileVM(ctx)
+	switch {
+	case ctx.ElfMachine.IsFailed():
 		return reconcile.Result{}, nil
-	} else if err != nil {
+	case err != nil:
 		ctx.Logger.Error(err, "failed to reconcile VM")
 
 		if service.IsVMNotFound(err) {
@@ -411,12 +412,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 		}
 
 		return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile VM")
-	}
-
-	if vm == nil || vm.EntityAsyncStatus != nil || *vm.Status != models.VMStatusRUNNING ||
-		!machineutil.IsUUID(ctx.ElfMachine.Status.VMRef) || ctx.ElfMachine.HasTask() {
-		ctx.Logger.Info("VM state is not reconciled")
-
+	case !ok || ctx.ElfMachine.HasTask():
 		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 	}
 
@@ -458,9 +454,14 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 
 // reconcileVM makes sure that the VM is in the desired state by:
 //  1. Creating the VM with the bootstrap data if it does not exist, then...
-//  2. Powering on the VM, and finally...
-//  3. Returning the real-time state of the VM to the caller
-func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models.VM, error) {
+//  2. Adding the VM to the placement group if needed, then...
+//  3. Powering on the VM, and finally...
+//  4. Returning the real-time state of the VM to the caller
+//
+// The return bool value:
+// 1. true means that the VM is running and is joined to a placement group (if needed).
+// 2. false and error is nil means the VM is not running or wait to join the placement group.
+func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models.VM, bool, error) {
 	// If there is no vmRef then no VM exists, create one
 	if !ctx.ElfMachine.HasVM() {
 		// We are setting this condition only in case it does not exists so we avoid to get flickering LastConditionTime
@@ -473,16 +474,16 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		if err != nil {
 			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.CloningFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 
-			return nil, err
+			return nil, false, err
 		}
 		if bootstrapData == "" {
-			return nil, errors.New("bootstrapData is empty")
+			return nil, false, errors.New("bootstrapData is empty")
 		}
 
 		if ok := isElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster); ok {
 			if canRetry := canRetryVMOperation(ctx.ElfCluster.Spec.Cluster); !canRetry {
 				ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, skip creating VM", ctx.ElfCluster.Spec.Cluster))
-				return nil, nil
+				return nil, false, nil
 			}
 
 			ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, try to create VM", ctx.ElfCluster.Spec.Cluster))
@@ -492,13 +493,13 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		if !machineutil.IsControlPlaneMachine(ctx.ElfMachine) {
 			if ok := acquireTicketForCreateVM(ctx.ElfMachine.Name); !ok {
 				ctx.Logger.V(1).Info(fmt.Sprintf("The number of concurrently created VMs has reached the limit, skip creating VM %s", ctx.ElfMachine.Name))
-				return nil, nil
+				return nil, false, nil
 			}
 		}
 
 		hostID, err := r.preCheckPlacementGroup(ctx)
 		if err != nil || hostID == nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		ctx.Logger.Info("Create VM for ElfMachine")
@@ -510,7 +511,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 			if service.IsVMDuplicate(err) {
 				vm, err := ctx.VMService.GetByName(ctx.ElfMachine.Name)
 				if err != nil {
-					return nil, err
+					return nil, false, err
 				}
 
 				ctx.ElfMachine.SetVM(util.GetVMRef(vm))
@@ -520,7 +521,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 
 				conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.CloningFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 
-				return nil, err
+				return nil, false, err
 			}
 		} else {
 			ctx.ElfMachine.SetVM(*withTaskVM.Data.ID)
@@ -530,7 +531,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 
 	vm, err := r.getVM(ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// Remove VM disconnection timestamp
@@ -542,9 +543,9 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	}
 
 	if ok, err := r.reconcileVMTask(ctx, vm); err != nil {
-		return nil, err
+		return nil, false, err
 	} else if !ok {
-		return vm, nil
+		return vm, false, nil
 	}
 
 	// The host of the virtual machine may change, such as rescheduling caused by HA.
@@ -558,7 +559,9 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 	vmRef := util.GetVMRef(vm)
 	// If vmRef is in UUID format, it means that the ELF VM created.
 	if !machineutil.IsUUID(vmRef) {
-		return vm, nil
+		ctx.Logger.Info("The VM is being created", "vmRef", vmRef)
+
+		return vm, false, nil
 	}
 
 	// When ELF VM created, set UUID to VMRef
@@ -574,19 +577,19 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		ctx.ElfMachine.SetVM("")
 		ctx.Logger.Error(stderrors.New(message), "")
 
-		return vm, nil
+		return vm, false, nil
 	}
 
 	// Before the virtual machine is powered on, put the virtual machine into the specified placement group.
 	if ok, err := r.joinPlacementGroup(ctx, vm); err != nil || !ok {
-		return nil, err
+		return vm, false, err
 	}
 
 	if ok, err := r.reconcileVMStatus(ctx, vm); err != nil || !ok {
-		return nil, err
+		return vm, false, err
 	}
 
-	return vm, nil
+	return vm, true, nil
 }
 
 func (r *ElfMachineReconciler) getVM(ctx *context.MachineContext) (*models.VM, error) {
@@ -638,10 +641,15 @@ func (r *ElfMachineReconciler) getVM(ctx *context.MachineContext) (*models.VM, e
 // 1. VM in STOPPED status will be powered on.
 // 2. VM in SUSPENDED status will be powered off, then powered on in future reconcile.
 // 3. Set VM configuration to the expected values.
-// It will return true when VM status is not in STOPPED or SUSPENDED status.
+//
+// The return value:
+// 1. true means that the VM is in Running status.
+// 2. false and error is nil means the VM is not in Running status.
 func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm *models.VM) (bool, error) {
 	if vm.Status == nil {
-		return true, nil
+		ctx.Logger.Info("The status of VM is an unexpected value nil", "vmRef", ctx.ElfMachine.Status.VMRef)
+
+		return false, nil
 	}
 
 	updatedVMRestrictedFields := service.GetUpdatedVMRestrictedFields(vm, ctx.ElfMachine)
@@ -659,6 +667,8 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 				return false, r.shutDownVM(ctx)
 			}
 		}
+
+		return true, nil
 	case models.VMStatusSTOPPED:
 		if len(updatedVMRestrictedFields) > 0 && towerresources.IsAllowCustomVMConfig() {
 			ctx.Logger.Info("The VM configuration has been modified, and the VM is stopped, just restore the VM configuration to expected values", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
@@ -673,9 +683,11 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 		// try to 'Power off VM -> Power on VM' resumes the VM from a suspended state.
 		// See issue http://jira.smartx.com/browse/SKS-1351 for details.
 		return false, r.powerOffVM(ctx)
-	}
+	default:
+		ctx.Logger.Info(fmt.Sprintf("The VM is in an unexpected status %s", string(*vm.Status)), "vmRef", ctx.ElfMachine.Status.VMRef)
 
-	return true, nil
+		return false, nil
+	}
 }
 
 func (r *ElfMachineReconciler) shutDownVM(ctx *context.MachineContext) error {
