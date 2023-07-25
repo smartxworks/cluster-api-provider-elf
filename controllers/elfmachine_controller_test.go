@@ -522,7 +522,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ShouldNot(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("VM state is not reconciled"))
+			Expect(logBuffer.String()).To(ContainSubstring("The VM is being created"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.ID))
@@ -667,6 +667,28 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		AfterEach(func() {
 			Expect(os.Unsetenv(towerresources.AllowCustomVMConfig)).NotTo(HaveOccurred())
+		})
+
+		It("should return false when VM status in an unexpected status", func() {
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm.Status = nil
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileVMStatus(machineContext, vm)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("The status of VM is an unexpected value nil"))
+
+			logBuffer = new(bytes.Buffer)
+			klog.SetOutput(logBuffer)
+			vm.Status = models.NewVMStatus(models.VMStatusUNKNOWN)
+			ok, err = reconciler.reconcileVMStatus(machineContext, vm)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("The VM is in an unexpected status"))
 		})
 
 		It("should power on the VM when VM is stopped", func() {
