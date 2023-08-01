@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/conditions"
 )
 
-// IsKCPRollingUpdate returns whether KCP is in scaling down.
+// IsKCPInRollingUpdate returns whether KCP is in scaling down.
 //
 // When KCP is in rolling update, KCP controller marks
 // MachinesSpecUpToDateCondition to false and RollingUpdateInProgressReason as Reason.
@@ -30,7 +30,7 @@ import (
 // When all machines are up to date, KCP controller marks MachinesSpecUpToDateCondition to true.
 //
 // For more information about KCP MachinesSpecUpToDateCondition and RollingUpdateInProgressReason, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/api/v1beta1/condition_consts.go
-func IsKCPRollingUpdate(kcp *controlplanev1.KubeadmControlPlane) bool {
+func IsKCPInRollingUpdate(kcp *controlplanev1.KubeadmControlPlane) bool {
 	return conditions.IsFalse(kcp, controlplanev1.MachinesSpecUpToDateCondition) &&
 		conditions.GetReason(kcp, controlplanev1.MachinesSpecUpToDateCondition) == controlplanev1.RollingUpdateInProgressReason
 }
@@ -51,7 +51,7 @@ func IsKCPRollingUpdate(kcp *controlplanev1.KubeadmControlPlane) bool {
 // For more information about KCP replicas, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/controlplane/kubeadm/api/v1beta1/kubeadm_control_plane_types.go
 // For more information about KCP rollout, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20191017-kubeadm-based-control-plane.md#kubeadmcontrolplane-rollout
 func IsKCPRollingUpdateFirstMachine(kcp *controlplanev1.KubeadmControlPlane) bool {
-	return IsKCPRollingUpdate(kcp) && kcp.Status.UpdatedReplicas == 1
+	return IsKCPInRollingUpdate(kcp) && kcp.Status.UpdatedReplicas == 1
 }
 
 // IsKCPInScalingDown returns whether KCP is in scaling down.

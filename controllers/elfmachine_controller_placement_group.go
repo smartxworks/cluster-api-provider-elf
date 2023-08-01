@@ -168,9 +168,9 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 		return nil, err
 	}
 
-	// KCP is not in scaling down/rolling update.
+	// When KCP is not in scaling down and it's not rolling update the 1st CP Machine, just return since the placement group is full.
 	if !(kcputil.IsKCPRollingUpdateFirstMachine(kcp) || kcputil.IsKCPInScalingDown(kcp)) {
-		ctx.Logger.V(1).Info("The placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String())
+		ctx.Logger.V(1).Info("KCP is not in scaling down and it's not rolling update the 1st CP Machine, the placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String())
 
 		return nil, nil
 	}
@@ -211,7 +211,9 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 		return nil, nil
 	}
 
-	// KCP is in rolling update.
+	// When the PlacementGroup is full and it's rolling update the 1st CP Machine and,
+	// place the VM on the target host without joining the PlacementGroup and power it on.
+	// After other CP Machine are rolled out successfully, add this 1st CP VM into the PlacementGroup.
 
 	if usedHostsByPG.Len() == usedHostsByPG.Available(*service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB)).Len() &&
 		int(*kcp.Spec.Replicas) == usedHostsByPG.Len() {
@@ -225,7 +227,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 		return pointer.String(hostID), err
 	}
 
-	ctx.Logger.V(1).Info("The placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String())
+	ctx.Logger.V(1).Info("KCP is rolling update the 1st CP Machine, the placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String())
 
 	return nil, nil
 }
@@ -448,7 +450,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 				return false, err
 			}
 
-			if kcputil.IsKCPRollingUpdate(kcp) {
+			if kcputil.IsKCPInRollingUpdate(kcp) {
 				ctx.Logger.Info("KCP rolling update in progress, skip migrating VM", "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 				return true, nil
 			}
