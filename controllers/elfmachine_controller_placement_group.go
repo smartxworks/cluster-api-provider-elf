@@ -477,7 +477,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			}
 
 			usedHostsCount := usedHostsByPG.Len()
-			ctx.Logger.V(1).Info("The hosts used by the PlacementGroup", "usedHosts", usedHostsByPG, "count", usedHostsCount, "targetHost", targetHost)
+			ctx.Logger.V(1).Info("The hosts used by the PlacementGroup", "usedHosts", usedHostsByPG, "count", usedHostsCount, "targetHost", formatHost(targetHost))
 			if usedHostsCount < int(*kcp.Spec.Replicas-1) {
 				ctx.Logger.V(1).Info("Not all other CPs joined the PlacementGroup, skip migrating VM")
 				return true, nil
@@ -492,7 +492,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			// This is the last CP ElfMachine (i.e. the 1st new CP ElfMachine) which has not been added into the target PlacementGroup.
 			// Migrate this VM to the target host, then it will be added into the target PlacementGroup.
 
-			ctx.Logger.V(1).Info("Start migrateVM since KCP is not in rolling update process", "targetHost", targetHost)
+			ctx.Logger.V(1).Info("Start migrateVM since KCP is not in rolling update process", "targetHost", formatHost(targetHost))
 
 			return r.migrateVM(ctx, vm, *targetHost.ID)
 		}
@@ -613,8 +613,17 @@ func (r *ElfMachineReconciler) deletePlacementGroup(ctx *context.MachineContext)
 	return true, nil
 }
 
-// formatNestedHost returns the basic information of the host (ID, name).
+// formatNestedHost returns the basic information of the NestedHost (ID, name).
 func formatNestedHost(host *models.NestedHost) string {
+	if host == nil {
+		return "{}"
+	}
+
+	return fmt.Sprintf("{id: %s,name: %s}", service.GetTowerString(host.ID), service.GetTowerString(host.Name))
+}
+
+// formatHost returns the basic information of the Host (ID, name).
+func formatHost(host *models.Host) string {
 	if host == nil {
 		return "{}"
 	}
