@@ -168,9 +168,9 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 		return nil, err
 	}
 
-	// When KCP is not in rolling update and it's not in scaling down, just return since the placement group is full.
+	// When KCP is not in rolling update and not in scaling down, just return since the placement group is full.
 	if !kcputil.IsKCPInRollingUpdate(kcp) && !kcputil.IsKCPInScalingDown(kcp) {
-		ctx.Logger.V(1).Info("KCP is not in rolling update and it's not in scaling down, the placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String())
+		ctx.Logger.V(1).Info("KCP is not in rolling update and not in scaling down, the placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String())
 
 		return nil, nil
 	}
@@ -216,9 +216,9 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 	// After other CP VMs are rolled out successfully, these VMs must already join the PlacementGroup
 	// since there is always an empty seat in the PlacementGroup, we will add the target CP VM into the PlacementGroup.
 
-	usedAndUnavailableHostsByPG := usedHostsByPG.FilterUnavailableHostsWithoutEnoughMemory(*service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
-	if !usedAndUnavailableHostsByPG.IsEmpty() {
-		ctx.Logger.V(1).Info("KCP is in rolling update, the placement group is full and has unavailable hosts, wait for enough available hosts", "placementGroup", *placementGroup.Name, "usedAndUnavailableHostsByPG", usedAndUnavailableHostsByPG.String(), "usedHostsByPG", usedHostsByPG.String())
+	unusableHosts := usedHostsByPG.FilterUnavailableHostsOrWithoutEnoughMemory(*service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
+	if !unusableHosts.IsEmpty() {
+		ctx.Logger.V(1).Info("KCP is in rolling update, the placement group is full and has unusable hosts, will wait for enough available hosts", "placementGroup", *placementGroup.Name, "unusableHosts", unusableHosts.String(), "usedHostsByPG", usedHostsByPG.String())
 
 		return nil, nil
 	}
@@ -277,17 +277,17 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx *context.MachineCon
 
 	host := hosts.Get(*vm.Host.ID)
 	if host == nil {
-		ctx.Logger.Info("Host not found, skip selecting host for VM", "hostID", *vm.Host.ID, "vmRef", ctx.ElfMachine.Status.VMRef)
+		ctx.Logger.Info("Host not found, skip selecting host for VM", "host", formatNestedHost(vm.Host), "vmRef", ctx.ElfMachine.Status.VMRef)
 		return "", err
 	}
 
 	ok, message := service.IsAvailableHost(host, *service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
 	if ok {
-		ctx.Logger.Info("Selected the host server for VM since the placement group is full", "hostID", *vm.Host.ID, "vmRef", ctx.ElfMachine.Status.VMRef)
+		ctx.Logger.Info("Select a host to power on the VM since the placement group is full", "host", formatNestedHost(vm.Host), "vmRef", ctx.ElfMachine.Status.VMRef)
 		return *vm.Host.ID, nil
 	}
 
-	ctx.Logger.Info(fmt.Sprintf("Host is unavailable: %s, skip selecting host for VM", message), "hostID", *vm.Host.ID, "vmRef", ctx.ElfMachine.Status.VMRef)
+	ctx.Logger.Info(fmt.Sprintf("Host is unavailable: %s, skip selecting host for VM", message), "host", formatNestedHost(vm.Host), "vmRef", ctx.ElfMachine.Status.VMRef)
 	return "", err
 }
 
@@ -417,16 +417,17 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			}
 
 			// Only when the KCP is in rolling update, the VM is stopped, and all the hosts used by the placement group are available,
-			// will the upgrade be allowed with the same number of hosts and CP nodes.
-			// In this case machine created by KCP rolling update can be powered on without being added to the placement group.
+			// will the upgrade be allowed.
+			// In this case the machine created by KCP rolling update can be powered on without being added to the placement group,
+			// so return true and nil to let reconcileVMStatus() power it on.
 			if kcputil.IsKCPInRollingUpdate(kcp) && *vm.Status == models.VMStatusSTOPPED {
-				usedAndUnavailableHostsByPG := usedHostsByPG.FilterUnavailableHostsWithoutEnoughMemory(*service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
-				if usedAndUnavailableHostsByPG.IsEmpty() {
-					ctx.Logger.Info("KCP is in rolling update, the placement group is full and has no unavailable hosts, skip adding VM to the placement group", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+				unusablehosts := usedHostsByPG.FilterUnavailableHostsOrWithoutEnoughMemory(*service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
+				if unusablehosts.IsEmpty() {
+					ctx.Logger.Info("KCP is in rolling update, the placement group is full and has no unusable hosts, so skip adding VM to the placement group and power it on", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 					return true, nil
 				}
 
-				ctx.Logger.Info("KCP is in rolling update, the placement group is full and has unavailable hosts, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+				ctx.Logger.Info("KCP is in rolling update, the placement group is full and has unusable hosts, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "unusablehosts", unusablehosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
 				return false, nil
 			}
@@ -438,7 +439,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			}
 
 			// KCP is scaling out or being created.
-			ctx.Logger.V(1).Info("The placement group is full, wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+			ctx.Logger.V(1).Info("KCP is in scaling up or being created, the placement group is full, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
 			return false, nil
 		}
@@ -447,7 +448,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 		// and the virtual machine is not STOPPED, we need to migrate the virtual machine to a host that
 		// is not used by the placement group before adding the virtual machine to the placement group.
 		// Otherwise, just add the virtual machine to the placement group directly.
-		ctx.Logger.V(1).Info("The availableHosts for migrating the VM", "hosts", availableHosts.String(), "vmHost", *vm.Host.ID)
+		ctx.Logger.V(1).Info("The availableHosts for migrating the VM", "hosts", availableHosts.String(), "vmHost", formatNestedHost(vm.Host))
 		if !availableHosts.Contains(*vm.Host.ID) && *vm.Status != models.VMStatusSTOPPED {
 			ctx.Logger.V(1).Info("Try to migrate the virtual machine to the specified target host if needed")
 
@@ -528,7 +529,7 @@ func (r *ElfMachineReconciler) migrateVM(ctx *context.MachineContext, vm *models
 
 	ctx.ElfMachine.SetTask(*withTaskVM.TaskID)
 
-	ctx.Logger.Info(fmt.Sprintf("Waiting for the VM to be migrated from %s to %s", *vm.Host.ID, targetHost), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID, "taskRef", ctx.ElfMachine.Status.TaskRef)
+	ctx.Logger.Info(fmt.Sprintf("Waiting for the VM to be migrated from %s to %s", formatNestedHost(vm.Host), targetHost), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID, "taskRef", ctx.ElfMachine.Status.TaskRef)
 
 	return false, nil
 }
@@ -613,4 +614,13 @@ func (r *ElfMachineReconciler) deletePlacementGroup(ctx *context.MachineContext)
 	}
 
 	return true, nil
+}
+
+// formatNestedHost returns the basic information of the host (ID, name).
+func formatNestedHost(host *models.NestedHost) string {
+	if host == nil {
+		return "{}"
+	}
+
+	return fmt.Sprintf("{id: %s,name: %s}", service.GetTowerString(host.ID), service.GetTowerString(host.Name))
 }

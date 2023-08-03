@@ -56,13 +56,13 @@ func TestHostCollection(t *testing.T) {
 		g.Expect(availableHosts.Contains(*host2.ID)).To(gomega.BeTrue())
 
 		hosts = NewHosts()
-		unavailableHosts := hosts.FilterUnavailableHostsWithoutEnoughMemory(0)
+		unavailableHosts := hosts.FilterUnavailableHostsOrWithoutEnoughMemory(0)
 		g.Expect(unavailableHosts.IsEmpty()).To(gomega.BeTrue())
 		g.Expect(unavailableHosts.Len()).To(gomega.Equal(0))
 		g.Expect(unavailableHosts.String()).To(gomega.Equal("[]"))
 
 		hosts = NewHostsFromList([]*models.Host{host1, host2})
-		unavailableHosts = hosts.FilterUnavailableHostsWithoutEnoughMemory(2)
+		unavailableHosts = hosts.FilterUnavailableHostsOrWithoutEnoughMemory(2)
 		g.Expect(unavailableHosts.Len()).To(gomega.Equal(1))
 		g.Expect(unavailableHosts.Contains(*host1.ID)).To(gomega.BeTrue())
 		g.Expect(unavailableHosts.String()).To(gomega.Equal(fmt.Sprintf("[{id: %s,name: %s,memory: %d,status: %s,state: %s},]", *host1.ID, *host1.Name, *host1.AllocatableMemoryBytes, string(*host1.Status), "")))

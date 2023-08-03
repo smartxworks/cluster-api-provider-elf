@@ -88,8 +88,8 @@ func (s Hosts) FilterAvailableHostsWithEnoughMemory(memory int64) Hosts {
 	})
 }
 
-// FilterUnavailableHostsWithoutEnoughMemory returns a Hosts containing the unavailable host which has allocatable memory less than the specified memory.
-func (s Hosts) FilterUnavailableHostsWithoutEnoughMemory(memory int64) Hosts {
+// FilterUnavailableHostsOrWithoutEnoughMemory returns a Hosts containing the unavailable hosts or available hosts whose available memory is less than the specified memory.
+func (s Hosts) FilterUnavailableHostsOrWithoutEnoughMemory(memory int64) Hosts {
 	return s.Filter(func(h *models.Host) bool {
 		ok, _ := IsAvailableHost(h, memory)
 		return !ok
