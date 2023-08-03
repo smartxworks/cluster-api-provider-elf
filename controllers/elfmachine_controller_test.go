@@ -992,20 +992,20 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ok, err := reconciler.joinPlacementGroup(machineContext, vm)
 				Expect(ok).To(BeTrue())
 				Expect(err).To(BeZero())
-				Expect(logBuffer.String()).To(ContainSubstring("The placement group is full and KCP is in rolling update, skip adding VM to the placement group"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and has no unavailable hosts, skip adding VM to the placement group"))
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
 				host.HostState = &models.NestedMaintenanceHostState{State: models.NewMaintenanceModeEnum(models.MaintenanceModeEnumMAINTENANCEMODE)}
 				mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host), nil)
-				mockVMService.EXPECT().FindByIDs([]string{*placementGroup.Vms[0].ID}).Return([]*models.VM{}, nil)
+				mockVMService.EXPECT().FindByIDs([]string{*placementGroup.Vms[0].ID}).Return([]*models.VM{vm2}, nil)
 
 				reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 				ok, err = reconciler.joinPlacementGroup(machineContext, vm)
 				Expect(ok).To(BeFalse())
 				Expect(err).To(BeZero())
-				Expect(logBuffer.String()).To(ContainSubstring("The placement group is full, wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and has unavailable hosts, wait for enough available hosts"))
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
@@ -1229,6 +1229,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				placementGroup.Vms = []*models.NestedVM{}
 				kcp.Spec.Replicas = pointer.Int32(3)
 				kcp.Status.Replicas = 3
+				kcp.Status.UpdatedReplicas = 3
 				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2, elfMachine3, machine3)
 				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
@@ -1248,6 +1249,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				hostID, err := reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(*hostID).To(Equal(""))
+				Expect(logBuffer.String()).To(ContainSubstring("The placement group still has capacity"))
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
@@ -1260,7 +1262,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				hostID, err = reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(hostID).To(BeNil())
-				Expect(logBuffer.String()).To(ContainSubstring("KCP is not in scaling down and it's not rolling update the 1st CP Machine, the placement group is full, wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is not in rolling update and it's not in scaling down, the placement group is full, wait for enough available hosts"))
 			})
 
 			It("when placement group is full and KCP rolling update in progress", func() {
@@ -1334,7 +1336,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				host, err = reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(host).To(BeNil())
-				Expect(logBuffer.String()).To(ContainSubstring("KCP is rolling update the 1st CP Machine, the placement group is full, wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and has unavailable hosts"))
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
@@ -1348,7 +1350,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				host, err = reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(host).To(BeNil())
-				Expect(logBuffer.String()).To(ContainSubstring("KCP is rolling update the 1st CP Machine, the placement group is full, wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and has unavailable hosts, wait for enough available hosts"))
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
@@ -1362,7 +1364,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				host, err = reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(host).To(BeNil())
-				Expect(logBuffer.String()).To(ContainSubstring("KCP is rolling update the 1st CP Machine, the placement group is full, wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and has unavailable hosts, wait for enough available hosts"))
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
@@ -1416,6 +1418,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(err).To(BeZero())
 				Expect(hostID).To(Equal(*vm3.Host.ID))
 				Expect(logBuffer.String()).To(ContainSubstring("Selected the host server for VM since the placement group is full"))
+
+				ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp)
+				machineContext = newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+				reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				hostID, err = reconciler.getVMHostForRollingUpdate(machineContext, placementGroup, service.NewHostsFromList(hosts))
+				Expect(err).To(BeZero())
+				Expect(hostID).To(Equal(""))
+				Expect(logBuffer.String()).To(ContainSubstring("Newest machine not found, skip selecting host for VM"))
 			})
 		})
 
@@ -1458,7 +1468,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				hostID, err := reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(hostID).To(BeNil())
-				Expect(logBuffer.String()).To(ContainSubstring("KCP is not in scaling down and it's not rolling update the 1st CP Machine, the placement group is full, wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is not in rolling update and it's not in scaling down, the placement group is full, wait for enough available hosts"))
 				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForAvailableHostRequiredByPlacementGroupReason}})
 
 				elfMachine.Status.Conditions = nil

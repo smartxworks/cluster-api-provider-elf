@@ -67,18 +67,32 @@ func (s Hosts) IsEmpty() bool {
 
 func (s Hosts) String() string {
 	str := ""
+
 	for _, host := range s {
-		str += fmt.Sprintf("{id: %s,name: %s},", GetTowerString(host.ID), GetTowerString(host.Name))
+		state := ""
+		if host.HostState != nil {
+			state = string(*host.HostState.State)
+		}
+
+		str += fmt.Sprintf("{id: %s,name: %s,memory: %d,status: %s,state: %s},", GetTowerString(host.ID), GetTowerString(host.Name), GetTowerInt64(host.AllocatableMemoryBytes), string(*host.Status), state)
 	}
 
 	return fmt.Sprintf("[%s]", str)
 }
 
-// Available returns a Hosts with available hosts.
-func (s Hosts) Available(memory int64) Hosts {
+// FilterAvailableHostsWithEnoughMemory returns a Hosts containing the available host which has allocatable memory no less than the specified memory.
+func (s Hosts) FilterAvailableHostsWithEnoughMemory(memory int64) Hosts {
 	return s.Filter(func(h *models.Host) bool {
 		ok, _ := IsAvailableHost(h, memory)
 		return ok
+	})
+}
+
+// FilterUnavailableHostsWithoutEnoughMemory returns a Hosts containing the unavailable host which has allocatable memory less than the specified memory.
+func (s Hosts) FilterUnavailableHostsWithoutEnoughMemory(memory int64) Hosts {
+	return s.Filter(func(h *models.Host) bool {
+		ok, _ := IsAvailableHost(h, memory)
+		return !ok
 	})
 }
 

@@ -22,36 +22,23 @@ import (
 	"sigs.k8s.io/cluster-api/util/conditions"
 )
 
-// IsKCPInRollingUpdate returns whether KCP is in scaling down.
+// IsKCPInRollingUpdate returns whether KCP is in rolling update.
 //
-// When KCP is in rolling update, KCP controller marks
-// MachinesSpecUpToDateCondition to false and RollingUpdateInProgressReason as Reason.
-//
-// When all machines are up to date, KCP controller marks MachinesSpecUpToDateCondition to true.
-//
-// For more information about KCP MachinesSpecUpToDateCondition and RollingUpdateInProgressReason, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/api/v1beta1/condition_consts.go
-func IsKCPInRollingUpdate(kcp *controlplanev1.KubeadmControlPlane) bool {
-	return conditions.IsFalse(kcp, controlplanev1.MachinesSpecUpToDateCondition) &&
-		conditions.GetReason(kcp, controlplanev1.MachinesSpecUpToDateCondition) == controlplanev1.RollingUpdateInProgressReason
-}
-
-// IsKCPRollingUpdateFirstMachine returns true if KCP is in rolling update and creating the first CP Machine.
-//
-// KCP rollout algorithm is as follows:
-// Find Machines that have an outdated spec, If there is a machine requiring rollout
-// 1.Scale up control plane creating a machine with the new spec
-// 2.Scale down control plane by removing one of the machine that needs rollout (the oldest out-of date machine in the failure domain that has the most control-plane machines on it)
-//
-// kcp.Status.UpdatedReplicas is the total number of machines that are up to date with the control
-// plane's configuration and therefore do not require rollout.
-//
-// So when KCP is in rolling update and creating the first CP Machine,
-// kcp.Status.Replicas is greater than kcp.Spec.Replicas and kcp.Status.UpdatedReplicas equals 1.
+// When *kcp.Spec.Replicas > kcp.Status.UpdatedReplicas, it must be in a KCP rolling update process.
+// When *kcp.Spec.Replicas == kcp.Status.UpdatedReplicas, it could be in one of the following cases:
+//  1. It's not in a KCP rolling update process. So kcp.Spec.Replicas == kcp.Status.Replicas.
+//  2. It's at the end of a KCP rolling update process, and the last KCP replica (i.e the last KCP ElfMachine) is created just now.
+//     There is still an old KCP ElfMachine, so kcp.Spec.Replicas + 1 == kcp.Status.Replicas.
 //
 // For more information about KCP replicas, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/controlplane/kubeadm/api/v1beta1/kubeadm_control_plane_types.go
 // For more information about KCP rollout, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20191017-kubeadm-based-control-plane.md#kubeadmcontrolplane-rollout
-func IsKCPRollingUpdateFirstMachine(kcp *controlplanev1.KubeadmControlPlane) bool {
-	return IsKCPInRollingUpdate(kcp) && kcp.Status.UpdatedReplicas == 1
+func IsKCPInRollingUpdate(kcp *controlplanev1.KubeadmControlPlane) bool {
+	if (*kcp.Spec.Replicas > kcp.Status.UpdatedReplicas && *kcp.Spec.Replicas <= kcp.Status.Replicas) ||
+		(*kcp.Spec.Replicas == kcp.Status.UpdatedReplicas && *kcp.Spec.Replicas < kcp.Status.Replicas) {
+		return true
+	}
+
+	return false
 }
 
 // IsKCPInScalingDown returns whether KCP is in scaling down.

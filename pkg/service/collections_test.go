@@ -17,6 +17,7 @@ limitations under the License.
 package service
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/onsi/gomega"
@@ -47,12 +48,24 @@ func TestHostCollection(t *testing.T) {
 		host2 := &models.Host{ID: TowerString("2"), Name: TowerString("host2"), AllocatableMemoryBytes: pointer.Int64(2), Status: models.NewHostStatus(models.HostStatusCONNECTEDHEALTHY)}
 
 		hosts := NewHosts()
-		g.Expect(hosts.Available(0).Len()).To(gomega.Equal(0))
+		g.Expect(hosts.FilterAvailableHostsWithEnoughMemory(0).Len()).To(gomega.Equal(0))
 
 		hosts = NewHostsFromList([]*models.Host{host1, host2})
-		availableHosts := hosts.Available(2)
+		availableHosts := hosts.FilterAvailableHostsWithEnoughMemory(2)
 		g.Expect(availableHosts.Len()).To(gomega.Equal(1))
 		g.Expect(availableHosts.Contains(*host2.ID)).To(gomega.BeTrue())
+
+		hosts = NewHosts()
+		unavailableHosts := hosts.FilterUnavailableHostsWithoutEnoughMemory(0)
+		g.Expect(unavailableHosts.IsEmpty()).To(gomega.BeTrue())
+		g.Expect(unavailableHosts.Len()).To(gomega.Equal(0))
+		g.Expect(unavailableHosts.String()).To(gomega.Equal("[]"))
+
+		hosts = NewHostsFromList([]*models.Host{host1, host2})
+		unavailableHosts = hosts.FilterUnavailableHostsWithoutEnoughMemory(2)
+		g.Expect(unavailableHosts.Len()).To(gomega.Equal(1))
+		g.Expect(unavailableHosts.Contains(*host1.ID)).To(gomega.BeTrue())
+		g.Expect(unavailableHosts.String()).To(gomega.Equal(fmt.Sprintf("[{id: %s,name: %s,memory: %d,status: %s,state: %s},]", *host1.ID, *host1.Name, *host1.AllocatableMemoryBytes, string(*host1.Status), "")))
 	})
 
 	t.Run("Difference", func(t *testing.T) {
