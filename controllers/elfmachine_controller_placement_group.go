@@ -354,8 +354,6 @@ func (r *ElfMachineReconciler) getPlacementGroup(ctx *context.MachineContext, pl
 //     For example, the virtual machine has joined the placement group.
 //  2. false and error is nil means the virtual machine has not joined the placement group.
 //     For example, the placement group is full or the virtual machine is being migrated.
-//
-//nolint:gocyclo
 func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
 	if !version.IsCompatibleWithPlacementGroup(ctx.ElfMachine) {
 		ctx.Logger.V(1).Info(fmt.Sprintf("The capeVersion of ElfMachine is lower than %s, skip adding VM to the placement group", version.CAPEVersion1_2_0), "capeVersion", version.GetCAPEVersion(ctx.ElfMachine))
@@ -432,7 +430,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 				return false, nil
 			}
 
-			if *vm.Status == models.VMStatusRUNNING || *vm.Status == models.VMStatusSUSPENDED {
+			if *vm.Status != models.VMStatusSTOPPED {
 				ctx.Logger.V(1).Info(fmt.Sprintf("The placement group is full and VM is in %s status, skip adding VM to the placement group", *vm.Status), "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
 				return true, nil
@@ -473,8 +471,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			usedHostsByPG := sets.Set[string]{}
 			for i := 0; i < len(cpElfMachines); i++ {
 				if ctx.ElfMachine.Name != cpElfMachines[i].Name &&
-					cpElfMachines[i].Status.PlacementGroupRef == *placementGroup.ID &&
-					cpElfMachines[i].CreationTimestamp.After(ctx.ElfMachine.CreationTimestamp.Time) {
+					cpElfMachines[i].Status.PlacementGroupRef == *placementGroup.ID {
 					usedHostsByPG.Insert(cpElfMachines[i].Status.HostServerRef)
 				}
 			}
