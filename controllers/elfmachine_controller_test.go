@@ -1167,7 +1167,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(ok).To(BeFalse())
 				Expect(err).To(BeZero())
 				Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-				Expect(logBuffer.String()).To(ContainSubstring("Start migrateVM since KCP is not in rolling update process"))
+				Expect(logBuffer.String()).To(ContainSubstring("Start migrating VM since KCP is not in rolling update process"))
 				Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be migrated from"))
 				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.JoiningPlacementGroupReason}})
 

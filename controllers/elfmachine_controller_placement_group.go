@@ -463,7 +463,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 				return true, nil
 			}
 
-			// The new CP ElfMachine should wait for other new CP ElfMachines to join the target PlacementGroup.
+			// The powered on CP ElfMachine which is not in the PlacementGroup should wait for other new CP ElfMachines to join the target PlacementGroup.
 			// The code below double checks the recommended target host for migration is valid.
 			cpElfMachines, err := machineutil.GetControlPlaneElfMachinesInCluster(ctx, ctx.Client, ctx.Cluster.Namespace, ctx.Cluster.Name)
 			if err != nil {
@@ -485,7 +485,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			// and kcp.Status.UnavailableReplicas == 0.
 			// So we need to check if the number of CP ElfMachine is equal to kcp.Spec.Replicas.
 			if len(cpElfMachines) != int(*kcp.Spec.Replicas) {
-				ctx.Logger.Info("The number of CP ElfMachine does not match the expected", "kcp", formatKCP(kcp), "cpElfMachines", cpElfMachineNames)
+				ctx.Logger.V(1).Info("The number of CP ElfMachine does not match the expected", "kcp", formatKCP(kcp), "cpElfMachines", cpElfMachineNames)
 				return true, nil
 			}
 
@@ -506,7 +506,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			// This is the last CP ElfMachine (i.e. the 1st new CP ElfMachine) which has not been added into the target PlacementGroup.
 			// Migrate this VM to the target host, then it will be added into the target PlacementGroup.
 
-			ctx.Logger.V(1).Info("Start migrateVM since KCP is not in rolling update process", "targetHost", formatHost(targetHost))
+			ctx.Logger.V(1).Info("Start migrating VM since KCP is not in rolling update process", "targetHost", formatHost(targetHost))
 
 			return r.migrateVM(ctx, vm, *targetHost.ID)
 		}
