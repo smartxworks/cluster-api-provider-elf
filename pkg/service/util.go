@@ -77,84 +77,6 @@ func IsAvailableHost(host *models.Host, memory int64) (bool, string) {
 	return true, ""
 }
 
-// GetAvailableHosts returns the available hosts.
-func GetAvailableHosts(hosts []*models.Host, memory int64) []*models.Host {
-	var availableHosts []*models.Host
-	for i := 0; i < len(hosts); i++ {
-		if ok, _ := IsAvailableHost(hosts[i], memory); ok {
-			availableHosts = append(availableHosts, hosts[i])
-		}
-	}
-
-	return availableHosts
-}
-
-func GetUnavailableHostInfo(hosts []*models.Host, memory int64) map[string]string {
-	info := make(map[string]string)
-	for i := 0; i < len(hosts); i++ {
-		ok, message := IsAvailableHost(hosts[i], memory)
-		if !ok {
-			info[*hosts[i].Name] = message
-		}
-	}
-
-	return info
-}
-
-func ContainsUnavailableHost(hosts []*models.Host, hostIDs []string, memory int64) bool {
-	if len(hosts) == 0 || len(hostIDs) == 0 {
-		return true
-	}
-
-	hostMap := make(map[string]*models.Host)
-	for i := 0; i < len(hosts); i++ {
-		hostMap[*hosts[i].ID] = hosts[i]
-	}
-
-	for i := 0; i < len(hostIDs); i++ {
-		host, ok := hostMap[hostIDs[i]]
-		if !ok {
-			return true
-		}
-
-		if ok, _ := IsAvailableHost(host, memory); !ok {
-			return true
-		}
-	}
-
-	return false
-}
-
-func GetHostFromList(hostID string, hosts []*models.Host) *models.Host {
-	for i := 0; i < len(hosts); i++ {
-		if *hosts[i].ID == hostID {
-			return hosts[i]
-		}
-	}
-
-	return nil
-}
-
-func HostsToSet(hosts []*models.Host) sets.Set[string] {
-	hostSet := sets.Set[string]{}
-	for i := 0; i < len(hosts); i++ {
-		hostSet.Insert(*hosts[i].ID)
-	}
-
-	return hostSet
-}
-
-func FilterHosts(hosts []*models.Host, needFilteredHosts sets.Set[string]) []*models.Host {
-	var filteredHosts []*models.Host
-	for i := 0; i < len(hosts); i++ {
-		if !needFilteredHosts.Has(*hosts[i].ID) {
-			filteredHosts = append(filteredHosts, hosts[i])
-		}
-	}
-
-	return filteredHosts
-}
-
 // GetVMsInPlacementGroup returns a Set of IDs of the virtual machines in the placement group.
 func GetVMsInPlacementGroup(placementGroup *models.VMPlacementGroup) sets.Set[string] {
 	placementGroupVMSet := sets.Set[string]{}
@@ -236,6 +158,14 @@ func GetTowerString(ptr *string) string {
 }
 
 func GetTowerInt32(ptr *int32) int32 {
+	if ptr == nil {
+		return 0
+	}
+
+	return *ptr
+}
+
+func GetTowerInt64(ptr *int64) int64 {
 	if ptr == nil {
 		return 0
 	}

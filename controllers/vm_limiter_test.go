@@ -85,27 +85,6 @@ var _ = Describe("VM Operation Limiter", func() {
 	})
 })
 
-var _ = Describe("Placement Group VM Migration Limiter", func() {
-	var groupName string
-
-	BeforeEach(func() {
-		groupName = fake.UUID()
-	})
-
-	It("acquireTicketForPlacementGroupVMMigration", func() {
-		Expect(acquireTicketForPlacementGroupVMMigration(groupName)).To(BeTrue())
-		Expect(placementGroupVMMigrationMap).To(HaveKey(groupName))
-
-		Expect(acquireTicketForPlacementGroupVMMigration(groupName)).To(BeFalse())
-		releaseTicketForPlacementGroupVMMigration(groupName)
-		Expect(placementGroupVMMigrationMap).NotTo(HaveKey(groupName))
-
-		placementGroupVMMigrationMap[groupName] = time.Now().Add(-vmMigrationTimeout)
-		Expect(acquireTicketForPlacementGroupVMMigration(groupName)).To(BeTrue())
-		Expect(placementGroupVMMigrationMap).To(HaveKey(groupName))
-	})
-})
-
 var _ = Describe("Placement Group Operation Limiter", func() {
 	var groupName string
 

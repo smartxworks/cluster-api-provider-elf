@@ -27,7 +27,6 @@ import (
 const (
 	creationTimeout               = time.Minute * 6
 	vmOperationRateLimit          = time.Second * 6
-	vmMigrationTimeout            = time.Minute * 20
 	placementGroupSilenceTime     = time.Minute * 30
 	placementGroupCreationLockKey = "%s:creation"
 )
@@ -35,7 +34,6 @@ const (
 var vmStatusMap = make(map[string]time.Time)
 var limiterLock sync.Mutex
 var vmOperationMap = make(map[string]time.Time)
-var placementGroupVMMigrationMap = make(map[string]time.Time)
 var vmOperationLock sync.Mutex
 
 var placementGroupOperationMap = make(map[string]time.Time)
@@ -89,32 +87,6 @@ func acquireTicketForUpdatingVM(vmName string) bool {
 	vmOperationMap[vmName] = time.Now()
 
 	return true
-}
-
-// acquireTicketForPlacementGroupVMMigration returns whether virtual machine migration
-// of placement group operation can be performed.
-func acquireTicketForPlacementGroupVMMigration(groupName string) bool {
-	vmOperationLock.Lock()
-	defer vmOperationLock.Unlock()
-
-	if status, ok := placementGroupVMMigrationMap[groupName]; ok {
-		if !time.Now().After(status.Add(vmMigrationTimeout)) {
-			return false
-		}
-	}
-
-	placementGroupVMMigrationMap[groupName] = time.Now()
-
-	return true
-}
-
-// releaseTicketForPlacementGroupVMMigration releases the virtual machine migration
-// of placement group being operated.
-func releaseTicketForPlacementGroupVMMigration(groupName string) {
-	vmOperationLock.Lock()
-	defer vmOperationLock.Unlock()
-
-	delete(placementGroupVMMigrationMap, groupName)
 }
 
 // acquireTicketForPlacementGroupOperation returns whether placement group operation

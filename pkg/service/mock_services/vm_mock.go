@@ -11,6 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	models "github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	v1beta1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	service "github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	v1beta10 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -217,10 +218,10 @@ func (mr *MockVMServiceMockRecorder) GetHost(id interface{}) *gomock.Call {
 }
 
 // GetHostsByCluster mocks base method.
-func (m *MockVMService) GetHostsByCluster(clusterID string) ([]*models.Host, error) {
+func (m *MockVMService) GetHostsByCluster(clusterID string) (service.Hosts, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHostsByCluster", clusterID)
-	ret0, _ := ret[0].([]*models.Host)
+	ret0, _ := ret[0].(service.Hosts)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -277,18 +278,18 @@ func (mr *MockVMServiceMockRecorder) GetVMPlacementGroup(name interface{}) *gomo
 }
 
 // GetVMTemplate mocks base method.
-func (m *MockVMService) GetVMTemplate(id string) (*models.ContentLibraryVMTemplate, error) {
+func (m *MockVMService) GetVMTemplate(template string) (*models.ContentLibraryVMTemplate, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVMTemplate", id)
+	ret := m.ctrl.Call(m, "GetVMTemplate", template)
 	ret0, _ := ret[0].(*models.ContentLibraryVMTemplate)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetVMTemplate indicates an expected call of GetVMTemplate.
-func (mr *MockVMServiceMockRecorder) GetVMTemplate(id interface{}) *gomock.Call {
+func (mr *MockVMServiceMockRecorder) GetVMTemplate(template interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMTemplate", reflect.TypeOf((*MockVMService)(nil).GetVMTemplate), id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMTemplate", reflect.TypeOf((*MockVMService)(nil).GetVMTemplate), template)
 }
 
 // GetVlan mocks base method.
