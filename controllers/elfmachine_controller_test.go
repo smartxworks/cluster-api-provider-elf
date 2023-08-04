@@ -1282,7 +1282,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				hostID, err = reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(hostID).To(BeNil())
-				Expect(logBuffer.String()).To(ContainSubstring("KCP is not in rolling update and not in scaling down, the placement group is full, wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is not in rolling update and not in scaling down, the placement group is full, so wait for enough available hosts"))
 			})
 
 			It("when placement group is full and KCP rolling update in progress", func() {
@@ -1356,7 +1356,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				host, err = reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(host).To(BeNil())
-				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and has unusable hosts, will wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and has unusable hosts, so wait for enough available hosts"))
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
@@ -1370,7 +1370,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				host, err = reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(host).To(BeNil())
-				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and has unusable hosts, will wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and has unusable hosts, so wait for enough available hosts"))
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
@@ -1384,7 +1384,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				host, err = reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(host).To(BeNil())
-				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and has unusable hosts, will wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and has unusable hosts, so wait for enough available hosts"))
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
@@ -1488,7 +1488,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				hostID, err := reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(hostID).To(BeNil())
-				Expect(logBuffer.String()).To(ContainSubstring("KCP is not in rolling update and not in scaling down, the placement group is full, wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is not in rolling update and not in scaling down, the placement group is full, so wait for enough available hosts"))
 				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForAvailableHostRequiredByPlacementGroupReason}})
 
 				elfMachine.Status.Conditions = nil
