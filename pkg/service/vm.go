@@ -54,6 +54,7 @@ type VMService interface {
 	Get(id string) (*models.VM, error)
 	GetByName(name string) (*models.VM, error)
 	FindByIDs(ids []string) ([]*models.VM, error)
+	FindVMsByName(name string) ([]*models.VM, error)
 	GetVMNics(vmID string) ([]*models.VMNic, error)
 	GetVMTemplate(template string) (*models.ContentLibraryVMTemplate, error)
 	GetTask(id string) (*models.Task, error)
@@ -417,6 +418,28 @@ func (svr *TowerVMService) FindByIDs(ids []string) ([]*models.VM, error) {
 	getVmsParams.RequestBody = &models.GetVmsRequestBody{
 		Where: &models.VMWhereInput{
 			OR: []*models.VMWhereInput{{LocalIDIn: ids}, {IDIn: ids}},
+		},
+	}
+
+	getVmsResp, err := svr.Session.VM.GetVms(getVmsParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return getVmsResp.Payload, nil
+}
+
+// FindVMsByName searches for virtual machines by name.
+func (svr *TowerVMService) FindVMsByName(name string) ([]*models.VM, error) {
+	if name == "" {
+		return nil, nil
+	}
+
+	getVmsParams := clientvm.NewGetVmsParams()
+	getVmsParams.RequestBody = &models.GetVmsRequestBody{
+		Where: &models.VMWhereInput{
+			NameStartsWith: TowerString(name),
+			Description:    TowerString(VMPlacementGroupDescription),
 		},
 	}
 
