@@ -1040,6 +1040,23 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(ok).To(BeFalse())
 				Expect(err).To(BeZero())
 				Expect(logBuffer.String()).To(ContainSubstring("KCP is in scaling up or being created, the placement group is full, so wait for enough available hosts"))
+
+				logBuffer = new(bytes.Buffer)
+				klog.SetOutput(logBuffer)
+				kcp.Spec.Replicas = pointer.Int32(2)
+				kcp.Status.Replicas = 2
+				kcp.Status.UpdatedReplicas = 1
+				ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
+				machineContext = newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+				mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host), nil)
+				mockVMService.EXPECT().FindByIDs([]string{*placementGroup.Vms[0].ID}).Return([]*models.VM{vm2}, nil)
+				reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				ok, err = reconciler.joinPlacementGroup(machineContext, vm)
+				Expect(ok).To(BeFalse())
+				Expect(err).To(BeZero())
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and capacity is less than replicas of kcp, so wait for enough available hosts"))
 			})
 
 			It("should add VM to placement group when VM is not in placement group and the host where VM in is not in placement group", func() {
@@ -1385,6 +1402,23 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(err).To(BeZero())
 				Expect(host).To(BeNil())
 				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and has unusable hosts, so wait for enough available hosts"))
+
+				logBuffer = new(bytes.Buffer)
+				klog.SetOutput(logBuffer)
+				kcp.Spec.Replicas = pointer.Int32(5)
+				kcp.Status.Replicas = 6
+				kcp.Status.UpdatedReplicas = 4
+				ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2, elfMachine3, machine3)
+				machineContext = newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+				mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
+				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host1, host2, host3), nil)
+				mockVMService.EXPECT().FindByIDs(gomock.InAnyOrder([]string{*vm1.ID, *vm2.ID, *vm3.ID})).Return([]*models.VM{vm1, vm2, vm3}, nil)
+
+				reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				host, err = reconciler.preCheckPlacementGroup(machineContext)
+				Expect(err).To(BeZero())
+				Expect(host).To(BeNil())
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and capacity is less than replicas of kcp, so wait for enough available hosts"))
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)

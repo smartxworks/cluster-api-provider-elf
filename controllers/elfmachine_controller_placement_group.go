@@ -217,6 +217,13 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 	// After other CP VMs are rolled out successfully, these VMs must already join the PlacementGroup
 	// since there is always an empty seat in the PlacementGroup, we will add the target CP VM into the PlacementGroup.
 
+	// Replicas of kcp is greater than the capacity of the placement group do not allow rolling update.
+	if int(*kcp.Spec.Replicas) > usedHostsByPG.Len() {
+		ctx.Logger.V(1).Info("KCP is in rolling update, the placement group is full and capacity is less than replicas of kcp, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "usedHostsByPG", usedHostsByPG.String())
+
+		return nil, nil
+	}
+
 	unusableHosts := usedHostsByPG.FilterUnavailableHostsOrWithoutEnoughMemory(*service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
 	if !unusableHosts.IsEmpty() {
 		ctx.Logger.V(1).Info("KCP is in rolling update, the placement group is full and has unusable hosts, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "unusableHosts", unusableHosts.String(), "usedHostsByPG", usedHostsByPG.String())
@@ -422,6 +429,13 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			// In this case the machine created by KCP rolling update can be powered on without being added to the placement group,
 			// so return true and nil to let reconcileVMStatus() power it on.
 			if kcputil.IsKCPInRollingUpdate(kcp) && *vm.Status == models.VMStatusSTOPPED {
+				// Replicas of kcp is greater than the capacity of the placement group do not allow rolling update.
+				if int(*kcp.Spec.Replicas) > usedHostsByPG.Len() {
+					ctx.Logger.V(1).Info("KCP is in rolling update, the placement group is full and capacity is less than replicas of kcp, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "usedHostsByPG", usedHostsByPG.String())
+
+					return false, nil
+				}
+
 				unusablehosts := usedHostsByPG.FilterUnavailableHostsOrWithoutEnoughMemory(*service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
 				if unusablehosts.IsEmpty() {
 					ctx.Logger.Info("KCP is in rolling update, the placement group is full and has no unusable hosts, so skip adding VM to the placement group and power it on", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
