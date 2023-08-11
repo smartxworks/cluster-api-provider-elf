@@ -36,6 +36,9 @@ const (
 	LabelAddFailed            = "LABEL_ADD_FAILED"
 	CloudInitError            = "VM_CLOUD_INIT_CONFIG_ERROR"
 	MemoryInsufficientError   = "HostAvailableMemoryFilter"
+	PlacementGroupError       = "PlacementGroupFilter" // SMTX OS <= 5.0.4
+	PlacementGroupMustError   = "PlacementGroupMustFilter"
+	PlacementGroupPriorError  = "PlacementGroupPriorFilter"
 )
 
 func IsVMNotFound(err error) bool {
@@ -85,4 +88,18 @@ func FormatCloudInitError(message string) string {
 
 func IsMemoryInsufficientError(message string) bool {
 	return strings.Contains(message, MemoryInsufficientError)
+}
+
+func IsPlacementGroupError(message string) bool {
+	return strings.Contains(message, PlacementGroupError) ||
+		IsPlacementGroupMustError(message) ||
+		IsPlacementGroupPriorError(message)
+}
+
+func IsPlacementGroupMustError(message string) bool {
+	return strings.Contains(message, PlacementGroupMustError)
+}
+
+func IsPlacementGroupPriorError(message string) bool {
+	return strings.Contains(message, PlacementGroupPriorError)
 }

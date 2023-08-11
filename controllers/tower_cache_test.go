@@ -28,75 +28,62 @@ var _ = Describe("TowerCache", func() {
 
 	BeforeEach(func() {
 		clusterID = fake.UUID()
-		resetClusterStatusMap()
+		resetClusterResourceMap()
 	})
 
 	It("should set memoryInsufficient", func() {
-		Expect(clusterStatusMap).NotTo(HaveKey(clusterID))
-		Expect(clusterStatusMap[clusterID]).To(BeNil())
+		Expect(clusterResourceMap).NotTo(HaveKey(clusterID))
+		Expect(clusterResourceMap[getMemoryKey(clusterID)]).To(BeNil())
 
 		setElfClusterMemoryInsufficient(clusterID, true)
-		Expect(clusterStatusMap[clusterID].Resources.IsMemoryInsufficient).To(BeTrue())
-		Expect(clusterStatusMap[clusterID].Resources.LastDetected).To(Equal(clusterStatusMap[clusterID].Resources.LastRetried))
+		Expect(clusterResourceMap[getMemoryKey(clusterID)].IsUnmet).To(BeTrue())
+		Expect(clusterResourceMap[getMemoryKey(clusterID)].LastDetected).To(Equal(clusterResourceMap[getMemoryKey(clusterID)].LastRetried))
 
 		setElfClusterMemoryInsufficient(clusterID, true)
-		Expect(clusterStatusMap[clusterID].Resources.IsMemoryInsufficient).To(BeTrue())
-		Expect(clusterStatusMap[clusterID].Resources.LastDetected).To(Equal(clusterStatusMap[clusterID].Resources.LastRetried))
+		Expect(clusterResourceMap[getMemoryKey(clusterID)].IsUnmet).To(BeTrue())
+		Expect(clusterResourceMap[getMemoryKey(clusterID)].LastDetected).To(Equal(clusterResourceMap[getMemoryKey(clusterID)].LastRetried))
 
 		setElfClusterMemoryInsufficient(clusterID, false)
-		Expect(clusterStatusMap[clusterID].Resources.IsMemoryInsufficient).To(BeFalse())
-		Expect(clusterStatusMap[clusterID].Resources.LastDetected).To(Equal(clusterStatusMap[clusterID].Resources.LastRetried))
+		Expect(clusterResourceMap[getMemoryKey(clusterID)].IsUnmet).To(BeFalse())
+		Expect(clusterResourceMap[getMemoryKey(clusterID)].LastDetected).To(Equal(clusterResourceMap[getMemoryKey(clusterID)].LastRetried))
 
-		resetClusterStatusMap()
-		Expect(clusterStatusMap).NotTo(HaveKey(clusterID))
-		Expect(clusterStatusMap[clusterID]).To(BeNil())
-
-		setElfClusterMemoryInsufficient(clusterID, false)
-		Expect(clusterStatusMap[clusterID].Resources.IsMemoryInsufficient).To(BeFalse())
-		Expect(clusterStatusMap[clusterID].Resources.LastDetected).To(Equal(clusterStatusMap[clusterID].Resources.LastRetried))
+		resetClusterResourceMap()
+		Expect(clusterResourceMap).NotTo(HaveKey(clusterID))
+		Expect(clusterResourceMap[getMemoryKey(clusterID)]).To(BeNil())
 
 		setElfClusterMemoryInsufficient(clusterID, false)
-		Expect(clusterStatusMap[clusterID].Resources.IsMemoryInsufficient).To(BeFalse())
-		Expect(clusterStatusMap[clusterID].Resources.LastDetected).To(Equal(clusterStatusMap[clusterID].Resources.LastRetried))
+		Expect(clusterResourceMap[getMemoryKey(clusterID)].IsUnmet).To(BeFalse())
+		Expect(clusterResourceMap[getMemoryKey(clusterID)].LastDetected).To(Equal(clusterResourceMap[getMemoryKey(clusterID)].LastRetried))
+
+		setElfClusterMemoryInsufficient(clusterID, false)
+		Expect(clusterResourceMap[getMemoryKey(clusterID)].IsUnmet).To(BeFalse())
+		Expect(clusterResourceMap[getMemoryKey(clusterID)].LastDetected).To(Equal(clusterResourceMap[getMemoryKey(clusterID)].LastRetried))
 
 		setElfClusterMemoryInsufficient(clusterID, true)
-		Expect(clusterStatusMap[clusterID].Resources.IsMemoryInsufficient).To(BeTrue())
-		Expect(clusterStatusMap[clusterID].Resources.LastDetected).To(Equal(clusterStatusMap[clusterID].Resources.LastRetried))
-	})
-
-	It("should return whether memory is insufficient", func() {
-		Expect(clusterStatusMap).NotTo(HaveKey(clusterID))
-		Expect(clusterStatusMap[clusterID]).To(BeNil())
-
-		Expect(isElfClusterMemoryInsufficient(clusterID)).To(BeFalse())
-
-		setElfClusterMemoryInsufficient(clusterID, false)
-		Expect(isElfClusterMemoryInsufficient(clusterID)).To(BeFalse())
-
-		setElfClusterMemoryInsufficient(clusterID, true)
-		Expect(isElfClusterMemoryInsufficient(clusterID)).To(BeTrue())
+		Expect(clusterResourceMap[getMemoryKey(clusterID)].IsUnmet).To(BeTrue())
+		Expect(clusterResourceMap[getMemoryKey(clusterID)].LastDetected).To(Equal(clusterResourceMap[getMemoryKey(clusterID)].LastRetried))
 	})
 
 	It("should return whether need to detect", func() {
-		Expect(clusterStatusMap).NotTo(HaveKey(clusterID))
-		Expect(clusterStatusMap[clusterID]).To(BeNil())
+		Expect(clusterResourceMap).NotTo(HaveKey(clusterID))
+		Expect(clusterResourceMap[getMemoryKey(clusterID)]).To(BeNil())
 
-		Expect(canRetryVMOperation(clusterID)).To(BeFalse())
+		Expect(canRetryVMOperation(clusterID, "")).To(BeFalse())
 
 		setElfClusterMemoryInsufficient(clusterID, false)
-		Expect(canRetryVMOperation(clusterID)).To(BeFalse())
+		Expect(canRetryVMOperation(clusterID, "")).To(BeFalse())
 
 		setElfClusterMemoryInsufficient(clusterID, true)
-		Expect(canRetryVMOperation(clusterID)).To(BeFalse())
+		Expect(canRetryVMOperation(clusterID, "")).To(BeFalse())
 
-		clusterStatusMap[clusterID].Resources.LastDetected = clusterStatusMap[clusterID].Resources.LastDetected.Add(-silenceTime)
-		clusterStatusMap[clusterID].Resources.LastRetried = clusterStatusMap[clusterID].Resources.LastRetried.Add(-silenceTime)
-		Expect(canRetryVMOperation(clusterID)).To(BeTrue())
+		clusterResourceMap[getMemoryKey(clusterID)].LastDetected = clusterResourceMap[getMemoryKey(clusterID)].LastDetected.Add(-silenceTime)
+		clusterResourceMap[getMemoryKey(clusterID)].LastRetried = clusterResourceMap[getMemoryKey(clusterID)].LastRetried.Add(-silenceTime)
+		Expect(canRetryVMOperation(clusterID, "")).To(BeTrue())
 
-		Expect(canRetryVMOperation(clusterID)).To(BeFalse())
+		Expect(canRetryVMOperation(clusterID, "")).To(BeFalse())
 	})
 })
 
-func resetClusterStatusMap() {
-	clusterStatusMap = make(map[string]*clusterStatus)
+func resetClusterResourceMap() {
+	clusterResourceMap = make(map[string]*clusterResource)
 }
