@@ -217,9 +217,10 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx *context.MachineContex
 	// After other CP VMs are rolled out successfully, these VMs must already join the PlacementGroup
 	// since there is always an empty seat in the PlacementGroup, we will add the target CP VM into the PlacementGroup.
 
-	// Replicas of kcp is greater than the capacity of the placement group do not allow rolling update.
+	// If KCP.Spec.Replicas is greater than the host count,
+	// do not allow creating more KCP VM because there is no more host to place the new VM.
 	if int(*kcp.Spec.Replicas) > usedHostsByPG.Len() {
-		ctx.Logger.V(1).Info("KCP is in rolling update, the placement group is full and capacity is less than replicas of kcp, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "usedHostsByPG", usedHostsByPG.String())
+		ctx.Logger.V(1).Info("KCP is in rolling update, the placement group is full and no available host for placing more KCP VM, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "usedHostsByPG", usedHostsByPG.String(), "usedHostsCount", usedHostsByPG.Len(), "kcpReplicas", *kcp.Spec.Replicas)
 
 		return nil, nil
 	}
@@ -429,9 +430,10 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			// In this case the machine created by KCP rolling update can be powered on without being added to the placement group,
 			// so return true and nil to let reconcileVMStatus() power it on.
 			if kcputil.IsKCPInRollingUpdate(kcp) && *vm.Status == models.VMStatusSTOPPED {
-				// Replicas of kcp is greater than the capacity of the placement group do not allow rolling update.
+				// If KCP.Spec.Replicas is greater than the host count,
+				// do not allow creating more KCP VM because there is no more host to place the new VM.
 				if int(*kcp.Spec.Replicas) > usedHostsByPG.Len() {
-					ctx.Logger.V(1).Info("KCP is in rolling update, the placement group is full and capacity is less than replicas of kcp, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "usedHostsByPG", usedHostsByPG.String())
+					ctx.Logger.V(1).Info("KCP is in rolling update, the placement group is full and no available host for placing more KCP VM, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "usedHostsByPG", usedHostsByPG.String(), "usedHostsCount", usedHostsByPG.Len(), "kcpReplicas", *kcp.Spec.Replicas)
 
 					return false, nil
 				}

@@ -1056,7 +1056,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ok, err = reconciler.joinPlacementGroup(machineContext, vm)
 				Expect(ok).To(BeFalse())
 				Expect(err).To(BeZero())
-				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and capacity is less than replicas of kcp, so wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and no available host for placing more KCP VM, so wait for enough available hosts"))
 			})
 
 			It("should add VM to placement group when VM is not in placement group and the host where VM in is not in placement group", func() {
@@ -1418,7 +1418,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				host, err = reconciler.preCheckPlacementGroup(machineContext)
 				Expect(err).To(BeZero())
 				Expect(host).To(BeNil())
-				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and capacity is less than replicas of kcp, so wait for enough available hosts"))
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and no available host for placing more KCP VM, so wait for enough available hosts"))
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
