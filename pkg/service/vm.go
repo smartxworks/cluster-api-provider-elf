@@ -439,7 +439,6 @@ func (svr *TowerVMService) FindVMsByName(name string) ([]*models.VM, error) {
 	getVmsParams.RequestBody = &models.GetVmsRequestBody{
 		Where: &models.VMWhereInput{
 			NameStartsWith: TowerString(name),
-			Description:    TowerString(VMPlacementGroupDescription),
 		},
 	}
 

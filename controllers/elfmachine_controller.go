@@ -1176,7 +1176,8 @@ func (r *ElfMachineReconciler) getK8sNodeIP(ctx *context.MachineContext, nodeNam
 const (
 	// The time duration for check duplicate VM,
 	// starting from when the virtual machine was created.
-	checkDuplicateVMDuration = 30 * time.Minute
+	// Tower syncs virtual machines from ELF every 30 minutes.
+	checkDuplicateVMDuration = 1 * time.Hour
 )
 
 // deleteDuplicateVMs deletes the duplicate virtual machines.
@@ -1208,6 +1209,7 @@ func (r *ElfMachineReconciler) deleteDuplicateVMs(ctx *context.MachineContext) (
 	}
 
 	for i := 0; i < len(vms); i++ {
+		// Do not delete already running virtual machines to avoid deleting already used virtual machines.
 		if *vms[i].ID == ctx.ElfMachine.Status.VMRef ||
 			*vms[i].LocalID == ctx.ElfMachine.Status.VMRef ||
 			*vms[i].Status != models.VMStatusSTOPPED {
@@ -1234,7 +1236,9 @@ func (r *ElfMachineReconciler) deleteVM(ctx *context.MachineContext, vm *models.
 		return nil
 	}
 
-	// Delete the VM
+	// Delete the VM.
+	// Delete duplicate virtual machines asynchronously,
+	// because synchronous deletion will affect the performance of reconcile.
 	task, err := ctx.VMService.Delete(*vm.ID)
 	if err != nil {
 		return err
