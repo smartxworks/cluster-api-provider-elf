@@ -430,14 +430,6 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 			// In this case the machine created by KCP rolling update can be powered on without being added to the placement group,
 			// so return true and nil to let reconcileVMStatus() power it on.
 			if kcputil.IsKCPInRollingUpdate(kcp) && *vm.Status == models.VMStatusSTOPPED {
-				// If KCP.Spec.Replicas is greater than the host count,
-				// do not allow creating more KCP VM because there is no more host to place the new VM.
-				if int(*kcp.Spec.Replicas) > usedHostsByPG.Len() {
-					ctx.Logger.V(1).Info("KCP is in rolling update, the placement group is full and no more host for placing more KCP VM, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "usedHostsByPG", usedHostsByPG.String(), "usedHostsCount", usedHostsByPG.Len(), "kcpReplicas", *kcp.Spec.Replicas)
-
-					return false, nil
-				}
-
 				unusablehosts := usedHostsByPG.FilterUnavailableHostsOrWithoutEnoughMemory(*service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
 				if unusablehosts.IsEmpty() {
 					ctx.Logger.Info("KCP is in rolling update, the placement group is full and has no unusable hosts, so skip adding VM to the placement group and power it on", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", ctx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
