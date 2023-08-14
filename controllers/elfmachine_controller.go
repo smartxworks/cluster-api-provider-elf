@@ -480,18 +480,17 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 			return nil, false, errors.New("bootstrapData is empty")
 		}
 
-		placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
-		if err != nil {
+		if ok, message, err := isELFScheduleVMErrorRecorded(ctx); err != nil {
 			return nil, false, err
-		}
-
-		if ok, message := isElfClusterMemoryInsufficientOrPlacementGroupNotMatchPolicy(ctx.ElfCluster.Spec.Cluster, placementGroupName); ok {
-			if canRetry := canRetryVMOperation(ctx.ElfCluster.Spec.Cluster, placementGroupName); !canRetry {
+		} else if ok {
+			if canRetry, err := canRetryVMOperation(ctx); err != nil {
+				return nil, false, err
+			} else if !canRetry {
 				ctx.Logger.V(1).Info(fmt.Sprintf("%s, skip creating VM", message))
 				return nil, false, nil
 			}
 
-			ctx.Logger.V(1).Info(fmt.Sprintf("%s, try to create VM", message))
+			ctx.Logger.V(1).Info(fmt.Sprintf("%s was detected previously, try to create VM", message))
 		}
 
 		// Only limit the virtual machines of the worker nodes
@@ -742,19 +741,18 @@ func (r *ElfMachineReconciler) powerOffVM(ctx *context.MachineContext) error {
 }
 
 func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext) error {
-	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
-	if err != nil {
+	if ok, message, err := isELFScheduleVMErrorRecorded(ctx); err != nil {
 		return err
-	}
-
-	if ok, message := isElfClusterMemoryInsufficientOrPlacementGroupNotMatchPolicy(ctx.ElfCluster.Spec.Cluster, placementGroupName); ok {
-		if canRetry := canRetryVMOperation(ctx.ElfCluster.Spec.Cluster, placementGroupName); !canRetry {
+	} else if ok {
+		if canRetry, err := canRetryVMOperation(ctx); err != nil {
+			return err
+		} else if !canRetry {
 			ctx.Logger.V(1).Info(fmt.Sprintf("%s, skip powering on VM %s", message, ctx.ElfMachine.Status.VMRef))
 
 			return nil
 		}
 
-		ctx.Logger.V(1).Info(fmt.Sprintf("%s was detected previously, try to power on VM %s to check if the ELF cluster has sufficient memory or match policy for the placement group now", message, ctx.ElfMachine.Status.VMRef))
+		ctx.Logger.V(1).Info(fmt.Sprintf("%s was detected previously, try to power on VM %s to check if the ELF cluster has sufficient memory or satisfy policy for the placement group now", message, ctx.ElfMachine.Status.VMRef))
 	}
 
 	if ok := acquireTicketForUpdatingVM(ctx.ElfMachine.Name); !ok {
@@ -853,19 +851,16 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		case service.IsCloneVMTask(task):
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
 		case service.IsMemoryInsufficientError(errorMessage):
-			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, true)
+			recordElfClusterMemoryInsufficient(ctx, true)
 			message := fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
 			ctx.Logger.Info(message)
 
 			return true, errors.New(message)
 		case service.IsPlacementGroupError(errorMessage):
-			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
-			if err != nil {
-				return false, err
+			if err := recordPlacementGroupPolicyNotSatisfied(ctx, true); err != nil {
+				return true, err
 			}
-
-			setPlacementGroupNotMatchPolicy(placementGroupName, true)
-			message := fmt.Sprintf("Not match policy for the placement group %s", placementGroupName)
+			message := "Not satisfy policy for the placement group"
 			ctx.Logger.Info(message)
 
 			return true, errors.New(message)
@@ -874,14 +869,11 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		ctx.Logger.Info("VM task succeeded", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", service.GetTowerString(task.Description))
 
 		if service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) {
-			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, false)
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
-
-			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
-			if err != nil {
-				return false, err
+			recordElfClusterMemoryInsufficient(ctx, false)
+			if err := recordPlacementGroupPolicyNotSatisfied(ctx, false); err != nil {
+				return true, err
 			}
-			setPlacementGroupNotMatchPolicy(placementGroupName, false)
 		}
 	default:
 		ctx.Logger.Info("Waiting for VM task done", "vmRef", vmRef, "taskRef", taskRef, "taskStatus", service.GetTowerTaskStatus(task.Status), "taskDescription", service.GetTowerString(task.Description))

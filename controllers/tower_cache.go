@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 )
 
 const (
@@ -31,7 +34,7 @@ var lock sync.RWMutex
 
 type clusterResource struct {
 	// IsUnmet indicates whether the resource does not meet the requirement.
-	// For example, true can indicate insufficient memory and not match placement group policy.
+	// For example, true can indicate insufficient memory and not satisfy placement group policy.
 	IsUnmet bool
 	// LastDetected records the last resource detection time
 	LastDetected time.Time
@@ -39,37 +42,52 @@ type clusterResource struct {
 	LastRetried time.Time
 }
 
-// isElfClusterMemoryInsufficientOrPlacementGroupNotMatchPolicy returns whether the ELF cluster has insufficient memory
-// or the placement group not match policy.
-func isElfClusterMemoryInsufficientOrPlacementGroupNotMatchPolicy(clusterID string, placementGroupName string) (bool, string) {
+// isELFScheduleVMErrorRecorded returns whether the ELF cluster has failed scheduling virtual machine errors.
+//
+// Includes these scenarios:
+// 1. ELF cluster has insufficient memory.
+// 2. Placement group not satisfy policy.
+func isELFScheduleVMErrorRecorded(ctx *context.MachineContext) (bool, string, error) {
 	lock.RLock()
 	defer lock.RUnlock()
 
-	if resource, ok := clusterResourceMap[getMemoryKey(clusterID)]; ok && resource.IsUnmet {
-		return true, fmt.Sprintf("Insufficient memory for the ELF cluster %s", clusterID)
+	if resource, ok := clusterResourceMap[getMemoryKey(ctx.ElfCluster.Spec.Cluster)]; ok && resource.IsUnmet {
+		return true, fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", ctx.ElfCluster.Spec.Cluster), nil
+	}
+
+	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
+	if err != nil {
+		return false, "", err
 	}
 
 	if resource, ok := clusterResourceMap[getPlacementGroupKey(placementGroupName)]; ok && resource.IsUnmet {
-		return true, fmt.Sprintf("Not match policy for the placement group %s", placementGroupName)
+		return true, fmt.Sprintf("Not satisfy policy detected for the placement group %s", placementGroupName), nil
 	}
 
-	return false, ""
+	return false, "", nil
 }
 
-// setElfClusterMemoryInsufficient sets whether the memory is insufficient.
-func setElfClusterMemoryInsufficient(clusterID string, isInsufficient bool) {
+// recordElfClusterMemoryInsufficient records whether the memory is insufficient.
+func recordElfClusterMemoryInsufficient(ctx *context.MachineContext, isInsufficient bool) {
 	lock.Lock()
 	defer lock.Unlock()
 
-	clusterResourceMap[getMemoryKey(clusterID)] = newClusterResource(isInsufficient)
+	clusterResourceMap[getMemoryKey(ctx.ElfCluster.Spec.Cluster)] = newClusterResource(isInsufficient)
 }
 
-// setPlacementGroupNotMatchPolicy sets whether the placement group not match policy.
-func setPlacementGroupNotMatchPolicy(placementGroupName string, notMatchPolicy bool) {
+// recordPlacementGroupPolicyNotSatisfied records whether the placement group not satisfy policy.
+func recordPlacementGroupPolicyNotSatisfied(ctx *context.MachineContext, isNotSatisfiedPolicy bool) error {
 	lock.Lock()
 	defer lock.Unlock()
 
-	clusterResourceMap[getPlacementGroupKey(placementGroupName)] = newClusterResource(notMatchPolicy)
+	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
+	if err != nil {
+		return err
+	}
+
+	clusterResourceMap[getPlacementGroupKey(placementGroupName)] = newClusterResource(isNotSatisfiedPolicy)
+
+	return nil
 }
 
 func newClusterResource(isUnmet bool) *clusterResource {
@@ -83,11 +101,20 @@ func newClusterResource(isUnmet bool) *clusterResource {
 
 // canRetryVMOperation returns whether virtual machine operations(Create/PowerOn)
 // can be performed.
-func canRetryVMOperation(clusterID string, placementGroupName string) bool {
+func canRetryVMOperation(ctx *context.MachineContext) (bool, error) {
 	lock.Lock()
 	defer lock.Unlock()
 
-	return canRetry(getMemoryKey(clusterID)) || canRetry(getPlacementGroupKey(placementGroupName))
+	if ok := canRetry(getMemoryKey(ctx.ElfCluster.Spec.Cluster)); ok {
+		return true, nil
+	}
+
+	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
+	if err != nil {
+		return false, err
+	}
+
+	return canRetry(getPlacementGroupKey(placementGroupName)), nil
 }
 
 func canRetry(key string) bool {

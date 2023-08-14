@@ -267,27 +267,44 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should create a new VM if none exists", func() {
+			resetClusterResourceMap()
 			vm := fake.NewTowerVM()
 			vm.Name = &elfMachine.Name
+			elfCluster.Spec.Cluster = clusterKey
 			task := fake.NewTowerTask()
 			withTaskVM := fake.NewWithTaskVM(vm, task)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
-			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(withTaskVM, nil)
-			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
-			mockVMService.EXPECT().GetTask(*task.ID).Return(task, nil)
-
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.VMService = mockVMService
+			recordIsUnmet(machineContext, clusterKey, true)
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
+
+			logBuffer = new(bytes.Buffer)
+			klog.SetOutput(logBuffer)
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(withTaskVM, nil)
+			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
+			mockVMService.EXPECT().GetTask(*task.ID).Return(task, nil)
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+			expireELFScheduleVMError(machineContext, clusterKey)
+
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ShouldNot(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("was detected previously, try to create VM"))
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM task done"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.ID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+			resetClusterResourceMap()
 		})
 
 		It("should recover from lost task", func() {
@@ -788,6 +805,33 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PowerOffReason}})
+		})
+
+		Context("powerOnVM", func() {
+			It("should", func() {
+				resetClusterResourceMap()
+				vm := fake.NewTowerVM()
+				elfMachine.Status.VMRef = *vm.LocalID
+				elfCluster.Spec.Cluster = clusterKey
+				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+				machineContext.VMService = mockVMService
+				recordIsUnmet(machineContext, clusterKey, true)
+				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				err := reconciler.powerOnVM(machineContext)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(logBuffer.String()).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
+
+				task := fake.NewTowerTask()
+				mockVMService.EXPECT().PowerOn(elfMachine.Status.VMRef).Return(task, nil)
+				expireELFScheduleVMError(machineContext, clusterKey)
+				err = reconciler.powerOnVM(machineContext)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(logBuffer.String()).To(ContainSubstring("was detected previously, try to power on VM"))
+				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PoweringOnReason}})
+				resetClusterResourceMap()
+			})
 		})
 	})
 
@@ -2628,6 +2672,53 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).Should(BeFalse())
 			Expect(strings.Contains(err.Error(), "failed to get task")).To(BeTrue())
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+		})
+
+		It("should handle failed/succeeded task", func() {
+			resetClusterResourceMap()
+			task := fake.NewTowerTask()
+			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
+			task.ErrorMessage = service.TowerString(service.MemoryInsufficientError)
+			elfMachine.Status.TaskRef = *task.ID
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.VMService = mockVMService
+			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).AnyTimes().Return(task, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileVMTask(machineContext, nil)
+			Expect(ok).Should(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
+			Expect(elfMachine.Status.TaskRef).To(Equal(""))
+			Expect(logBuffer.String()).To(ContainSubstring("VM task failed"))
+
+			logBuffer = new(bytes.Buffer)
+			klog.SetOutput(logBuffer)
+			task.ErrorMessage = service.TowerString(service.PlacementGroupMustError)
+			elfMachine.Status.TaskRef = *task.ID
+			ok, err = reconciler.reconcileVMTask(machineContext, nil)
+			Expect(ok).Should(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("Not satisfy policy for the placement group"))
+			Expect(logBuffer.String()).To(ContainSubstring("VM task failed"))
+
+			ok, msg, err := isELFScheduleVMErrorRecorded(machineContext)
+			Expect(ok).To(BeTrue())
+			Expect(msg).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
+			Expect(err).ShouldNot(HaveOccurred())
+
+			task.Status = models.NewTaskStatus(models.TaskStatusSUCCESSED)
+			task.Description = service.TowerString("Start VM")
+			elfMachine.Status.TaskRef = *task.ID
+			ok, err = reconciler.reconcileVMTask(machineContext, nil)
+			Expect(ok).Should(BeTrue())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("VM task succeeded"))
+
+			ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(msg).To(Equal(""))
+			Expect(err).ShouldNot(HaveOccurred())
 		})
 	})
 

@@ -17,72 +17,168 @@ limitations under the License.
 package controllers
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
 
-var _ = Describe("TowerCache", func() {
-	var clusterID string
+const (
+	clusterKey        = "clusterID"
+	placementGroupKey = "getPlacementGroupName"
+)
 
+var _ = Describe("TowerCache", func() {
 	BeforeEach(func() {
-		clusterID = fake.UUID()
 		resetClusterResourceMap()
 	})
 
-	It("should set memoryInsufficient", func() {
-		Expect(clusterResourceMap).NotTo(HaveKey(clusterID))
-		Expect(clusterResourceMap[getMemoryKey(clusterID)]).To(BeNil())
+	It("should set memoryInsufficient/policyNotSatisfied", func() {
+		for _, name := range []string{clusterKey, placementGroupKey} {
+			resetClusterResourceMap()
+			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
+			elfCluster.Spec.Cluster = name
+			md := fake.NewMD()
+			md.Name = name
+			fake.ToWorkerMachine(machine, md)
+			fake.ToWorkerMachine(elfMachine, md)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
+			key := getKey(machineContext, name)
 
-		setElfClusterMemoryInsufficient(clusterID, true)
-		Expect(clusterResourceMap[getMemoryKey(clusterID)].IsUnmet).To(BeTrue())
-		Expect(clusterResourceMap[getMemoryKey(clusterID)].LastDetected).To(Equal(clusterResourceMap[getMemoryKey(clusterID)].LastRetried))
+			Expect(clusterResourceMap).NotTo(HaveKey(key))
+			Expect(clusterResourceMap[key]).To(BeNil())
 
-		setElfClusterMemoryInsufficient(clusterID, true)
-		Expect(clusterResourceMap[getMemoryKey(clusterID)].IsUnmet).To(BeTrue())
-		Expect(clusterResourceMap[getMemoryKey(clusterID)].LastDetected).To(Equal(clusterResourceMap[getMemoryKey(clusterID)].LastRetried))
+			recordIsUnmet(machineContext, name, true)
+			Expect(clusterResourceMap[key].IsUnmet).To(BeTrue())
+			Expect(clusterResourceMap[key].LastDetected).To(Equal(clusterResourceMap[key].LastRetried))
 
-		setElfClusterMemoryInsufficient(clusterID, false)
-		Expect(clusterResourceMap[getMemoryKey(clusterID)].IsUnmet).To(BeFalse())
-		Expect(clusterResourceMap[getMemoryKey(clusterID)].LastDetected).To(Equal(clusterResourceMap[getMemoryKey(clusterID)].LastRetried))
+			recordIsUnmet(machineContext, name, true)
+			Expect(clusterResourceMap[key].IsUnmet).To(BeTrue())
+			Expect(clusterResourceMap[key].LastDetected).To(Equal(clusterResourceMap[key].LastRetried))
 
-		resetClusterResourceMap()
-		Expect(clusterResourceMap).NotTo(HaveKey(clusterID))
-		Expect(clusterResourceMap[getMemoryKey(clusterID)]).To(BeNil())
+			recordIsUnmet(machineContext, name, false)
+			Expect(clusterResourceMap[key].IsUnmet).To(BeFalse())
+			Expect(clusterResourceMap[key].LastDetected).To(Equal(clusterResourceMap[key].LastRetried))
 
-		setElfClusterMemoryInsufficient(clusterID, false)
-		Expect(clusterResourceMap[getMemoryKey(clusterID)].IsUnmet).To(BeFalse())
-		Expect(clusterResourceMap[getMemoryKey(clusterID)].LastDetected).To(Equal(clusterResourceMap[getMemoryKey(clusterID)].LastRetried))
+			resetClusterResourceMap()
+			Expect(clusterResourceMap).NotTo(HaveKey(name))
+			Expect(clusterResourceMap[key]).To(BeNil())
 
-		setElfClusterMemoryInsufficient(clusterID, false)
-		Expect(clusterResourceMap[getMemoryKey(clusterID)].IsUnmet).To(BeFalse())
-		Expect(clusterResourceMap[getMemoryKey(clusterID)].LastDetected).To(Equal(clusterResourceMap[getMemoryKey(clusterID)].LastRetried))
+			recordIsUnmet(machineContext, name, false)
+			Expect(clusterResourceMap[key].IsUnmet).To(BeFalse())
+			Expect(clusterResourceMap[key].LastDetected).To(Equal(clusterResourceMap[key].LastRetried))
 
-		setElfClusterMemoryInsufficient(clusterID, true)
-		Expect(clusterResourceMap[getMemoryKey(clusterID)].IsUnmet).To(BeTrue())
-		Expect(clusterResourceMap[getMemoryKey(clusterID)].LastDetected).To(Equal(clusterResourceMap[getMemoryKey(clusterID)].LastRetried))
+			recordIsUnmet(machineContext, name, false)
+			Expect(clusterResourceMap[key].IsUnmet).To(BeFalse())
+			Expect(clusterResourceMap[key].LastDetected).To(Equal(clusterResourceMap[key].LastRetried))
+
+			recordIsUnmet(machineContext, name, true)
+			Expect(clusterResourceMap[key].IsUnmet).To(BeTrue())
+			Expect(clusterResourceMap[key].LastDetected).To(Equal(clusterResourceMap[key].LastRetried))
+		}
 	})
 
 	It("should return whether need to detect", func() {
-		Expect(clusterResourceMap).NotTo(HaveKey(clusterID))
-		Expect(clusterResourceMap[getMemoryKey(clusterID)]).To(BeNil())
+		for _, name := range []string{clusterKey, placementGroupKey} {
+			resetClusterResourceMap()
+			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
+			elfCluster.Spec.Cluster = name
+			md := fake.NewMD()
+			md.Name = name
+			fake.ToWorkerMachine(machine, md)
+			fake.ToWorkerMachine(elfMachine, md)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
+			key := getKey(machineContext, name)
 
-		Expect(canRetryVMOperation(clusterID, "")).To(BeFalse())
+			Expect(clusterResourceMap).NotTo(HaveKey(key))
+			Expect(clusterResourceMap[key]).To(BeNil())
+			ok, err := canRetryVMOperation(machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(err).ShouldNot(HaveOccurred())
 
-		setElfClusterMemoryInsufficient(clusterID, false)
-		Expect(canRetryVMOperation(clusterID, "")).To(BeFalse())
+			recordIsUnmet(machineContext, name, false)
+			ok, err = canRetryVMOperation(machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(err).ShouldNot(HaveOccurred())
 
-		setElfClusterMemoryInsufficient(clusterID, true)
-		Expect(canRetryVMOperation(clusterID, "")).To(BeFalse())
+			recordIsUnmet(machineContext, name, true)
+			ok, err = canRetryVMOperation(machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(err).ShouldNot(HaveOccurred())
 
-		clusterResourceMap[getMemoryKey(clusterID)].LastDetected = clusterResourceMap[getMemoryKey(clusterID)].LastDetected.Add(-silenceTime)
-		clusterResourceMap[getMemoryKey(clusterID)].LastRetried = clusterResourceMap[getMemoryKey(clusterID)].LastRetried.Add(-silenceTime)
-		Expect(canRetryVMOperation(clusterID, "")).To(BeTrue())
+			expireELFScheduleVMError(machineContext, name)
+			ok, err = canRetryVMOperation(machineContext)
+			Expect(ok).To(BeTrue())
+			Expect(err).ShouldNot(HaveOccurred())
 
-		Expect(canRetryVMOperation(clusterID, "")).To(BeFalse())
+			ok, err = canRetryVMOperation(machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(err).ShouldNot(HaveOccurred())
+		}
+	})
+
+	It("isELFScheduleVMErrorRecorded", func() {
+		resetClusterResourceMap()
+		elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
+		elfCluster.Spec.Cluster = clusterKey
+		md := fake.NewMD()
+		md.Name = placementGroupKey
+		fake.ToWorkerMachine(machine, md)
+		fake.ToWorkerMachine(elfMachine, md)
+		ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+		machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
+
+		ok, msg, err := isELFScheduleVMErrorRecorded(machineContext)
+		Expect(ok).To(BeFalse())
+		Expect(msg).To(Equal(""))
+		Expect(err).ShouldNot(HaveOccurred())
+
+		recordIsUnmet(machineContext, clusterKey, true)
+		ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
+		Expect(ok).To(BeTrue())
+		Expect(msg).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
+		Expect(err).ShouldNot(HaveOccurred())
+
+		resetClusterResourceMap()
+		recordIsUnmet(machineContext, placementGroupKey, true)
+		ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
+		Expect(ok).To(BeTrue())
+		Expect(msg).To(ContainSubstring("Not satisfy policy detected for the placement group"))
+		Expect(err).ShouldNot(HaveOccurred())
 	})
 })
+
+func getKey(ctx *context.MachineContext, name string) string {
+	if name == clusterKey {
+		return getMemoryKey(name)
+	}
+
+	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	return getPlacementGroupKey(placementGroupName)
+}
+
+func recordIsUnmet(ctx *context.MachineContext, key string, isUnmet bool) {
+	if strings.Contains(key, clusterKey) {
+		recordElfClusterMemoryInsufficient(ctx, isUnmet)
+		return
+	}
+
+	Expect(recordPlacementGroupPolicyNotSatisfied(ctx, isUnmet)).ShouldNot(HaveOccurred())
+}
+
+func expireELFScheduleVMError(ctx *context.MachineContext, name string) {
+	key := getKey(ctx, name)
+	clusterResourceMap[key].LastDetected = clusterResourceMap[key].LastDetected.Add(-silenceTime)
+	clusterResourceMap[key].LastRetried = clusterResourceMap[key].LastRetried.Add(-silenceTime)
+}
 
 func resetClusterResourceMap() {
 	clusterResourceMap = make(map[string]*clusterResource)
