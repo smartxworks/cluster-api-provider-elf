@@ -27,9 +27,9 @@ import (
 const (
 	creationTimeout      = time.Minute * 6
 	vmOperationRateLimit = time.Second * 6
-	// Normally, Tower syncs placement groups from the ELF cluster within a minute.
-	// When a placement group with the same name appears, the ELF service is unstable,
-	// so the retry time is set to 5 minutes.
+	// When Tower gets a placement group name duplicate error, it means the ELF API is responding slow.
+	// Tower will sync this placement group from ELF cluster immediately and the sync usually can complete within 1~2 minute.
+	// So set the placement group creation retry interval to 5 minutes.
 	placementGroupSilenceTime     = time.Minute * 5
 	placementGroupCreationLockKey = "%s:creation"
 )
