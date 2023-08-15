@@ -425,8 +425,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, v
 				return false, err
 			}
 
-			// Only when the KCP is in rolling update, the VM is stopped, and all the hosts used by the placement group are available,
-			// will the upgrade be allowed.
+			// Proceed only when the KCP is in rolling update, the VM is stopped, and all the hosts used by the placement group are available.
 			// In this case the machine created by KCP rolling update can be powered on without being added to the placement group,
 			// so return true and nil to let reconcileVMStatus() power it on.
 			if kcputil.IsKCPInRollingUpdate(kcp) && *vm.Status == models.VMStatusSTOPPED {
