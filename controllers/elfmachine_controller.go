@@ -490,7 +490,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 				return nil, false, nil
 			}
 
-			ctx.Logger.V(1).Info(fmt.Sprintf("%s was detected previously, try to create VM", message))
+			ctx.Logger.V(1).Info(fmt.Sprintf("%s and the retry silence period passes, will try to create the VM again", message))
 		}
 
 		// Only limit the virtual machines of the worker nodes
@@ -752,7 +752,7 @@ func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext) error {
 			return nil
 		}
 
-		ctx.Logger.V(1).Info(fmt.Sprintf("%s was detected previously, try to power on VM %s to check if the ELF cluster has sufficient memory or satisfy policy for the placement group now", message, ctx.ElfMachine.Status.VMRef))
+		ctx.Logger.V(1).Info(fmt.Sprintf("%s and the retry silence period passes, will try to power on the VM again", message))
 	}
 
 	if ok := acquireTicketForUpdatingVM(ctx.ElfMachine.Name); !ok {
@@ -860,7 +860,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 			if err := recordPlacementGroupPolicyNotSatisfied(ctx, true); err != nil {
 				return true, err
 			}
-			message := "Not satisfy policy for the placement group"
+			message := "The placement group policy can not be satisfied"
 			ctx.Logger.Info(message)
 
 			return true, errors.New(message)

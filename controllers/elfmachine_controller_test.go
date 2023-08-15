@@ -298,7 +298,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ShouldNot(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("was detected previously, try to create VM"))
+			Expect(logBuffer.String()).To(ContainSubstring("and the retry silence period passes, will try to create the VM again"))
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM task done"))
 			elfMachine = &infrav1.ElfMachine{}
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
@@ -828,7 +828,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				expireELFScheduleVMError(machineContext, clusterKey)
 				err = reconciler.powerOnVM(machineContext)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(logBuffer.String()).To(ContainSubstring("was detected previously, try to power on VM"))
+				Expect(logBuffer.String()).To(ContainSubstring("and the retry silence period passes, will try to power on the VM again"))
 				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PoweringOnReason}})
 				resetClusterResourceMap()
 			})
@@ -2699,7 +2699,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.TaskRef = *task.ID
 			ok, err = reconciler.reconcileVMTask(machineContext, nil)
 			Expect(ok).Should(BeTrue())
-			Expect(err.Error()).To(ContainSubstring("Not satisfy policy for the placement group"))
+			Expect(err.Error()).To(ContainSubstring("The placement group policy can not be satisfied"))
 			Expect(logBuffer.String()).To(ContainSubstring("VM task failed"))
 
 			ok, msg, err := isELFScheduleVMErrorRecorded(machineContext)
