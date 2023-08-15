@@ -480,13 +480,17 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 			return nil, false, errors.New("bootstrapData is empty")
 		}
 
-		if ok := isElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster); ok {
-			if canRetry := canRetryVMOperation(ctx.ElfCluster.Spec.Cluster); !canRetry {
-				ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, skip creating VM", ctx.ElfCluster.Spec.Cluster))
+		if ok, message, err := isELFScheduleVMErrorRecorded(ctx); err != nil {
+			return nil, false, err
+		} else if ok {
+			if canRetry, err := canRetryVMOperation(ctx); err != nil {
+				return nil, false, err
+			} else if !canRetry {
+				ctx.Logger.V(1).Info(fmt.Sprintf("%s, skip creating VM", message))
 				return nil, false, nil
 			}
 
-			ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, try to create VM", ctx.ElfCluster.Spec.Cluster))
+			ctx.Logger.V(1).Info(fmt.Sprintf("%s and the retry silence period passes, will try to create the VM again", message))
 		}
 
 		// Only limit the virtual machines of the worker nodes
@@ -737,14 +741,18 @@ func (r *ElfMachineReconciler) powerOffVM(ctx *context.MachineContext) error {
 }
 
 func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext) error {
-	if ok := isElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster); ok {
-		if canRetry := canRetryVMOperation(ctx.ElfCluster.Spec.Cluster); !canRetry {
-			ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for ELF cluster %s, skip powering on VM %s", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
+	if ok, message, err := isELFScheduleVMErrorRecorded(ctx); err != nil {
+		return err
+	} else if ok {
+		if canRetry, err := canRetryVMOperation(ctx); err != nil {
+			return err
+		} else if !canRetry {
+			ctx.Logger.V(1).Info(fmt.Sprintf("%s, skip powering on VM %s", message, ctx.ElfMachine.Status.VMRef))
 
 			return nil
 		}
 
-		ctx.Logger.V(1).Info(fmt.Sprintf("Insufficient memory for the ELF cluster %s was detected previously, try to power on VM %s to check if the ELF cluster has sufficient memory now", ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Status.VMRef))
+		ctx.Logger.V(1).Info(fmt.Sprintf("%s and the retry silence period passes, will try to power on the VM again", message))
 	}
 
 	if ok := acquireTicketForUpdatingVM(ctx.ElfMachine.Name); !ok {
@@ -843,8 +851,16 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		case service.IsCloneVMTask(task):
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
 		case service.IsMemoryInsufficientError(errorMessage):
-			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, true)
-			message := fmt.Sprintf("Insufficient memory detected for ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
+			recordElfClusterMemoryInsufficient(ctx, true)
+			message := fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
+			ctx.Logger.Info(message)
+
+			return true, errors.New(message)
+		case service.IsPlacementGroupError(errorMessage):
+			if err := recordPlacementGroupPolicyNotSatisfied(ctx, true); err != nil {
+				return true, err
+			}
+			message := "The placement group policy can not be satisfied"
 			ctx.Logger.Info(message)
 
 			return true, errors.New(message)
@@ -853,8 +869,11 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		ctx.Logger.Info("VM task succeeded", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", service.GetTowerString(task.Description))
 
 		if service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) {
-			setElfClusterMemoryInsufficient(ctx.ElfCluster.Spec.Cluster, false)
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
+			recordElfClusterMemoryInsufficient(ctx, false)
+			if err := recordPlacementGroupPolicyNotSatisfied(ctx, false); err != nil {
+				return true, err
+			}
 		}
 	default:
 		ctx.Logger.Info("Waiting for VM task done", "vmRef", vmRef, "taskRef", taskRef, "taskStatus", service.GetTowerTaskStatus(task.Status), "taskDescription", service.GetTowerString(task.Description))
