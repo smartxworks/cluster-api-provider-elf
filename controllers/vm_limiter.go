@@ -25,9 +25,12 @@ import (
 )
 
 const (
-	creationTimeout               = time.Minute * 6
-	vmOperationRateLimit          = time.Second * 6
-	placementGroupSilenceTime     = time.Minute * 30
+	creationTimeout      = time.Minute * 6
+	vmOperationRateLimit = time.Second * 6
+	// Normally, Tower syncs placement groups from the ELF cluster within a minute.
+	// When a placement group with the same name appears, the ELF service is unstable,
+	// so the retry time is set to 5 minutes.
+	placementGroupSilenceTime     = time.Minute * 5
 	placementGroupCreationLockKey = "%s:creation"
 )
 
