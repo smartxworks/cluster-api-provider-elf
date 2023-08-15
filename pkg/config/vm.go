@@ -31,4 +31,4 @@ const (
 )
 
 // MaxConcurrentVMCreations is the maximum number of concurrent virtual machine creations.
-var MaxConcurrentVMCreations = 50
+var MaxConcurrentVMCreations = 20
