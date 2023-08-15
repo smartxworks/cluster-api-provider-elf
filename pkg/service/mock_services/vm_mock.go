@@ -157,6 +157,21 @@ func (mr *MockVMServiceMockRecorder) FindByIDs(ids interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByIDs", reflect.TypeOf((*MockVMService)(nil).FindByIDs), ids)
 }
 
+// FindVMsByName mocks base method.
+func (m *MockVMService) FindVMsByName(name string) ([]*models.VM, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindVMsByName", name)
+	ret0, _ := ret[0].([]*models.VM)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindVMsByName indicates an expected call of FindVMsByName.
+func (mr *MockVMServiceMockRecorder) FindVMsByName(name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindVMsByName", reflect.TypeOf((*MockVMService)(nil).FindVMsByName), name)
+}
+
 // Get mocks base method.
 func (m *MockVMService) Get(id string) (*models.VM, error) {
 	m.ctrl.T.Helper()

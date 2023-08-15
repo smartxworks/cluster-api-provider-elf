@@ -367,6 +367,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(3).Return(fake.NewTowerLabel(), nil)
 			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(1)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -1691,6 +1692,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Times(2).Return(placementGroup, nil)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -1721,6 +1723,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Times(22).Return(placementGroup, nil)
 			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(33).Return(fake.NewTowerLabel(), nil)
 			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(11)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Times(6).Return(nil, nil)
 
 			// k8s node IP is null, VM has no nic info
 			k8sNode.Status.Addresses = nil
@@ -1889,6 +1892,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Times(2).Return(placementGroup, nil)
 			mockVMService.EXPECT().UpsertLabel(gomock.Any(), gomock.Any()).Times(3).Return(fake.NewTowerLabel(), nil)
 			mockVMService.EXPECT().AddLabelsToVM(gomock.Any(), gomock.Any()).Times(1)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -1973,6 +1977,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
 			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -1998,6 +2003,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
 			mockVMService.EXPECT().Get(*vm.LocalID).Return(vm, nil)
 			mockVMService.EXPECT().ShutDown(*vm.LocalID).Return(task, nil)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -2022,6 +2028,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			vmNotFoundError := errors.New(service.VMNotFound)
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(nil, vmNotFoundError)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -2047,6 +2054,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task, nil)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -2074,6 +2082,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task, nil)
 			mockVMService.EXPECT().ShutDown(elfMachine.Status.VMRef).Return(task, errors.New("some error"))
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 
@@ -2103,6 +2112,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task, nil)
 			mockVMService.EXPECT().PowerOff(elfMachine.Status.VMRef).Return(task, nil)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -2132,6 +2142,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task, nil)
 			mockVMService.EXPECT().ShutDown(elfMachine.Status.VMRef).Return(nil, errors.New("some error"))
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -2154,6 +2165,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().ShutDown(elfMachine.Status.VMRef).Return(task, nil)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -2180,6 +2192,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().Delete(elfMachine.Status.VMRef).Return(nil, errors.New("some error"))
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -2205,6 +2218,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().Delete(elfMachine.Status.VMRef).Return(task, nil)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -2232,6 +2246,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().PowerOff(elfMachine.Status.VMRef).Return(task, nil)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -2337,6 +2352,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ctrlContext.Client = testEnv.Client
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 			machineContext.VMService = mockVMService
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			// before reconcile, create k8s node for VM.
 			node := &corev1.Node{
@@ -2381,6 +2397,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.LocalID
 			cluster.Status.ControlPlaneReady = true
 			cluster.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			ctrlContext.Client = testEnv.Client
@@ -2432,6 +2449,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ctrlContext.Client = testEnv.Client
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 			machineContext.VMService = mockVMService
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			// before reconcile, create k8s node for VM.
 			node := &corev1.Node{
@@ -2477,6 +2495,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ctrlContext.Client = testEnv.Client
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 			machineContext.VMService = mockVMService
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			// before reconcile, create k8s node for VM.
 			node := &corev1.Node{
@@ -2851,6 +2870,92 @@ var _ = Describe("ElfMachineReconciler", func() {
 					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
 					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName
 			}, timeout).Should(BeTrue())
+		})
+	})
+
+	Context("deleteDuplicateVMs", func() {
+		It("should do nothing without duplicate virtual machines", func() {
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			ctrlContext.Client = testEnv.Client
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.VMService = mockVMService
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err := reconciler.deleteDuplicateVMs(machineContext)
+			Expect(result).To(BeZero())
+			Expect(err).ToNot(HaveOccurred())
+
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return([]*models.VM{vm}, nil)
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err = reconciler.deleteDuplicateVMs(machineContext)
+			Expect(result).To(BeZero())
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should not delete the VM that in operation", func() {
+			vm1 := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm1.EntityAsyncStatus = nil
+			elfMachine.Status.VMRef = *vm1.LocalID
+			vm2 := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm2.Status = models.NewVMStatus(models.VMStatusSTOPPED)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return([]*models.VM{vm1, vm2}, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err := reconciler.deleteDuplicateVMs(machineContext)
+			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM task done before deleting the duplicate VM"))
+		})
+
+		It("should wait ElfMachine to select one of the duplicate VMs ", func() {
+			vm1 := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm1.Status = models.NewVMStatus(models.VMStatusSTOPPED)
+			vm1.EntityAsyncStatus = nil
+			vm2 := fake.NewTowerVMFromElfMachine(elfMachine)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return([]*models.VM{vm1, vm2}, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err := reconciler.deleteDuplicateVMs(machineContext)
+			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for ElfMachine to select one of the duplicate VMs before deleting the other"))
+		})
+
+		It("should delete duplicate virtual machines", func() {
+			vm1 := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm1.EntityAsyncStatus = nil
+			elfMachine.Status.VMRef = *vm1.LocalID
+			vm2 := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm2.Status = models.NewVMStatus(models.VMStatusSTOPPED)
+			vm2.EntityAsyncStatus = nil
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			task := fake.NewTowerTask()
+			task.Status = models.NewTaskStatus(models.TaskStatusSUCCESSED)
+			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return([]*models.VM{vm1, vm2}, nil)
+			mockVMService.EXPECT().Delete(*vm2.ID).Return(task, nil)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err := reconciler.deleteDuplicateVMs(machineContext)
+			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Destroying duplicate VM %s in task %s", *vm2.ID, *task.ID)))
+		})
+
+		It("should skip checking duplicate virtual machines after more than half an hour", func() {
+			elfMachine.CreationTimestamp = metav1.NewTime(time.Now().Add(-(1*checkDuplicateVMDuration + 1*time.Second)))
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err := reconciler.deleteDuplicateVMs(machineContext)
+			Expect(result).To(BeZero())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 })
