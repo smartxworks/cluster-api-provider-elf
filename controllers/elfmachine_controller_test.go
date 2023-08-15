@@ -1388,6 +1388,23 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
+				kcp.Spec.Replicas = pointer.Int32(5)
+				kcp.Status.Replicas = 6
+				kcp.Status.UpdatedReplicas = 4
+				ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2, elfMachine3, machine3)
+				machineContext = newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+				mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
+				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host1, host2, host3), nil)
+				mockVMService.EXPECT().FindByIDs(gomock.InAnyOrder([]string{*vm1.ID, *vm2.ID, *vm3.ID})).Return([]*models.VM{vm1, vm2, vm3}, nil)
+
+				reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+				host, err = reconciler.preCheckPlacementGroup(machineContext)
+				Expect(err).To(BeZero())
+				Expect(host).To(BeNil())
+				Expect(logBuffer.String()).To(ContainSubstring("KCP is in rolling update, the placement group is full and no more host for placing more KCP VM, so wait for enough available hosts"))
+
+				logBuffer = new(bytes.Buffer)
+				klog.SetOutput(logBuffer)
 				host3.Status = models.NewHostStatus(models.HostStatusCONNECTEDERROR)
 				hosts := []*models.Host{host1, host2, host3}
 				mockVMService.EXPECT().Get(*vm3.ID).Return(vm3, nil)
