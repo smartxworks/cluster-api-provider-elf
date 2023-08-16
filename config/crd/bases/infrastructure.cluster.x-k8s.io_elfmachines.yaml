@@ -23,7 +23,7 @@ spec:
       jsonPath: .spec.providerID
       name: ProviderID
       type: string
-    - description: IP address of one of the virtual machine's network devices
+    - description: IP addresses of the virtual machine
       jsonPath: .status.addresses[?(@.address!="240.255.0.1")].address
       name: IP
       type: string
