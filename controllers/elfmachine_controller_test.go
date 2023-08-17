@@ -2593,7 +2593,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err = reconciler.reconcilePlacementGroup(machineContext)
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to wait for placement group creation task done timed out in %s: placementName %s, taskID %s", config.PlacementGroupCreationWaitTaskTimeout, placementGroupName, *withTaskVMPlacementGroup.TaskID)))
+			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to wait for placement group creation task done: placementName %s, taskID %s", placementGroupName, *withTaskVMPlacementGroup.TaskID)))
 			Expect(canCreatePlacementGroup(placementGroupName)).To(BeFalse())
 
 			logBuffer = new(bytes.Buffer)

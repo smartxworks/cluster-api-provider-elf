@@ -101,7 +101,7 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 		// For simplicity, both cases are treated as duplicate placement groups.
 		setPlacementGroupDuplicate(placementGroupName)
 
-		return nil, errors.Wrapf(err, "failed to wait for placement group creation task done timed out in %s: placementName %s, taskID %s", config.PlacementGroupCreationWaitTaskTimeout, placementGroupName, *withTaskVMPlacementGroup.TaskID)
+		return nil, errors.Wrapf(err, "failed to wait for placement group creation task done: placementName %s, taskID %s", placementGroupName, *withTaskVMPlacementGroup.TaskID)
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
