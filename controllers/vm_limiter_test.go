@@ -148,3 +148,7 @@ func resetVMStatusMap() {
 func resetVMOperationMap() {
 	vmOperationMap = make(map[string]time.Time)
 }
+
+func resetPlacementGroupOperationMap() {
+	placementGroupOperationMap = make(map[string]time.Time)
+}

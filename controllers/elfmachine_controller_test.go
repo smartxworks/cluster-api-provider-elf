@@ -2560,7 +2560,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
-			mockVMService.EXPECT().WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval).Return(task, nil)
+			mockVMService.EXPECT().WaitTask(*task.ID, config.PlacementGroupCreationWaitTaskTimeout, config.WaitTaskInterval).Return(task, nil)
 
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			result, err = reconciler.reconcilePlacementGroup(machineContext)
@@ -2575,7 +2575,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
-			mockVMService.EXPECT().WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval).Return(task, nil)
+			mockVMService.EXPECT().WaitTask(*task.ID, config.PlacementGroupCreationWaitTaskTimeout, config.WaitTaskInterval).Return(task, nil)
 
 			result, err = reconciler.reconcilePlacementGroup(machineContext)
 			Expect(result).To(BeZero())
@@ -2584,30 +2584,34 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
+			resetPlacementGroupOperationMap()
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
-			mockVMService.EXPECT().WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval).Return(nil, errors.New("xxx"))
+			mockVMService.EXPECT().WaitTask(*task.ID, config.PlacementGroupCreationWaitTaskTimeout, config.WaitTaskInterval).Return(nil, errors.New("xxx"))
 
 			result, err = reconciler.reconcilePlacementGroup(machineContext)
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to wait for placement group creation task done timed out in %s: placementName %s, taskID %s", config.WaitTaskTimeout, placementGroupName, *withTaskVMPlacementGroup.TaskID)))
+			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to wait for placement group creation task done timed out in %s: placementName %s, taskID %s", config.PlacementGroupCreationWaitTaskTimeout, placementGroupName, *withTaskVMPlacementGroup.TaskID)))
+			Expect(canCreatePlacementGroup(placementGroupName)).To(BeFalse())
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
+			resetPlacementGroupOperationMap()
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
 			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
 			task.ErrorMessage = pointer.String(service.VMPlacementGroupDuplicate)
-			mockVMService.EXPECT().WaitTask(*task.ID, config.WaitTaskTimeout, config.WaitTaskInterval).Return(task, nil)
+			mockVMService.EXPECT().WaitTask(*task.ID, config.PlacementGroupCreationWaitTaskTimeout, config.WaitTaskInterval).Return(task, nil)
 
 			result, err = reconciler.reconcilePlacementGroup(machineContext)
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to create placement group"))
 			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Duplicate placement group detected, will try again in %s", placementGroupSilenceTime)))
+			Expect(canCreatePlacementGroup(placementGroupName)).To(BeFalse())
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
