@@ -233,7 +233,6 @@ func (svr *TowerVMService) Clone(
 		CPUCores:    cpuCores,
 		CPUSockets:  cpuSockets,
 		Memory:      TowerMemory(elfMachine.Spec.MemoryMiB),
-		Firmware:    models.NewVMFirmware(models.VMFirmwareBIOS),
 		Status:      models.NewVMStatus(models.VMStatusSTOPPED),
 		Ha:          TowerBool(elfMachine.Spec.HA),
 		IsFullCopy:  TowerBool(isFullCopy),
