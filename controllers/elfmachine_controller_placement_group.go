@@ -66,7 +66,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 		if placementGroup, err := r.createPlacementGroup(ctx, placementGroupName); err != nil {
 			return reconcile.Result{}, err
 		} else if placementGroup == nil {
-			return reconcile.Result{RequeueAfter: config.VMPlacementGroupDuplicateTimeout}, err
+			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, err
 		}
 	} else if placementGroup == nil {
 		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil

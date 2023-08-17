@@ -2618,7 +2618,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 
 			result, err = reconciler.reconcilePlacementGroup(machineContext)
-			Expect(result.RequeueAfter).To(Equal(config.VMPlacementGroupDuplicateTimeout))
+			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Tower has duplicate placement group, skip creating placement group %s", placementGroupName)))
 		})
