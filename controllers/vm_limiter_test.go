@@ -17,7 +17,6 @@ limitations under the License.
 package controllers
 
 import (
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -32,33 +31,58 @@ var _ = Describe("VMLimiter", func() {
 
 	BeforeEach(func() {
 		vmName = fake.UUID()
-		resetVMStatusMap()
+		resetVMConcurrentMap()
+		resetVMOperationMap()
 	})
 
 	It("acquireTicketForCreateVM", func() {
-		Expect(acquireTicketForCreateVM(vmName)).To(BeTrue())
-		Expect(vmStatusMap).To(HaveKey(vmName))
+		ok, msg := acquireTicketForCreateVM(vmName, true)
+		Expect(ok).To(BeTrue())
+		Expect(msg).To(Equal(""))
+		Expect(vmOperationMap).NotTo(HaveKey(getCreationLockKey(vmName)))
+
+		setVMDuplicate(vmName)
+		Expect(vmOperationMap).To(HaveKey(getCreationLockKey(vmName)))
+		ok, msg = acquireTicketForCreateVM(vmName, true)
+		Expect(ok).To(BeFalse())
+		Expect(msg).To(Equal("Duplicate virtual machine detected"))
+
+		vmOperationMap[getCreationLockKey(vmName)] = time.Now().Add(-vmSilenceTime)
+		Expect(vmOperationMap).To(HaveKey(getCreationLockKey(vmName)))
+		ok, msg = acquireTicketForCreateVM(vmName, true)
+		Expect(ok).To(BeTrue())
+		Expect(msg).To(Equal(""))
+
+		ok, msg = acquireTicketForCreateVM(vmName, false)
+		Expect(ok).To(BeTrue())
+		Expect(msg).To(Equal(""))
+		Expect(vmConcurrentMap).To(HaveKey(vmName))
 
 		for i := 0; i < config.MaxConcurrentVMCreations-1; i++ {
-			vmStatusMap[fake.UUID()] = time.Now()
+			vmConcurrentMap[fake.UUID()] = time.Now()
 		}
-		Expect(acquireTicketForCreateVM(vmName)).To(BeFalse())
+		ok, msg = acquireTicketForCreateVM(vmName, false)
+		Expect(ok).To(BeFalse())
+		Expect(msg).To(Equal("The number of concurrently created VMs has reached the limit"))
 
-		resetVMStatusMap()
+		resetVMConcurrentMap()
 		for i := 0; i < config.MaxConcurrentVMCreations; i++ {
-			vmStatusMap[fake.UUID()] = time.Now().Add(-creationTimeout)
+			vmConcurrentMap[fake.UUID()] = time.Now().Add(-creationTimeout)
 		}
-		Expect(acquireTicketForCreateVM(vmName)).To(BeTrue())
-		Expect(vmStatusMap).To(HaveKey(vmName))
-		Expect(vmStatusMap).To(HaveLen(1))
+		ok, msg = acquireTicketForCreateVM(vmName, false)
+		Expect(ok).To(BeTrue())
+		Expect(msg).To(Equal(""))
+		Expect(vmConcurrentMap).To(HaveKey(vmName))
+		Expect(vmConcurrentMap).To(HaveLen(1))
 	})
 
 	It("releaseTicketForCreateVM", func() {
-		Expect(vmStatusMap).NotTo(HaveKey(vmName))
-		Expect(acquireTicketForCreateVM(vmName)).To(BeTrue())
-		Expect(vmStatusMap).To(HaveKey(vmName))
+		Expect(vmConcurrentMap).NotTo(HaveKey(vmName))
+		ok, _ := acquireTicketForCreateVM(vmName, false)
+		Expect(ok).To(BeTrue())
+		Expect(vmConcurrentMap).To(HaveKey(vmName))
 		releaseTicketForCreateVM(vmName)
-		Expect(vmStatusMap).NotTo(HaveKey(vmName))
+		Expect(vmConcurrentMap).NotTo(HaveKey(vmName))
 	})
 })
 
@@ -123,7 +147,7 @@ var _ = Describe("Placement Group Operation Limiter", func() {
 	})
 
 	It("canCreatePlacementGroup", func() {
-		key := fmt.Sprintf(placementGroupCreationLockKey, groupName)
+		key := getCreationLockKey(groupName)
 
 		Expect(placementGroupOperationMap).NotTo(HaveKey(key))
 		Expect(canCreatePlacementGroup(groupName)).To(BeTrue())
@@ -141,8 +165,8 @@ var _ = Describe("Placement Group Operation Limiter", func() {
 	})
 })
 
-func resetVMStatusMap() {
-	vmStatusMap = make(map[string]time.Time)
+func resetVMConcurrentMap() {
+	vmConcurrentMap = make(map[string]time.Time)
 }
 
 func resetVMOperationMap() {
