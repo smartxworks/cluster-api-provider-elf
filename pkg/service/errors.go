@@ -39,6 +39,7 @@ const (
 	PlacementGroupError       = "PlacementGroupFilter" // SMTX OS <= 5.0.4
 	PlacementGroupMustError   = "PlacementGroupMustFilter"
 	PlacementGroupPriorError  = "PlacementGroupPriorFilter"
+	VMDuplicateError          = "VM_DUPLICATED_NAME"
 )
 
 func IsVMNotFound(err error) bool {
@@ -47,6 +48,10 @@ func IsVMNotFound(err error) bool {
 
 func IsVMDuplicate(err error) bool {
 	return strings.Contains(err.Error(), VMDuplicate)
+}
+
+func IsVMDuplicateError(message string) bool {
+	return strings.Contains(message, VMDuplicateError)
 }
 
 func IsShutDownTimeout(message string) bool {

@@ -27,15 +27,14 @@ import (
 const (
 	creationTimeout      = time.Minute * 6
 	vmOperationRateLimit = time.Second * 6
+	vmSilenceTime        = time.Minute * 5
 	// When Tower gets a placement group name duplicate error, it means the ELF API is responding slow.
 	// Tower will sync this placement group from ELF cluster immediately and the sync usually can complete within 1~2 minute.
 	// So set the placement group creation retry interval to 5 minutes.
-	placementGroupSilenceTime     = time.Minute * 5
-	placementGroupCreationLockKey = "%s:creation"
+	placementGroupSilenceTime = time.Minute * 5
 )
 
-var vmStatusMap = make(map[string]time.Time)
-var limiterLock sync.Mutex
+var vmConcurrentMap = make(map[string]time.Time)
 var vmOperationMap = make(map[string]time.Time)
 var vmOperationLock sync.Mutex
 
@@ -44,33 +43,45 @@ var placementGroupOperationLock sync.Mutex
 
 // acquireTicketForCreateVM returns whether virtual machine create operation
 // can be performed.
-func acquireTicketForCreateVM(vmName string) bool {
-	limiterLock.Lock()
-	defer limiterLock.Unlock()
+func acquireTicketForCreateVM(vmName string, isControlPlaneVM bool) (bool, string) {
+	vmOperationLock.Lock()
+	defer vmOperationLock.Unlock()
 
-	if len(vmStatusMap) >= config.MaxConcurrentVMCreations {
-		for name, timestamp := range vmStatusMap {
+	if timestamp, ok := vmOperationMap[getCreationLockKey(vmName)]; ok {
+		if !time.Now().After(timestamp.Add(vmSilenceTime)) {
+			return false, "Duplicate virtual machine detected"
+		}
+		delete(vmOperationMap, getCreationLockKey(vmName))
+	}
+
+	// Only limit the concurrent of worker virtual machines.
+	if isControlPlaneVM {
+		return true, ""
+	}
+
+	if len(vmConcurrentMap) >= config.MaxConcurrentVMCreations {
+		for name, timestamp := range vmConcurrentMap {
 			if !time.Now().Before(timestamp.Add(creationTimeout)) {
-				delete(vmStatusMap, name)
+				delete(vmConcurrentMap, name)
 			}
 		}
 	}
 
-	if len(vmStatusMap) >= config.MaxConcurrentVMCreations {
-		return false
+	if len(vmConcurrentMap) >= config.MaxConcurrentVMCreations {
+		return false, "The number of concurrently created VMs has reached the limit"
 	}
 
-	vmStatusMap[vmName] = time.Now()
+	vmConcurrentMap[vmName] = time.Now()
 
-	return true
+	return true, ""
 }
 
 // releaseTicketForCreateVM releases the virtual machine being created.
 func releaseTicketForCreateVM(vmName string) {
-	limiterLock.Lock()
-	defer limiterLock.Unlock()
+	vmOperationLock.Lock()
+	defer vmOperationLock.Unlock()
 
-	delete(vmStatusMap, vmName)
+	delete(vmConcurrentMap, vmName)
 }
 
 // acquireTicketForUpdatingVM returns whether virtual machine update operation
@@ -81,8 +92,8 @@ func acquireTicketForUpdatingVM(vmName string) bool {
 	vmOperationLock.Lock()
 	defer vmOperationLock.Unlock()
 
-	if status, ok := vmOperationMap[vmName]; ok {
-		if !time.Now().After(status.Add(vmOperationRateLimit)) {
+	if timestamp, ok := vmOperationMap[vmName]; ok {
+		if !time.Now().After(timestamp.Add(vmOperationRateLimit)) {
 			return false
 		}
 	}
@@ -90,6 +101,14 @@ func acquireTicketForUpdatingVM(vmName string) bool {
 	vmOperationMap[vmName] = time.Now()
 
 	return true
+}
+
+// setVMDuplicate sets whether virtual machine is duplicated.
+func setVMDuplicate(vmName string) {
+	vmOperationLock.Lock()
+	defer vmOperationLock.Unlock()
+
+	vmOperationMap[getCreationLockKey(vmName)] = time.Now()
 }
 
 // acquireTicketForPlacementGroupOperation returns whether placement group operation
@@ -120,7 +139,7 @@ func setPlacementGroupDuplicate(groupName string) {
 	placementGroupOperationLock.Lock()
 	defer placementGroupOperationLock.Unlock()
 
-	placementGroupOperationMap[fmt.Sprintf(placementGroupCreationLockKey, groupName)] = time.Now()
+	placementGroupOperationMap[getCreationLockKey(groupName)] = time.Now()
 }
 
 // canCreatePlacementGroup returns whether placement group creation can be performed.
@@ -128,7 +147,7 @@ func canCreatePlacementGroup(groupName string) bool {
 	placementGroupOperationLock.Lock()
 	defer placementGroupOperationLock.Unlock()
 
-	key := fmt.Sprintf(placementGroupCreationLockKey, groupName)
+	key := getCreationLockKey(groupName)
 	if timestamp, ok := placementGroupOperationMap[key]; ok {
 		if time.Now().Before(timestamp.Add(placementGroupSilenceTime)) {
 			return false
@@ -138,4 +157,8 @@ func canCreatePlacementGroup(groupName string) bool {
 	}
 
 	return true
+}
+
+func getCreationLockKey(name string) string {
+	return fmt.Sprintf("%s:creation", name)
 }

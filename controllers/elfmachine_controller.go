@@ -501,12 +501,9 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 			ctx.Logger.V(1).Info(fmt.Sprintf("%s and the retry silence period passes, will try to create the VM again", message))
 		}
 
-		// Only limit the virtual machines of the worker nodes
-		if !machineutil.IsControlPlaneMachine(ctx.ElfMachine) {
-			if ok := acquireTicketForCreateVM(ctx.ElfMachine.Name); !ok {
-				ctx.Logger.V(1).Info(fmt.Sprintf("The number of concurrently created VMs has reached the limit, skip creating VM %s", ctx.ElfMachine.Name))
-				return nil, false, nil
-			}
+		if ok, msg := acquireTicketForCreateVM(ctx.ElfMachine.Name, machineutil.IsControlPlaneMachine(ctx.ElfMachine)); !ok {
+			ctx.Logger.V(1).Info(fmt.Sprintf("%s, skip creating VM", msg))
+			return nil, false, nil
 		}
 
 		hostID, err := r.preCheckPlacementGroup(ctx)
@@ -704,7 +701,7 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 
 func (r *ElfMachineReconciler) shutDownVM(ctx *context.MachineContext) error {
 	if ok := acquireTicketForUpdatingVM(ctx.ElfMachine.Name); !ok {
-		ctx.Logger.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip shut down VM %s", ctx.ElfMachine.Status.VMRef))
+		ctx.Logger.V(1).Info("The VM operation reaches rate limit, skip shut down VM")
 
 		return nil
 	}
@@ -858,6 +855,10 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		switch {
 		case service.IsCloneVMTask(task):
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
+
+			if service.IsVMDuplicateError(errorMessage) {
+				setVMDuplicate(ctx.ElfMachine.Name)
+			}
 		case service.IsMemoryInsufficientError(errorMessage):
 			recordElfClusterMemoryInsufficient(ctx, true)
 			message := fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", ctx.ElfCluster.Spec.Cluster)

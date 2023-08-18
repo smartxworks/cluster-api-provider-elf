@@ -2712,6 +2712,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should handle failed/succeeded task", func() {
 			resetClusterResourceMap()
+			resetVMOperationMap()
 			task := fake.NewTowerTask()
 			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
 			task.ErrorMessage = service.TowerString(service.MemoryInsufficientError)
@@ -2755,6 +2756,17 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(msg).To(Equal(""))
 			Expect(err).ShouldNot(HaveOccurred())
+
+			// Duplicate VM
+			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
+			task.Description = service.TowerString("Create a VM")
+			task.ErrorMessage = service.TowerString(service.VMDuplicateError)
+			elfMachine.Status.TaskRef = *task.ID
+			ok, err = reconciler.reconcileVMTask(machineContext, nil)
+			Expect(ok).Should(BeTrue())
+			Expect(err).ShouldNot(HaveOccurred())
+			ok, _ = acquireTicketForCreateVM(elfMachine.Name, true)
+			Expect(ok).To(BeFalse())
 		})
 	})
 
