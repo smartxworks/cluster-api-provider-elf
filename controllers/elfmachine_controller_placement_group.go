@@ -66,7 +66,7 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx *context.MachineConte
 		if placementGroup, err := r.createPlacementGroup(ctx, placementGroupName); err != nil {
 			return reconcile.Result{}, err
 		} else if placementGroup == nil {
-			return reconcile.Result{RequeueAfter: config.VMPlacementGroupDuplicateTimeout}, err
+			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, err
 		}
 	} else if placementGroup == nil {
 		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
@@ -94,9 +94,14 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 		return nil, err
 	}
 
-	task, err := ctx.VMService.WaitTask(*withTaskVMPlacementGroup.TaskID, config.WaitTaskTimeout, config.WaitTaskInterval)
+	task, err := ctx.VMService.WaitTask(*withTaskVMPlacementGroup.TaskID, config.PlacementGroupCreationWaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to wait for placement group creation task done timed out in %s: placementName %s, taskID %s", config.WaitTaskTimeout, placementGroupName, *withTaskVMPlacementGroup.TaskID)
+		// The default timeout for Tower to create a placement group is one minute.
+		// When current task times out, duplicate placement groups may or may not appear.
+		// For simplicity, both cases are treated as duplicate placement groups.
+		setPlacementGroupDuplicate(placementGroupName)
+
+		return nil, errors.Wrapf(err, "failed to wait for placement group creation task done: placementName %s, taskID %s", placementGroupName, *withTaskVMPlacementGroup.TaskID)
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
