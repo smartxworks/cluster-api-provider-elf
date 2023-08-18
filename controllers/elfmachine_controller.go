@@ -502,7 +502,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		}
 
 		if ok, msg := acquireTicketForCreateVM(ctx.ElfMachine.Name, machineutil.IsControlPlaneMachine(ctx.ElfMachine)); !ok {
-			ctx.Logger.V(1).Info(fmt.Sprintf("%s, skip creating VM %s", msg, ctx.ElfMachine.Name))
+			ctx.Logger.V(1).Info(fmt.Sprintf("%s, skip creating VM", msg))
 			return nil, false, nil
 		}
 
@@ -701,7 +701,7 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 
 func (r *ElfMachineReconciler) shutDownVM(ctx *context.MachineContext) error {
 	if ok := acquireTicketForUpdatingVM(ctx.ElfMachine.Name); !ok {
-		ctx.Logger.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip shut down VM %s", ctx.ElfMachine.Status.VMRef))
+		ctx.Logger.V(1).Info("The VM operation reaches rate limit, skip shut down VM")
 
 		return nil
 	}
