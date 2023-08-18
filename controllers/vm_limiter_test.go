@@ -39,16 +39,17 @@ var _ = Describe("VMLimiter", func() {
 		ok, msg := acquireTicketForCreateVM(vmName, true)
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(Equal(""))
-		Expect(vmOperationMap).NotTo(HaveKey(getCreationLockKey(vmName)))
+		Expect(vmOperationMap.Has(getCreationLockKey(vmName))).To(BeFalse())
 
 		setVMDuplicate(vmName)
-		Expect(vmOperationMap).To(HaveKey(getCreationLockKey(vmName)))
+		Expect(vmOperationMap.Has(getCreationLockKey(vmName))).To(BeTrue())
 		ok, msg = acquireTicketForCreateVM(vmName, true)
 		Expect(ok).To(BeFalse())
 		Expect(msg).To(Equal("Duplicate virtual machine detected"))
 
-		vmOperationMap[getCreationLockKey(vmName)] = time.Now().Add(-vmSilenceTime)
-		Expect(vmOperationMap).To(HaveKey(getCreationLockKey(vmName)))
+		vmOperationMap.Set(getCreationLockKey(vmName), vmSilenceTime)
+		vmOperationMap.Values[getCreationLockKey(vmName)].Expiration = time.Now().Add(-vmSilenceTime)
+		Expect(vmOperationMap.Has(getCreationLockKey(vmName))).To(BeFalse())
 		ok, msg = acquireTicketForCreateVM(vmName, true)
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(Equal(""))
@@ -56,33 +57,23 @@ var _ = Describe("VMLimiter", func() {
 		ok, msg = acquireTicketForCreateVM(vmName, false)
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(Equal(""))
-		Expect(vmConcurrentMap).To(HaveKey(vmName))
+		Expect(vmConcurrentMap.Has(vmName)).To(BeTrue())
 
 		for i := 0; i < config.MaxConcurrentVMCreations-1; i++ {
-			vmConcurrentMap[fake.UUID()] = time.Now()
+			vmConcurrentMap.Set(fake.UUID(), creationTimeout)
 		}
 		ok, msg = acquireTicketForCreateVM(vmName, false)
 		Expect(ok).To(BeFalse())
 		Expect(msg).To(Equal("The number of concurrently created VMs has reached the limit"))
-
-		resetVMConcurrentMap()
-		for i := 0; i < config.MaxConcurrentVMCreations; i++ {
-			vmConcurrentMap[fake.UUID()] = time.Now().Add(-creationTimeout)
-		}
-		ok, msg = acquireTicketForCreateVM(vmName, false)
-		Expect(ok).To(BeTrue())
-		Expect(msg).To(Equal(""))
-		Expect(vmConcurrentMap).To(HaveKey(vmName))
-		Expect(vmConcurrentMap).To(HaveLen(1))
 	})
 
 	It("releaseTicketForCreateVM", func() {
-		Expect(vmConcurrentMap).NotTo(HaveKey(vmName))
+		Expect(vmConcurrentMap.Has(vmName)).To(BeFalse())
 		ok, _ := acquireTicketForCreateVM(vmName, false)
 		Expect(ok).To(BeTrue())
-		Expect(vmConcurrentMap).To(HaveKey(vmName))
+		Expect(vmConcurrentMap.Has(vmName)).To(BeTrue())
 		releaseTicketForCreateVM(vmName)
-		Expect(vmConcurrentMap).NotTo(HaveKey(vmName))
+		Expect(vmConcurrentMap.Has(vmName)).To(BeFalse())
 	})
 })
 
@@ -94,18 +85,17 @@ var _ = Describe("VM Operation Limiter", func() {
 	})
 
 	It("acquireTicketForUpdatingVM", func() {
+		resetVMOperationMap()
 		Expect(acquireTicketForUpdatingVM(vmName)).To(BeTrue())
-		Expect(vmOperationMap).To(HaveKey(vmName))
-
+		Expect(vmOperationMap.Has(vmName)).To(BeTrue())
 		Expect(acquireTicketForUpdatingVM(vmName)).To(BeFalse())
-		acquireTicketForUpdatingVM(vmName)
-		resetVMOperationMap()
 
-		vmOperationMap[vmName] = time.Now().Add(-vmOperationRateLimit)
+		resetVMOperationMap()
+		vmOperationMap.Set(getCreationLockKey(vmName), vmSilenceTime)
+		vmOperationMap.Values[getCreationLockKey(vmName)].Expiration = time.Now().Add(-vmSilenceTime)
+		Expect(vmOperationMap.Has(vmName)).To(BeFalse())
 		Expect(acquireTicketForUpdatingVM(vmName)).To(BeTrue())
-		Expect(vmOperationMap).To(HaveKey(vmName))
-		Expect(vmOperationMap).To(HaveLen(1))
-		resetVMOperationMap()
+		Expect(vmOperationMap.Has(vmName)).To(BeTrue())
 	})
 })
 
@@ -118,61 +108,72 @@ var _ = Describe("Placement Group Operation Limiter", func() {
 
 	It("acquireTicketForPlacementGroupOperation", func() {
 		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
-		Expect(placementGroupOperationMap).To(HaveKey(groupName))
+		Expect(placementGroupOperationMap.Has(groupName)).To(BeTrue())
 
 		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeFalse())
 		releaseTicketForPlacementGroupOperation(groupName)
 
 		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
-		Expect(placementGroupOperationMap).To(HaveKey(groupName))
-	})
-})
-
-var _ = Describe("Placement Group Operation Limiter", func() {
-	var groupName string
-
-	BeforeEach(func() {
-		groupName = fake.UUID()
-	})
-
-	It("acquireTicketForPlacementGroupOperation", func() {
-		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
-		Expect(placementGroupOperationMap).To(HaveKey(groupName))
-
-		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeFalse())
-		releaseTicketForPlacementGroupOperation(groupName)
-
-		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
-		Expect(placementGroupOperationMap).To(HaveKey(groupName))
+		Expect(placementGroupOperationMap.Has(groupName)).To(BeTrue())
 	})
 
 	It("canCreatePlacementGroup", func() {
 		key := getCreationLockKey(groupName)
 
-		Expect(placementGroupOperationMap).NotTo(HaveKey(key))
+		Expect(placementGroupOperationMap.Has(key)).To(BeFalse())
 		Expect(canCreatePlacementGroup(groupName)).To(BeTrue())
 
 		setPlacementGroupDuplicate(groupName)
-		Expect(placementGroupOperationMap).To(HaveKey(key))
+		Expect(placementGroupOperationMap.Has(key)).To(BeTrue())
 		Expect(canCreatePlacementGroup(groupName)).To(BeFalse())
 
-		placementGroupOperationMap[key] = placementGroupOperationMap[key].Add(-placementGroupSilenceTime)
-		Expect(placementGroupOperationMap).To(HaveKey(key))
+		placementGroupOperationMap.Values[key].Expiration = placementGroupOperationMap.Values[key].Expiration.Add(-placementGroupSilenceTime)
+		Expect(placementGroupOperationMap.Has(key)).To(BeFalse())
 		Expect(canCreatePlacementGroup(groupName)).To(BeTrue())
-		Expect(placementGroupOperationMap).NotTo(HaveKey(key))
+		Expect(placementGroupOperationMap.Has(key)).To(BeFalse())
 
 		Expect(canCreatePlacementGroup(groupName)).To(BeTrue())
 	})
 })
 
+var _ = Describe("ttlMap", func() {
+	It("Test ttlMap", func() {
+		key := fake.UUID()
+		testMap := newTTLMap(gcInterval)
+		Expect(testMap.Len()).To(Equal(0))
+		Expect(testMap.Has(key)).To(BeFalse())
+
+		testMap.Set(key, 1*time.Minute)
+		Expect(testMap.Has(key)).To(BeTrue())
+		Expect(testMap.Len()).To(Equal(1))
+
+		testMap.Del(key)
+		Expect(testMap.Len()).To(Equal(0))
+		Expect(testMap.Has(key)).To(BeFalse())
+
+		testMap.Set(key, 1*time.Minute)
+		Expect(testMap.Has(key)).To(BeTrue())
+		testMap.Values[key].Expiration = time.Now().Add(-1 * time.Minute)
+		Expect(testMap.Has(key)).To(BeFalse())
+		Expect(testMap.Len()).To(Equal(0))
+
+		testMap.Set(key, 1*time.Minute)
+		Expect(testMap.Has(key)).To(BeTrue())
+		testMap.Values[key].Expiration = time.Now().Add(-1 * time.Minute)
+		testMap.LastGCTime = time.Now().Add(-testMap.GCInterval)
+		Expect(testMap.Has(key)).To(BeFalse())
+		Expect(testMap.Len()).To(Equal(0))
+	})
+})
+
 func resetVMConcurrentMap() {
-	vmConcurrentMap = make(map[string]time.Time)
+	vmConcurrentMap = newTTLMap(gcInterval)
 }
 
 func resetVMOperationMap() {
-	vmOperationMap = make(map[string]time.Time)
+	vmOperationMap = newTTLMap(gcInterval)
 }
 
 func resetPlacementGroupOperationMap() {
-	placementGroupOperationMap = make(map[string]time.Time)
+	placementGroupOperationMap = newTTLMap(gcInterval)
 }

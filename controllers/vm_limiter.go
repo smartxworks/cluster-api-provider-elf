@@ -34,11 +34,12 @@ const (
 	placementGroupSilenceTime = time.Minute * 5
 )
 
-var vmConcurrentMap = make(map[string]time.Time)
-var vmOperationMap = make(map[string]time.Time)
+var gcInterval = 6 * time.Minute
+var vmConcurrentMap = newTTLMap(gcInterval)
+var vmOperationMap = newTTLMap(gcInterval)
 var vmOperationLock sync.Mutex
 
-var placementGroupOperationMap = make(map[string]time.Time)
+var placementGroupOperationMap = newTTLMap(gcInterval)
 var placementGroupOperationLock sync.Mutex
 
 // acquireTicketForCreateVM returns whether virtual machine create operation
@@ -47,11 +48,8 @@ func acquireTicketForCreateVM(vmName string, isControlPlaneVM bool) (bool, strin
 	vmOperationLock.Lock()
 	defer vmOperationLock.Unlock()
 
-	if timestamp, ok := vmOperationMap[getCreationLockKey(vmName)]; ok {
-		if !time.Now().After(timestamp.Add(vmSilenceTime)) {
-			return false, "Duplicate virtual machine detected"
-		}
-		delete(vmOperationMap, getCreationLockKey(vmName))
+	if vmOperationMap.Has(getCreationLockKey(vmName)) {
+		return false, "Duplicate virtual machine detected"
 	}
 
 	// Only limit the concurrent of worker virtual machines.
@@ -59,19 +57,11 @@ func acquireTicketForCreateVM(vmName string, isControlPlaneVM bool) (bool, strin
 		return true, ""
 	}
 
-	if len(vmConcurrentMap) >= config.MaxConcurrentVMCreations {
-		for name, timestamp := range vmConcurrentMap {
-			if !time.Now().Before(timestamp.Add(creationTimeout)) {
-				delete(vmConcurrentMap, name)
-			}
-		}
-	}
-
-	if len(vmConcurrentMap) >= config.MaxConcurrentVMCreations {
+	if vmConcurrentMap.Len() >= config.MaxConcurrentVMCreations {
 		return false, "The number of concurrently created VMs has reached the limit"
 	}
 
-	vmConcurrentMap[vmName] = time.Now()
+	vmConcurrentMap.Set(vmName, creationTimeout)
 
 	return true, ""
 }
@@ -81,7 +71,7 @@ func releaseTicketForCreateVM(vmName string) {
 	vmOperationLock.Lock()
 	defer vmOperationLock.Unlock()
 
-	delete(vmConcurrentMap, vmName)
+	vmConcurrentMap.Del(vmName)
 }
 
 // acquireTicketForUpdatingVM returns whether virtual machine update operation
@@ -92,13 +82,11 @@ func acquireTicketForUpdatingVM(vmName string) bool {
 	vmOperationLock.Lock()
 	defer vmOperationLock.Unlock()
 
-	if timestamp, ok := vmOperationMap[vmName]; ok {
-		if !time.Now().After(timestamp.Add(vmOperationRateLimit)) {
-			return false
-		}
+	if vmOperationMap.Has(vmName) {
+		return false
 	}
 
-	vmOperationMap[vmName] = time.Now()
+	vmOperationMap.Set(vmName, vmOperationRateLimit)
 
 	return true
 }
@@ -108,7 +96,7 @@ func setVMDuplicate(vmName string) {
 	vmOperationLock.Lock()
 	defer vmOperationLock.Unlock()
 
-	vmOperationMap[getCreationLockKey(vmName)] = time.Now()
+	vmOperationMap.Set(getCreationLockKey(vmName), vmSilenceTime)
 }
 
 // acquireTicketForPlacementGroupOperation returns whether placement group operation
@@ -117,11 +105,11 @@ func acquireTicketForPlacementGroupOperation(groupName string) bool {
 	placementGroupOperationLock.Lock()
 	defer placementGroupOperationLock.Unlock()
 
-	if _, ok := placementGroupOperationMap[groupName]; ok {
+	if placementGroupOperationMap.Has(groupName) {
 		return false
 	}
 
-	placementGroupOperationMap[groupName] = time.Now()
+	placementGroupOperationMap.Set(groupName, placementGroupSilenceTime)
 
 	return true
 }
@@ -131,7 +119,7 @@ func releaseTicketForPlacementGroupOperation(groupName string) {
 	placementGroupOperationLock.Lock()
 	defer placementGroupOperationLock.Unlock()
 
-	delete(placementGroupOperationMap, groupName)
+	placementGroupOperationMap.Del(groupName)
 }
 
 // setPlacementGroupDuplicate sets whether placement group is duplicated.
@@ -139,7 +127,7 @@ func setPlacementGroupDuplicate(groupName string) {
 	placementGroupOperationLock.Lock()
 	defer placementGroupOperationLock.Unlock()
 
-	placementGroupOperationMap[getCreationLockKey(groupName)] = time.Now()
+	placementGroupOperationMap.Set(getCreationLockKey(groupName), placementGroupSilenceTime)
 }
 
 // canCreatePlacementGroup returns whether placement group creation can be performed.
@@ -147,18 +135,63 @@ func canCreatePlacementGroup(groupName string) bool {
 	placementGroupOperationLock.Lock()
 	defer placementGroupOperationLock.Unlock()
 
-	key := getCreationLockKey(groupName)
-	if timestamp, ok := placementGroupOperationMap[key]; ok {
-		if time.Now().Before(timestamp.Add(placementGroupSilenceTime)) {
-			return false
-		}
-
-		delete(placementGroupOperationMap, key)
-	}
-
-	return true
+	return !placementGroupOperationMap.Has(getCreationLockKey(groupName))
 }
 
 func getCreationLockKey(name string) string {
 	return fmt.Sprintf("%s:creation", name)
+}
+
+// Go built-in map with TTL.
+type ttlMap struct {
+	Values     map[string]*ttlMapValue
+	GCInterval time.Duration // interval time clearing expired values
+	LastGCTime time.Time     // timestamp of the last cleanup of expired values
+}
+
+func newTTLMap(gcInterval time.Duration) *ttlMap {
+	return &ttlMap{
+		Values:     make(map[string]*ttlMapValue),
+		GCInterval: gcInterval,
+		LastGCTime: time.Now(),
+	}
+}
+
+type ttlMapValue struct {
+	Expiration time.Time // expiration time
+}
+
+func (t *ttlMap) Set(key string, duration time.Duration) {
+	t.Values[key] = &ttlMapValue{Expiration: time.Now().Add(duration)}
+}
+
+// Active returns whether the key exists and has not expired.
+func (t *ttlMap) Has(key string) bool {
+	// Delete expired values lazily.
+	if time.Now().After(t.LastGCTime.Add(t.GCInterval)) {
+		for key, value := range t.Values {
+			if time.Now().After(value.Expiration) {
+				t.Del(key)
+			}
+		}
+	}
+
+	if value, ok := t.Values[key]; ok {
+		if time.Now().After(value.Expiration) {
+			t.Del(key)
+		} else {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (t *ttlMap) Del(key string) {
+	delete(t.Values, key)
+}
+
+// Len returns a count of all values including expired values.
+func (t *ttlMap) Len() int {
+	return len(t.Values)
 }
