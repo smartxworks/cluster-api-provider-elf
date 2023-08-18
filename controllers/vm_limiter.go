@@ -61,7 +61,7 @@ func acquireTicketForCreateVM(vmName string, isControlPlaneVM bool) (bool, strin
 		return false, "The number of concurrently created VMs has reached the limit"
 	}
 
-	vmConcurrentMap.Set(vmName, creationTimeout)
+	vmConcurrentMap.Set(vmName, nil, creationTimeout)
 
 	return true, ""
 }
@@ -86,7 +86,7 @@ func acquireTicketForUpdatingVM(vmName string) bool {
 		return false
 	}
 
-	vmOperationMap.Set(vmName, vmOperationRateLimit)
+	vmOperationMap.Set(vmName, nil, vmOperationRateLimit)
 
 	return true
 }
@@ -96,7 +96,7 @@ func setVMDuplicate(vmName string) {
 	vmOperationLock.Lock()
 	defer vmOperationLock.Unlock()
 
-	vmOperationMap.Set(getCreationLockKey(vmName), vmSilenceTime)
+	vmOperationMap.Set(getCreationLockKey(vmName), nil, vmSilenceTime)
 }
 
 // acquireTicketForPlacementGroupOperation returns whether placement group operation
@@ -109,7 +109,7 @@ func acquireTicketForPlacementGroupOperation(groupName string) bool {
 		return false
 	}
 
-	placementGroupOperationMap.Set(groupName, placementGroupSilenceTime)
+	placementGroupOperationMap.Set(groupName, nil, placementGroupSilenceTime)
 
 	return true
 }
@@ -127,7 +127,7 @@ func setPlacementGroupDuplicate(groupName string) {
 	placementGroupOperationLock.Lock()
 	defer placementGroupOperationLock.Unlock()
 
-	placementGroupOperationMap.Set(getCreationLockKey(groupName), placementGroupSilenceTime)
+	placementGroupOperationMap.Set(getCreationLockKey(groupName), nil, placementGroupSilenceTime)
 }
 
 // canCreatePlacementGroup returns whether placement group creation can be performed.
@@ -158,14 +158,23 @@ func newTTLMap(gcInterval time.Duration) *ttlMap {
 }
 
 type ttlMapValue struct {
+	Val        interface{}
 	Expiration time.Time // expiration time
 }
 
-func (t *ttlMap) Set(key string, duration time.Duration) {
-	t.Values[key] = &ttlMapValue{Expiration: time.Now().Add(duration)}
+func (t *ttlMap) Set(key string, val interface{}, duration time.Duration) {
+	t.Values[key] = &ttlMapValue{Val: val, Expiration: time.Now().Add(duration)}
 }
 
-// Active returns whether the key exists and has not expired.
+func (t *ttlMap) Get(key string) (interface{}, bool) {
+	if t.Has(key) {
+		return t.Values[key].Val, true
+	}
+
+	return nil, false
+}
+
+// Has returns whether the key exists and has not expired.
 func (t *ttlMap) Has(key string) bool {
 	// Delete expired values lazily.
 	if time.Now().After(t.LastGCTime.Add(t.GCInterval)) {

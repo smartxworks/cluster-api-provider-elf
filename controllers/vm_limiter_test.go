@@ -47,7 +47,7 @@ var _ = Describe("VMLimiter", func() {
 		Expect(ok).To(BeFalse())
 		Expect(msg).To(Equal("Duplicate virtual machine detected"))
 
-		vmOperationMap.Set(getCreationLockKey(vmName), vmSilenceTime)
+		vmOperationMap.Set(getCreationLockKey(vmName), nil, vmSilenceTime)
 		vmOperationMap.Values[getCreationLockKey(vmName)].Expiration = time.Now().Add(-vmSilenceTime)
 		Expect(vmOperationMap.Has(getCreationLockKey(vmName))).To(BeFalse())
 		ok, msg = acquireTicketForCreateVM(vmName, true)
@@ -60,7 +60,7 @@ var _ = Describe("VMLimiter", func() {
 		Expect(vmConcurrentMap.Has(vmName)).To(BeTrue())
 
 		for i := 0; i < config.MaxConcurrentVMCreations-1; i++ {
-			vmConcurrentMap.Set(fake.UUID(), creationTimeout)
+			vmConcurrentMap.Set(fake.UUID(), nil, creationTimeout)
 		}
 		ok, msg = acquireTicketForCreateVM(vmName, false)
 		Expect(ok).To(BeFalse())
@@ -91,7 +91,7 @@ var _ = Describe("VM Operation Limiter", func() {
 		Expect(acquireTicketForUpdatingVM(vmName)).To(BeFalse())
 
 		resetVMOperationMap()
-		vmOperationMap.Set(getCreationLockKey(vmName), vmSilenceTime)
+		vmOperationMap.Set(getCreationLockKey(vmName), nil, vmSilenceTime)
 		vmOperationMap.Values[getCreationLockKey(vmName)].Expiration = time.Now().Add(-vmSilenceTime)
 		Expect(vmOperationMap.Has(vmName)).To(BeFalse())
 		Expect(acquireTicketForUpdatingVM(vmName)).To(BeTrue())
@@ -142,22 +142,29 @@ var _ = Describe("ttlMap", func() {
 		testMap := newTTLMap(gcInterval)
 		Expect(testMap.Len()).To(Equal(0))
 		Expect(testMap.Has(key)).To(BeFalse())
+		_, ok := testMap.Get(key)
+		Expect(ok).To(BeFalse())
 
-		testMap.Set(key, 1*time.Minute)
+		testMap.Set(key, 1, 1*time.Minute)
 		Expect(testMap.Has(key)).To(BeTrue())
 		Expect(testMap.Len()).To(Equal(1))
+		val, ok := testMap.Get(key)
+		Expect(ok).To(BeTrue())
+		ival, valid := val.(int)
+		Expect(valid).To(BeTrue())
+		Expect(ival).To(Equal(1))
 
 		testMap.Del(key)
 		Expect(testMap.Len()).To(Equal(0))
 		Expect(testMap.Has(key)).To(BeFalse())
 
-		testMap.Set(key, 1*time.Minute)
+		testMap.Set(key, nil, 1*time.Minute)
 		Expect(testMap.Has(key)).To(BeTrue())
 		testMap.Values[key].Expiration = time.Now().Add(-1 * time.Minute)
 		Expect(testMap.Has(key)).To(BeFalse())
 		Expect(testMap.Len()).To(Equal(0))
 
-		testMap.Set(key, 1*time.Minute)
+		testMap.Set(key, nil, 1*time.Minute)
 		Expect(testMap.Has(key)).To(BeTrue())
 		testMap.Values[key].Expiration = time.Now().Add(-1 * time.Minute)
 		testMap.LastGCTime = time.Now().Add(-testMap.GCInterval)
