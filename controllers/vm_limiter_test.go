@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/collections"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
@@ -136,51 +137,14 @@ var _ = Describe("Placement Group Operation Limiter", func() {
 	})
 })
 
-var _ = Describe("ttlMap", func() {
-	It("Test ttlMap", func() {
-		key := fake.UUID()
-		testMap := newTTLMap(gcInterval)
-		Expect(testMap.Len()).To(Equal(0))
-		Expect(testMap.Has(key)).To(BeFalse())
-		_, ok := testMap.Get(key)
-		Expect(ok).To(BeFalse())
-
-		testMap.Set(key, 1, 1*time.Minute)
-		Expect(testMap.Has(key)).To(BeTrue())
-		Expect(testMap.Len()).To(Equal(1))
-		val, ok := testMap.Get(key)
-		Expect(ok).To(BeTrue())
-		ival, valid := val.(int)
-		Expect(valid).To(BeTrue())
-		Expect(ival).To(Equal(1))
-
-		testMap.Del(key)
-		Expect(testMap.Len()).To(Equal(0))
-		Expect(testMap.Has(key)).To(BeFalse())
-
-		testMap.Set(key, nil, 1*time.Minute)
-		Expect(testMap.Has(key)).To(BeTrue())
-		testMap.Values[key].Expiration = time.Now().Add(-1 * time.Minute)
-		Expect(testMap.Has(key)).To(BeFalse())
-		Expect(testMap.Len()).To(Equal(0))
-
-		testMap.Set(key, nil, 1*time.Minute)
-		Expect(testMap.Has(key)).To(BeTrue())
-		testMap.Values[key].Expiration = time.Now().Add(-1 * time.Minute)
-		testMap.LastGCTime = time.Now().Add(-testMap.GCInterval)
-		Expect(testMap.Has(key)).To(BeFalse())
-		Expect(testMap.Len()).To(Equal(0))
-	})
-})
-
 func resetVMConcurrentMap() {
-	vmConcurrentMap = newTTLMap(gcInterval)
+	vmConcurrentMap = collections.NewTTLMap(gcInterval)
 }
 
 func resetVMOperationMap() {
-	vmOperationMap = newTTLMap(gcInterval)
+	vmOperationMap = collections.NewTTLMap(gcInterval)
 }
 
 func resetPlacementGroupOperationMap() {
-	placementGroupOperationMap = newTTLMap(gcInterval)
+	placementGroupOperationMap = collections.NewTTLMap(gcInterval)
 }

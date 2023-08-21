@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/collections"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
@@ -158,13 +159,13 @@ var _ = Describe("TowerCache", func() {
 
 func getKey(ctx *context.MachineContext, name string) string {
 	if name == clusterKey {
-		return getMemoryKey(name)
+		return getKeyForInsufficientMemoryError(name)
 	}
 
 	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
 	Expect(err).ShouldNot(HaveOccurred())
 
-	return getPlacementGroupKey(placementGroupName)
+	return getKeyForDuplicatePlacementGroupError(placementGroupName)
 }
 
 func recordIsUnmet(ctx *context.MachineContext, key string, isUnmet bool) {
@@ -185,5 +186,5 @@ func expireELFScheduleVMError(ctx *context.MachineContext, name string) {
 }
 
 func resetClusterResourceMap() {
-	clusterResourceMap = newTTLMap(resourceGCInterval)
+	clusterResourceMap = collections.NewTTLMap(resourceGCInterval)
 }

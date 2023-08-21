@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/collections"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 )
 
@@ -35,11 +36,11 @@ const (
 )
 
 var gcInterval = 6 * time.Minute
-var vmConcurrentMap = newTTLMap(gcInterval)
-var vmOperationMap = newTTLMap(gcInterval)
+var vmConcurrentMap = collections.NewTTLMap(gcInterval)
+var vmOperationMap = collections.NewTTLMap(gcInterval)
 var vmOperationLock sync.Mutex
 
-var placementGroupOperationMap = newTTLMap(gcInterval)
+var placementGroupOperationMap = collections.NewTTLMap(gcInterval)
 var placementGroupOperationLock sync.Mutex
 
 // acquireTicketForCreateVM returns whether virtual machine create operation
@@ -140,67 +141,4 @@ func canCreatePlacementGroup(groupName string) bool {
 
 func getCreationLockKey(name string) string {
 	return fmt.Sprintf("%s:creation", name)
-}
-
-// Go built-in map with TTL.
-type ttlMap struct {
-	Values     map[string]*ttlMapValue
-	GCInterval time.Duration // interval time clearing expired values
-	LastGCTime time.Time     // timestamp of the last cleanup of expired values
-}
-
-func newTTLMap(gcInterval time.Duration) *ttlMap {
-	return &ttlMap{
-		Values:     make(map[string]*ttlMapValue),
-		GCInterval: gcInterval,
-		LastGCTime: time.Now(),
-	}
-}
-
-type ttlMapValue struct {
-	Val        interface{}
-	Expiration time.Time // expiration time
-}
-
-func (t *ttlMap) Set(key string, val interface{}, duration time.Duration) {
-	t.Values[key] = &ttlMapValue{Val: val, Expiration: time.Now().Add(duration)}
-}
-
-func (t *ttlMap) Get(key string) (interface{}, bool) {
-	if t.Has(key) {
-		return t.Values[key].Val, true
-	}
-
-	return nil, false
-}
-
-// Has returns whether the key exists and has not expired.
-func (t *ttlMap) Has(key string) bool {
-	// Delete expired values lazily.
-	if time.Now().After(t.LastGCTime.Add(t.GCInterval)) {
-		for key, value := range t.Values {
-			if time.Now().After(value.Expiration) {
-				t.Del(key)
-			}
-		}
-	}
-
-	if value, ok := t.Values[key]; ok {
-		if time.Now().After(value.Expiration) {
-			t.Del(key)
-		} else {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (t *ttlMap) Del(key string) {
-	delete(t.Values, key)
-}
-
-// Len returns a count of all values including expired values.
-func (t *ttlMap) Len() int {
-	return len(t.Values)
 }
