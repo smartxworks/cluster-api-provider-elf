@@ -101,7 +101,7 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 		// For simplicity, both cases are treated as duplicate placement groups.
 		setPlacementGroupDuplicate(placementGroupName)
 
-		return nil, errors.Wrapf(err, "failed to wait for placement group creation task to complete in %s: pgName %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, placementGroupName, *withTaskVMPlacementGroup.TaskID)
+		return nil, errors.Wrapf(err, "failed to wait for placement group creating task to complete in %s: pgName %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, placementGroupName, *withTaskVMPlacementGroup.TaskID)
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
@@ -566,7 +566,7 @@ func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContex
 	taskID := *task.ID
 	task, err = ctx.VMService.WaitTask(taskID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval)
 	if err != nil {
-		return errors.Wrapf(err, "failed to wait for placement group updation task to complete in %s: pgName %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, *placementGroup.Name, taskID)
+		return errors.Wrapf(err, "failed to wait for placement group updating task to complete in %s: pgName %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, *placementGroup.Name, taskID)
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
