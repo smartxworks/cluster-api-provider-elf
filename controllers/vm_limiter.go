@@ -21,12 +21,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/collections"
+	"github.com/patrickmn/go-cache"
+
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 )
 
 const (
-	creationTimeout      = time.Minute * 6
+	vmCreationTimeout    = time.Minute * 6
 	vmOperationRateLimit = time.Second * 6
 	vmSilenceTime        = time.Minute * 5
 	// When Tower gets a placement group name duplicate error, it means the ELF API is responding slow.
@@ -35,12 +36,10 @@ const (
 	placementGroupSilenceTime = time.Minute * 5
 )
 
-var gcInterval = 6 * time.Minute
-var vmConcurrentMap = collections.NewTTLMap(gcInterval)
-var vmOperationMap = collections.NewTTLMap(gcInterval)
-var vmOperationLock sync.Mutex
+var goCache = cache.New(5*time.Minute, 10*time.Minute)
+var vmConcurrentCache = cache.New(5*time.Minute, 6*time.Minute)
 
-var placementGroupOperationMap = collections.NewTTLMap(gcInterval)
+var vmOperationLock sync.Mutex
 var placementGroupOperationLock sync.Mutex
 
 // acquireTicketForCreateVM returns whether virtual machine create operation
@@ -49,7 +48,7 @@ func acquireTicketForCreateVM(vmName string, isControlPlaneVM bool) (bool, strin
 	vmOperationLock.Lock()
 	defer vmOperationLock.Unlock()
 
-	if vmOperationMap.Has(getCreationLockKey(vmName)) {
+	if _, found := goCache.Get(getKeyForVMDuplicate(vmName)); found {
 		return false, "Duplicate virtual machine detected"
 	}
 
@@ -58,21 +57,19 @@ func acquireTicketForCreateVM(vmName string, isControlPlaneVM bool) (bool, strin
 		return true, ""
 	}
 
-	if vmConcurrentMap.Len() >= config.MaxConcurrentVMCreations {
-		return false, "The number of concurrently created VMs has reached the limit"
+	concurrentCount := vmConcurrentCache.ItemCount()
+	if concurrentCount >= config.MaxConcurrentVMCreations {
+		return false, fmt.Sprintf("The number of concurrently created VMs has reached the limit %d", config.MaxConcurrentVMCreations)
 	}
 
-	vmConcurrentMap.Set(vmName, nil, creationTimeout)
+	vmConcurrentCache.Set(getKeyForVM(vmName), nil, vmCreationTimeout)
 
 	return true, ""
 }
 
 // releaseTicketForCreateVM releases the virtual machine being created.
 func releaseTicketForCreateVM(vmName string) {
-	vmOperationLock.Lock()
-	defer vmOperationLock.Unlock()
-
-	vmConcurrentMap.Del(vmName)
+	vmConcurrentCache.Delete(getKeyForVM(vmName))
 }
 
 // acquireTicketForUpdatingVM returns whether virtual machine update operation
@@ -80,24 +77,18 @@ func releaseTicketForCreateVM(vmName string) {
 // Tower API currently does not have a concurrency limit for operations on the same virtual machine,
 // which may cause task to fail.
 func acquireTicketForUpdatingVM(vmName string) bool {
-	vmOperationLock.Lock()
-	defer vmOperationLock.Unlock()
-
-	if vmOperationMap.Has(vmName) {
+	if _, found := goCache.Get(getKeyForVM(vmName)); found {
 		return false
 	}
 
-	vmOperationMap.Set(vmName, nil, vmOperationRateLimit)
+	goCache.Set(getKeyForVM(vmName), nil, vmOperationRateLimit)
 
 	return true
 }
 
 // setVMDuplicate sets whether virtual machine is duplicated.
 func setVMDuplicate(vmName string) {
-	vmOperationLock.Lock()
-	defer vmOperationLock.Unlock()
-
-	vmOperationMap.Set(getCreationLockKey(vmName), nil, vmSilenceTime)
+	goCache.Set(getKeyForVMDuplicate(vmName), nil, vmSilenceTime)
 }
 
 // acquireTicketForPlacementGroupOperation returns whether placement group operation
@@ -106,39 +97,44 @@ func acquireTicketForPlacementGroupOperation(groupName string) bool {
 	placementGroupOperationLock.Lock()
 	defer placementGroupOperationLock.Unlock()
 
-	if placementGroupOperationMap.Has(groupName) {
+	if _, found := goCache.Get(getKeyForPlacementGroup(groupName)); found {
 		return false
 	}
 
-	placementGroupOperationMap.Set(groupName, nil, placementGroupSilenceTime)
+	goCache.Set(getKeyForPlacementGroup(groupName), nil, cache.NoExpiration)
 
 	return true
 }
 
 // releaseTicketForPlacementGroupOperation releases the placement group being operated.
 func releaseTicketForPlacementGroupOperation(groupName string) {
-	placementGroupOperationLock.Lock()
-	defer placementGroupOperationLock.Unlock()
-
-	placementGroupOperationMap.Del(groupName)
+	goCache.Delete(getKeyForPlacementGroup(groupName))
 }
 
 // setPlacementGroupDuplicate sets whether placement group is duplicated.
 func setPlacementGroupDuplicate(groupName string) {
-	placementGroupOperationLock.Lock()
-	defer placementGroupOperationLock.Unlock()
-
-	placementGroupOperationMap.Set(getCreationLockKey(groupName), nil, placementGroupSilenceTime)
+	goCache.Set(getKeyForPlacementGroupDuplicate(groupName), nil, placementGroupSilenceTime)
 }
 
 // canCreatePlacementGroup returns whether placement group creation can be performed.
 func canCreatePlacementGroup(groupName string) bool {
-	placementGroupOperationLock.Lock()
-	defer placementGroupOperationLock.Unlock()
+	_, found := goCache.Get(getKeyForPlacementGroupDuplicate(groupName))
 
-	return !placementGroupOperationMap.Has(getCreationLockKey(groupName))
+	return !found
 }
 
-func getCreationLockKey(name string) string {
-	return fmt.Sprintf("%s:creation", name)
+func getKeyForPlacementGroup(name string) string {
+	return fmt.Sprintf("pg:%s", name)
+}
+
+func getKeyForPlacementGroupDuplicate(name string) string {
+	return fmt.Sprintf("pg:duplicate:%s", name)
+}
+
+func getKeyForVM(name string) string {
+	return fmt.Sprintf("vm:%s", name)
+}
+
+func getKeyForVMDuplicate(name string) string {
+	return fmt.Sprintf("vm:duplicate:%s", name)
 }

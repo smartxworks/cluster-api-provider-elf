@@ -21,20 +21,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/collections"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 )
 
 const (
-	silenceTime = time.Minute * 5
+	resourceSilenceTime = 5 * time.Minute
 	// resourceDuration is the lifespan of clusterResource.
-	resourceDuration   = 10 * time.Minute
-	resourceGCInterval = 10 * time.Minute
+	resourceDuration = 10 * time.Minute
 )
 
-var clusterResourceMap = collections.NewTTLMap(resourceGCInterval)
-var lock sync.RWMutex
+var lock sync.Mutex
 
 type clusterResource struct {
 	// LastDetected records the last resource detection time
@@ -49,8 +46,8 @@ type clusterResource struct {
 // 1. ELF cluster has insufficient memory.
 // 2. Placement group not satisfy policy.
 func isELFScheduleVMErrorRecorded(ctx *context.MachineContext) (bool, string, error) {
-	lock.RLock()
-	defer lock.RUnlock()
+	lock.Lock()
+	defer lock.Unlock()
 
 	if resource := getClusterResource(getKeyForInsufficientMemoryError(ctx.ElfCluster.Spec.Cluster)); resource != nil {
 		return true, fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", ctx.ElfCluster.Spec.Cluster), nil
@@ -70,22 +67,16 @@ func isELFScheduleVMErrorRecorded(ctx *context.MachineContext) (bool, string, er
 
 // recordElfClusterMemoryInsufficient records whether the memory is insufficient.
 func recordElfClusterMemoryInsufficient(ctx *context.MachineContext, isInsufficient bool) {
-	lock.Lock()
-	defer lock.Unlock()
-
 	key := getKeyForInsufficientMemoryError(ctx.ElfCluster.Spec.Cluster)
 	if isInsufficient {
-		clusterResourceMap.Set(getKeyForInsufficientMemoryError(ctx.ElfCluster.Spec.Cluster), newClusterResource(), resourceDuration)
+		goCache.Set(key, newClusterResource(), resourceDuration)
 	} else {
-		clusterResourceMap.Del(key)
+		goCache.Delete(key)
 	}
 }
 
 // recordPlacementGroupPolicyNotSatisfied records whether the placement group not satisfy policy.
 func recordPlacementGroupPolicyNotSatisfied(ctx *context.MachineContext, isNotSatisfiedPolicy bool) error {
-	lock.Lock()
-	defer lock.Unlock()
-
 	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
 	if err != nil {
 		return err
@@ -93,9 +84,9 @@ func recordPlacementGroupPolicyNotSatisfied(ctx *context.MachineContext, isNotSa
 
 	key := getKeyForDuplicatePlacementGroupError(placementGroupName)
 	if isNotSatisfiedPolicy {
-		clusterResourceMap.Set(key, newClusterResource(), resourceDuration)
+		goCache.Set(key, newClusterResource(), resourceDuration)
 	} else {
-		clusterResourceMap.Del(key)
+		goCache.Delete(key)
 	}
 
 	return nil
@@ -129,10 +120,10 @@ func canRetryVMOperation(ctx *context.MachineContext) (bool, error) {
 
 func canRetry(key string) bool {
 	if resource := getClusterResource(key); resource != nil {
-		if time.Now().Before(resource.LastDetected.Add(silenceTime)) {
+		if time.Now().Before(resource.LastDetected.Add(resourceSilenceTime)) {
 			return false
 		} else {
-			if time.Now().Before(resource.LastRetried.Add(silenceTime)) {
+			if time.Now().Before(resource.LastRetried.Add(resourceSilenceTime)) {
 				return false
 			} else {
 				resource.LastRetried = time.Now()
@@ -145,22 +136,22 @@ func canRetry(key string) bool {
 }
 
 func getClusterResource(key string) *clusterResource {
-	if val, exists := clusterResourceMap.Get(key); exists {
+	if val, found := goCache.Get(key); found {
 		if resource, ok := val.(*clusterResource); ok {
 			return resource
 		}
 
 		// Delete unexpected data.
-		clusterResourceMap.Del(key)
+		goCache.Delete(key)
 	}
 
 	return nil
 }
 
 func getKeyForInsufficientMemoryError(clusterID string) string {
-	return fmt.Sprintf("%s-insufficient-memory", clusterID)
+	return fmt.Sprintf("insufficient:memory:%s", clusterID)
 }
 
 func getKeyForDuplicatePlacementGroupError(placementGroup string) string {
-	return fmt.Sprintf("%s-duplicate-placement-group", placementGroup)
+	return fmt.Sprintf("pg:duplicate:%s", placementGroup)
 }

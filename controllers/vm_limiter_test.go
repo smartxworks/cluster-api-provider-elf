@@ -17,12 +17,11 @@ limitations under the License.
 package controllers
 
 import (
-	"time"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/collections"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
@@ -32,49 +31,48 @@ var _ = Describe("VMLimiter", func() {
 
 	BeforeEach(func() {
 		vmName = fake.UUID()
-		resetVMConcurrentMap()
-		resetVMOperationMap()
+		resetVMConcurrentCache()
 	})
 
 	It("acquireTicketForCreateVM", func() {
 		ok, msg := acquireTicketForCreateVM(vmName, true)
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(Equal(""))
-		Expect(vmOperationMap.Has(getCreationLockKey(vmName))).To(BeFalse())
+		_, found := goCache.Get(getKeyForVMDuplicate(vmName))
+		Expect(found).To(BeFalse())
 
 		setVMDuplicate(vmName)
-		Expect(vmOperationMap.Has(getCreationLockKey(vmName))).To(BeTrue())
+		_, found = goCache.Get(getKeyForVMDuplicate(vmName))
+		Expect(found).To(BeTrue())
 		ok, msg = acquireTicketForCreateVM(vmName, true)
 		Expect(ok).To(BeFalse())
 		Expect(msg).To(Equal("Duplicate virtual machine detected"))
-
-		vmOperationMap.Set(getCreationLockKey(vmName), nil, vmSilenceTime)
-		vmOperationMap.Values[getCreationLockKey(vmName)].Expiration = time.Now().Add(-vmSilenceTime)
-		Expect(vmOperationMap.Has(getCreationLockKey(vmName))).To(BeFalse())
-		ok, msg = acquireTicketForCreateVM(vmName, true)
-		Expect(ok).To(BeTrue())
-		Expect(msg).To(Equal(""))
+		goCache.Delete(getKeyForVMDuplicate(vmName))
 
 		ok, msg = acquireTicketForCreateVM(vmName, false)
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(Equal(""))
-		Expect(vmConcurrentMap.Has(vmName)).To(BeTrue())
+		_, found = vmConcurrentCache.Get(getKeyForVM(vmName))
+		Expect(found).To(BeTrue())
 
 		for i := 0; i < config.MaxConcurrentVMCreations-1; i++ {
-			vmConcurrentMap.Set(fake.UUID(), nil, creationTimeout)
+			vmConcurrentCache.Set(fake.UUID(), nil, vmCreationTimeout)
 		}
 		ok, msg = acquireTicketForCreateVM(vmName, false)
 		Expect(ok).To(BeFalse())
-		Expect(msg).To(Equal("The number of concurrently created VMs has reached the limit"))
+		Expect(msg).To(Equal(fmt.Sprintf("The number of concurrently created VMs has reached the limit %d", config.MaxConcurrentVMCreations)))
 	})
 
 	It("releaseTicketForCreateVM", func() {
-		Expect(vmConcurrentMap.Has(vmName)).To(BeFalse())
+		_, found := vmConcurrentCache.Get(getKeyForVM(vmName))
+		Expect(found).To(BeFalse())
 		ok, _ := acquireTicketForCreateVM(vmName, false)
 		Expect(ok).To(BeTrue())
-		Expect(vmConcurrentMap.Has(vmName)).To(BeTrue())
+		_, found = vmConcurrentCache.Get(getKeyForVM(vmName))
+		Expect(found).To(BeTrue())
 		releaseTicketForCreateVM(vmName)
-		Expect(vmConcurrentMap.Has(vmName)).To(BeFalse())
+		_, found = vmConcurrentCache.Get(getKeyForVM(vmName))
+		Expect(found).To(BeFalse())
 	})
 })
 
@@ -86,17 +84,10 @@ var _ = Describe("VM Operation Limiter", func() {
 	})
 
 	It("acquireTicketForUpdatingVM", func() {
-		resetVMOperationMap()
 		Expect(acquireTicketForUpdatingVM(vmName)).To(BeTrue())
-		Expect(vmOperationMap.Has(vmName)).To(BeTrue())
+		_, found := goCache.Get(getKeyForVM(vmName))
+		Expect(found).To(BeTrue())
 		Expect(acquireTicketForUpdatingVM(vmName)).To(BeFalse())
-
-		resetVMOperationMap()
-		vmOperationMap.Set(getCreationLockKey(vmName), nil, vmSilenceTime)
-		vmOperationMap.Values[getCreationLockKey(vmName)].Expiration = time.Now().Add(-vmSilenceTime)
-		Expect(vmOperationMap.Has(vmName)).To(BeFalse())
-		Expect(acquireTicketForUpdatingVM(vmName)).To(BeTrue())
-		Expect(vmOperationMap.Has(vmName)).To(BeTrue())
 	})
 })
 
@@ -109,42 +100,35 @@ var _ = Describe("Placement Group Operation Limiter", func() {
 
 	It("acquireTicketForPlacementGroupOperation", func() {
 		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
-		Expect(placementGroupOperationMap.Has(groupName)).To(BeTrue())
+		_, found := goCache.Get(getKeyForPlacementGroup(groupName))
+		Expect(found).To(BeTrue())
 
 		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeFalse())
 		releaseTicketForPlacementGroupOperation(groupName)
 
 		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
-		Expect(placementGroupOperationMap.Has(groupName)).To(BeTrue())
+		_, found = goCache.Get(getKeyForPlacementGroup(groupName))
+		Expect(found).To(BeTrue())
 	})
 
 	It("canCreatePlacementGroup", func() {
-		key := getCreationLockKey(groupName)
+		key := getKeyForPlacementGroupDuplicate(groupName)
 
-		Expect(placementGroupOperationMap.Has(key)).To(BeFalse())
+		_, found := goCache.Get(key)
+		Expect(found).To(BeFalse())
 		Expect(canCreatePlacementGroup(groupName)).To(BeTrue())
 
 		setPlacementGroupDuplicate(groupName)
-		Expect(placementGroupOperationMap.Has(key)).To(BeTrue())
+		_, found = goCache.Get(key)
+		Expect(found).To(BeTrue())
 		Expect(canCreatePlacementGroup(groupName)).To(BeFalse())
-
-		placementGroupOperationMap.Values[key].Expiration = placementGroupOperationMap.Values[key].Expiration.Add(-placementGroupSilenceTime)
-		Expect(placementGroupOperationMap.Has(key)).To(BeFalse())
-		Expect(canCreatePlacementGroup(groupName)).To(BeTrue())
-		Expect(placementGroupOperationMap.Has(key)).To(BeFalse())
-
-		Expect(canCreatePlacementGroup(groupName)).To(BeTrue())
 	})
 })
 
-func resetVMConcurrentMap() {
-	vmConcurrentMap = collections.NewTTLMap(gcInterval)
+func resetVMConcurrentCache() {
+	vmConcurrentCache.Flush()
 }
 
-func resetVMOperationMap() {
-	vmOperationMap = collections.NewTTLMap(gcInterval)
-}
-
-func resetPlacementGroupOperationMap() {
-	placementGroupOperationMap = collections.NewTTLMap(gcInterval)
+func resetGoCache() {
+	goCache.Flush()
 }

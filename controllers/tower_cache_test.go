@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/collections"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
@@ -35,12 +34,12 @@ const (
 
 var _ = Describe("TowerCache", func() {
 	BeforeEach(func() {
-		resetClusterResourceMap()
+		resetGoCache()
 	})
 
 	It("should set memoryInsufficient/policyNotSatisfied", func() {
 		for _, name := range []string{clusterKey, placementGroupKey} {
-			resetClusterResourceMap()
+			resetGoCache()
 			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 			elfCluster.Spec.Cluster = name
 			md := fake.NewMD()
@@ -51,10 +50,12 @@ var _ = Describe("TowerCache", func() {
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
 			key := getKey(machineContext, name)
 
-			Expect(clusterResourceMap.Has(key)).To(BeFalse())
+			_, found := goCache.Get(key)
+			Expect(found).To(BeFalse())
 
 			recordIsUnmet(machineContext, name, true)
-			Expect(clusterResourceMap.Has(key)).To(BeTrue())
+			_, found = goCache.Get(key)
+			Expect(found).To(BeTrue())
 			resource := getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
 
@@ -68,12 +69,14 @@ var _ = Describe("TowerCache", func() {
 			resource = getClusterResource(key)
 			Expect(resource).To(BeNil())
 
-			resetClusterResourceMap()
-			Expect(clusterResourceMap.Has(key)).To(BeFalse())
+			resetGoCache()
+			_, found = goCache.Get(key)
+			Expect(found).To(BeFalse())
 
 			recordIsUnmet(machineContext, name, false)
 			resource = getClusterResource(key)
-			Expect(clusterResourceMap.Has(key)).To(BeFalse())
+			_, found = goCache.Get(key)
+			Expect(found).To(BeFalse())
 			Expect(resource).To(BeNil())
 
 			recordIsUnmet(machineContext, name, false)
@@ -81,7 +84,8 @@ var _ = Describe("TowerCache", func() {
 			Expect(resource).To(BeNil())
 
 			recordIsUnmet(machineContext, name, true)
-			Expect(clusterResourceMap.Has(key)).To(BeTrue())
+			_, found = goCache.Get(key)
+			Expect(found).To(BeTrue())
 			resource = getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
 		}
@@ -89,7 +93,7 @@ var _ = Describe("TowerCache", func() {
 
 	It("should return whether need to detect", func() {
 		for _, name := range []string{clusterKey, placementGroupKey} {
-			resetClusterResourceMap()
+			resetGoCache()
 			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 			elfCluster.Spec.Cluster = name
 			md := fake.NewMD()
@@ -100,7 +104,8 @@ var _ = Describe("TowerCache", func() {
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
 			key := getKey(machineContext, name)
 
-			Expect(clusterResourceMap.Has(key)).To(BeFalse())
+			_, found := goCache.Get(key)
+			Expect(found).To(BeFalse())
 			ok, err := canRetryVMOperation(machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
@@ -127,7 +132,7 @@ var _ = Describe("TowerCache", func() {
 	})
 
 	It("isELFScheduleVMErrorRecorded", func() {
-		resetClusterResourceMap()
+		resetGoCache()
 		elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 		elfCluster.Spec.Cluster = clusterKey
 		md := fake.NewMD()
@@ -148,7 +153,7 @@ var _ = Describe("TowerCache", func() {
 		Expect(msg).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
 		Expect(err).ShouldNot(HaveOccurred())
 
-		resetClusterResourceMap()
+		resetGoCache()
 		recordIsUnmet(machineContext, placementGroupKey, true)
 		ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
 		Expect(ok).To(BeTrue())
@@ -180,11 +185,7 @@ func recordIsUnmet(ctx *context.MachineContext, key string, isUnmet bool) {
 func expireELFScheduleVMError(ctx *context.MachineContext, name string) {
 	key := getKey(ctx, name)
 	resource := getClusterResource(key)
-	resource.LastDetected = resource.LastDetected.Add(-silenceTime)
-	resource.LastRetried = resource.LastRetried.Add(-silenceTime)
-	clusterResourceMap.Set(key, resource, resourceDuration)
-}
-
-func resetClusterResourceMap() {
-	clusterResourceMap = collections.NewTTLMap(resourceGCInterval)
+	resource.LastDetected = resource.LastDetected.Add(-resourceSilenceTime)
+	resource.LastRetried = resource.LastRetried.Add(-resourceSilenceTime)
+	goCache.Set(key, resource, resourceDuration)
 }
