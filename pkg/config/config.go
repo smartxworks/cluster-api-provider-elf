@@ -31,6 +31,6 @@ var (
 	// WaitTaskTimeout is the default timeout for waiting for task to complete.
 	WaitTaskTimeout = 3 * time.Second
 
-	// PlacementGroupCreationWaitTaskTimeout is the timeout for waiting for placement group creation task to complete.
-	PlacementGroupCreationWaitTaskTimeout = 10 * time.Second
+	// PlacementGroupWaitTaskTimeout is the timeout for waiting for placement group creation/updation task to complete.
+	PlacementGroupWaitTaskTimeout = 10 * time.Second
 )

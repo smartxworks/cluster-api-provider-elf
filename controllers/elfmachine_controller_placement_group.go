@@ -94,7 +94,7 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 		return nil, err
 	}
 
-	task, err := ctx.VMService.WaitTask(*withTaskVMPlacementGroup.TaskID, config.PlacementGroupCreationWaitTaskTimeout, config.WaitTaskInterval)
+	task, err := ctx.VMService.WaitTask(*withTaskVMPlacementGroup.TaskID, config.PlacementGroupWaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
 		// The default timeout for Tower to create a placement group is one minute.
 		// When current task times out, duplicate placement groups may or may not appear.
@@ -564,9 +564,9 @@ func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContex
 	}
 
 	taskID := *task.ID
-	task, err = ctx.VMService.WaitTask(taskID, config.WaitTaskTimeout, config.WaitTaskInterval)
+	task, err = ctx.VMService.WaitTask(taskID, config.PlacementGroupWaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
-		return errors.Wrapf(err, "failed to wait for placement group updation task done timed out in %s: placementName %s, taskID %s", config.WaitTaskTimeout, *placementGroup.Name, taskID)
+		return errors.Wrapf(err, "failed to wait for placement group updation task done: placementName %s, taskID %s", *placementGroup.Name, taskID)
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
