@@ -812,7 +812,7 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByName(placementGroupName stri
 	taskID := *deleteVMPlacementGroupResp.Payload[0].TaskID
 	withLatestStatusTask, err := svr.WaitTask(taskID, config.WaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
-		return errors.Wrapf(err, "failed to wait for placement group deletion task to complete in %s: namePrefix %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, placementGroupName, taskID)
+		return errors.Wrapf(err, "failed to wait for placement group deletion task to complete in %s: pgNamePrefix %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, placementGroupName, taskID)
 	}
 
 	if *withLatestStatusTask.Status == models.TaskStatusFAILED {
