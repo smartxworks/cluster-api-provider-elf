@@ -38,16 +38,16 @@ var _ = Describe("VMLimiter", func() {
 		ok, msg := acquireTicketForCreateVM(vmName, true)
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(Equal(""))
-		_, found := goCache.Get(getKeyForVMDuplicate(vmName))
+		_, found := vmTaskErrorCache.Get(getKeyForVMDuplicate(vmName))
 		Expect(found).To(BeFalse())
 
 		setVMDuplicate(vmName)
-		_, found = goCache.Get(getKeyForVMDuplicate(vmName))
+		_, found = vmTaskErrorCache.Get(getKeyForVMDuplicate(vmName))
 		Expect(found).To(BeTrue())
 		ok, msg = acquireTicketForCreateVM(vmName, true)
 		Expect(ok).To(BeFalse())
 		Expect(msg).To(Equal("Duplicate virtual machine detected"))
-		goCache.Delete(getKeyForVMDuplicate(vmName))
+		vmTaskErrorCache.Delete(getKeyForVMDuplicate(vmName))
 
 		ok, msg = acquireTicketForCreateVM(vmName, false)
 		Expect(ok).To(BeTrue())
@@ -85,7 +85,7 @@ var _ = Describe("VM Operation Limiter", func() {
 
 	It("acquireTicketForUpdatingVM", func() {
 		Expect(acquireTicketForUpdatingVM(vmName)).To(BeTrue())
-		_, found := goCache.Get(getKeyForVM(vmName))
+		_, found := vmTaskErrorCache.Get(getKeyForVM(vmName))
 		Expect(found).To(BeTrue())
 		Expect(acquireTicketForUpdatingVM(vmName)).To(BeFalse())
 	})
@@ -100,26 +100,26 @@ var _ = Describe("Placement Group Operation Limiter", func() {
 
 	It("acquireTicketForPlacementGroupOperation", func() {
 		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
-		_, found := goCache.Get(getKeyForPlacementGroup(groupName))
+		_, found := vmTaskErrorCache.Get(getKeyForPlacementGroup(groupName))
 		Expect(found).To(BeTrue())
 
 		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeFalse())
 		releaseTicketForPlacementGroupOperation(groupName)
 
 		Expect(acquireTicketForPlacementGroupOperation(groupName)).To(BeTrue())
-		_, found = goCache.Get(getKeyForPlacementGroup(groupName))
+		_, found = vmTaskErrorCache.Get(getKeyForPlacementGroup(groupName))
 		Expect(found).To(BeTrue())
 	})
 
 	It("canCreatePlacementGroup", func() {
 		key := getKeyForPlacementGroupDuplicate(groupName)
 
-		_, found := goCache.Get(key)
+		_, found := vmTaskErrorCache.Get(key)
 		Expect(found).To(BeFalse())
 		Expect(canCreatePlacementGroup(groupName)).To(BeTrue())
 
 		setPlacementGroupDuplicate(groupName)
-		_, found = goCache.Get(key)
+		_, found = vmTaskErrorCache.Get(key)
 		Expect(found).To(BeTrue())
 		Expect(canCreatePlacementGroup(groupName)).To(BeFalse())
 	})
@@ -129,6 +129,6 @@ func resetVMConcurrentCache() {
 	vmConcurrentCache.Flush()
 }
 
-func resetGoCache() {
-	goCache.Flush()
+func resetVMTaskErrorCache() {
+	vmTaskErrorCache.Flush()
 }

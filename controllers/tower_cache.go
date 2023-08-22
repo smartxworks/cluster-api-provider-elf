@@ -69,24 +69,24 @@ func isELFScheduleVMErrorRecorded(ctx *context.MachineContext) (bool, string, er
 func recordElfClusterMemoryInsufficient(ctx *context.MachineContext, isInsufficient bool) {
 	key := getKeyForInsufficientMemoryError(ctx.ElfCluster.Spec.Cluster)
 	if isInsufficient {
-		goCache.Set(key, newClusterResource(), resourceDuration)
+		vmTaskErrorCache.Set(key, newClusterResource(), resourceDuration)
 	} else {
-		goCache.Delete(key)
+		vmTaskErrorCache.Delete(key)
 	}
 }
 
 // recordPlacementGroupPolicyNotSatisfied records whether the placement group not satisfy policy.
-func recordPlacementGroupPolicyNotSatisfied(ctx *context.MachineContext, isNotSatisfiedPolicy bool) error {
+func recordPlacementGroupPolicyNotSatisfied(ctx *context.MachineContext, isPGPolicyNotSatisfied bool) error {
 	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
 	if err != nil {
 		return err
 	}
 
 	key := getKeyForDuplicatePlacementGroupError(placementGroupName)
-	if isNotSatisfiedPolicy {
-		goCache.Set(key, newClusterResource(), resourceDuration)
+	if isPGPolicyNotSatisfied {
+		vmTaskErrorCache.Set(key, newClusterResource(), resourceDuration)
 	} else {
-		goCache.Delete(key)
+		vmTaskErrorCache.Delete(key)
 	}
 
 	return nil
@@ -136,13 +136,13 @@ func canRetry(key string) bool {
 }
 
 func getClusterResource(key string) *clusterResource {
-	if val, found := goCache.Get(key); found {
+	if val, found := vmTaskErrorCache.Get(key); found {
 		if resource, ok := val.(*clusterResource); ok {
 			return resource
 		}
 
 		// Delete unexpected data.
-		goCache.Delete(key)
+		vmTaskErrorCache.Delete(key)
 	}
 
 	return nil
