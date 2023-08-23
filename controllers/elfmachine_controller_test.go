@@ -267,7 +267,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should create a new VM if none exists", func() {
-			resetClusterResourceMap()
+			resetVMTaskErrorCache()
 			vm := fake.NewTowerVM()
 			vm.Name = &elfMachine.Name
 			elfCluster.Spec.Cluster = clusterKey
@@ -304,7 +304,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.ID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			resetClusterResourceMap()
+			resetVMTaskErrorCache()
 		})
 
 		It("should recover from lost task", func() {
@@ -810,7 +810,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		Context("powerOnVM", func() {
 			It("should", func() {
-				resetClusterResourceMap()
+				resetVMTaskErrorCache()
 				vm := fake.NewTowerVM()
 				elfMachine.Status.VMRef = *vm.LocalID
 				elfCluster.Spec.Cluster = clusterKey
@@ -831,7 +831,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(logBuffer.String()).To(ContainSubstring("and the retry silence period passes, will try to power on the VM again"))
 				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PoweringOnReason}})
-				resetClusterResourceMap()
+				resetVMTaskErrorCache()
 			})
 		})
 	})
@@ -2584,7 +2584,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
-			resetPlacementGroupOperationMap()
+			resetVMTaskErrorCache()
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
@@ -2598,7 +2598,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
-			resetPlacementGroupOperationMap()
+			resetVMTaskErrorCache()
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
@@ -2715,8 +2715,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle failed/succeeded task", func() {
-			resetClusterResourceMap()
-			resetVMOperationMap()
+			resetVMTaskErrorCache()
 			task := fake.NewTowerTask()
 			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
 			task.ErrorMessage = service.TowerString(service.MemoryInsufficientError)

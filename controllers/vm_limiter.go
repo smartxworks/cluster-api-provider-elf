@@ -21,11 +21,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/patrickmn/go-cache"
+
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 )
 
 const (
-	creationTimeout      = time.Minute * 6
+	vmCreationTimeout    = time.Minute * 6
 	vmOperationRateLimit = time.Second * 6
 	vmSilenceTime        = time.Minute * 5
 	// When Tower gets a placement group name duplicate error, it means the ELF API is responding slow.
@@ -34,11 +36,10 @@ const (
 	placementGroupSilenceTime = time.Minute * 5
 )
 
-var vmConcurrentMap = make(map[string]time.Time)
-var vmOperationMap = make(map[string]time.Time)
-var vmOperationLock sync.Mutex
+var vmTaskErrorCache = cache.New(5*time.Minute, 10*time.Minute)
+var vmConcurrentCache = cache.New(5*time.Minute, 6*time.Minute)
 
-var placementGroupOperationMap = make(map[string]time.Time)
+var vmOperationLock sync.Mutex
 var placementGroupOperationLock sync.Mutex
 
 // acquireTicketForCreateVM returns whether virtual machine create operation
@@ -47,11 +48,8 @@ func acquireTicketForCreateVM(vmName string, isControlPlaneVM bool) (bool, strin
 	vmOperationLock.Lock()
 	defer vmOperationLock.Unlock()
 
-	if timestamp, ok := vmOperationMap[getCreationLockKey(vmName)]; ok {
-		if !time.Now().After(timestamp.Add(vmSilenceTime)) {
-			return false, "Duplicate virtual machine detected"
-		}
-		delete(vmOperationMap, getCreationLockKey(vmName))
+	if _, found := vmTaskErrorCache.Get(getKeyForVMDuplicate(vmName)); found {
+		return false, "Duplicate virtual machine detected"
 	}
 
 	// Only limit the concurrent of worker virtual machines.
@@ -59,29 +57,19 @@ func acquireTicketForCreateVM(vmName string, isControlPlaneVM bool) (bool, strin
 		return true, ""
 	}
 
-	if len(vmConcurrentMap) >= config.MaxConcurrentVMCreations {
-		for name, timestamp := range vmConcurrentMap {
-			if !time.Now().Before(timestamp.Add(creationTimeout)) {
-				delete(vmConcurrentMap, name)
-			}
-		}
+	concurrentCount := vmConcurrentCache.ItemCount()
+	if concurrentCount >= config.MaxConcurrentVMCreations {
+		return false, fmt.Sprintf("The number of concurrently created VMs has reached the limit %d", config.MaxConcurrentVMCreations)
 	}
 
-	if len(vmConcurrentMap) >= config.MaxConcurrentVMCreations {
-		return false, "The number of concurrently created VMs has reached the limit"
-	}
-
-	vmConcurrentMap[vmName] = time.Now()
+	vmConcurrentCache.Set(getKeyForVM(vmName), nil, vmCreationTimeout)
 
 	return true, ""
 }
 
 // releaseTicketForCreateVM releases the virtual machine being created.
 func releaseTicketForCreateVM(vmName string) {
-	vmOperationLock.Lock()
-	defer vmOperationLock.Unlock()
-
-	delete(vmConcurrentMap, vmName)
+	vmConcurrentCache.Delete(getKeyForVM(vmName))
 }
 
 // acquireTicketForUpdatingVM returns whether virtual machine update operation
@@ -89,26 +77,18 @@ func releaseTicketForCreateVM(vmName string) {
 // Tower API currently does not have a concurrency limit for operations on the same virtual machine,
 // which may cause task to fail.
 func acquireTicketForUpdatingVM(vmName string) bool {
-	vmOperationLock.Lock()
-	defer vmOperationLock.Unlock()
-
-	if timestamp, ok := vmOperationMap[vmName]; ok {
-		if !time.Now().After(timestamp.Add(vmOperationRateLimit)) {
-			return false
-		}
+	if _, found := vmTaskErrorCache.Get(getKeyForVM(vmName)); found {
+		return false
 	}
 
-	vmOperationMap[vmName] = time.Now()
+	vmTaskErrorCache.Set(getKeyForVM(vmName), nil, vmOperationRateLimit)
 
 	return true
 }
 
 // setVMDuplicate sets whether virtual machine is duplicated.
 func setVMDuplicate(vmName string) {
-	vmOperationLock.Lock()
-	defer vmOperationLock.Unlock()
-
-	vmOperationMap[getCreationLockKey(vmName)] = time.Now()
+	vmTaskErrorCache.Set(getKeyForVMDuplicate(vmName), nil, vmSilenceTime)
 }
 
 // acquireTicketForPlacementGroupOperation returns whether placement group operation
@@ -117,48 +97,44 @@ func acquireTicketForPlacementGroupOperation(groupName string) bool {
 	placementGroupOperationLock.Lock()
 	defer placementGroupOperationLock.Unlock()
 
-	if _, ok := placementGroupOperationMap[groupName]; ok {
+	if _, found := vmTaskErrorCache.Get(getKeyForPlacementGroup(groupName)); found {
 		return false
 	}
 
-	placementGroupOperationMap[groupName] = time.Now()
+	vmTaskErrorCache.Set(getKeyForPlacementGroup(groupName), nil, cache.NoExpiration)
 
 	return true
 }
 
 // releaseTicketForPlacementGroupOperation releases the placement group being operated.
 func releaseTicketForPlacementGroupOperation(groupName string) {
-	placementGroupOperationLock.Lock()
-	defer placementGroupOperationLock.Unlock()
-
-	delete(placementGroupOperationMap, groupName)
+	vmTaskErrorCache.Delete(getKeyForPlacementGroup(groupName))
 }
 
 // setPlacementGroupDuplicate sets whether placement group is duplicated.
 func setPlacementGroupDuplicate(groupName string) {
-	placementGroupOperationLock.Lock()
-	defer placementGroupOperationLock.Unlock()
-
-	placementGroupOperationMap[getCreationLockKey(groupName)] = time.Now()
+	vmTaskErrorCache.Set(getKeyForPlacementGroupDuplicate(groupName), nil, placementGroupSilenceTime)
 }
 
 // canCreatePlacementGroup returns whether placement group creation can be performed.
 func canCreatePlacementGroup(groupName string) bool {
-	placementGroupOperationLock.Lock()
-	defer placementGroupOperationLock.Unlock()
+	_, found := vmTaskErrorCache.Get(getKeyForPlacementGroupDuplicate(groupName))
 
-	key := getCreationLockKey(groupName)
-	if timestamp, ok := placementGroupOperationMap[key]; ok {
-		if time.Now().Before(timestamp.Add(placementGroupSilenceTime)) {
-			return false
-		}
-
-		delete(placementGroupOperationMap, key)
-	}
-
-	return true
+	return !found
 }
 
-func getCreationLockKey(name string) string {
-	return fmt.Sprintf("%s:creation", name)
+func getKeyForPlacementGroup(name string) string {
+	return fmt.Sprintf("pg:%s", name)
+}
+
+func getKeyForPlacementGroupDuplicate(name string) string {
+	return fmt.Sprintf("pg:duplicate:%s", name)
+}
+
+func getKeyForVM(name string) string {
+	return fmt.Sprintf("vm:%s", name)
+}
+
+func getKeyForVMDuplicate(name string) string {
+	return fmt.Sprintf("vm:duplicate:%s", name)
 }

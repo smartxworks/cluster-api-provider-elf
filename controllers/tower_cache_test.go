@@ -34,12 +34,12 @@ const (
 
 var _ = Describe("TowerCache", func() {
 	BeforeEach(func() {
-		resetClusterResourceMap()
+		resetVMTaskErrorCache()
 	})
 
 	It("should set memoryInsufficient/policyNotSatisfied", func() {
 		for _, name := range []string{clusterKey, placementGroupKey} {
-			resetClusterResourceMap()
+			resetVMTaskErrorCache()
 			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 			elfCluster.Spec.Cluster = name
 			md := fake.NewMD()
@@ -50,42 +50,50 @@ var _ = Describe("TowerCache", func() {
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
 			key := getKey(machineContext, name)
 
-			Expect(clusterResourceMap).NotTo(HaveKey(key))
-			Expect(clusterResourceMap[key]).To(BeNil())
+			_, found := vmTaskErrorCache.Get(key)
+			Expect(found).To(BeFalse())
 
 			recordIsUnmet(machineContext, name, true)
-			Expect(clusterResourceMap[key].IsUnmet).To(BeTrue())
-			Expect(clusterResourceMap[key].LastDetected).To(Equal(clusterResourceMap[key].LastRetried))
+			_, found = vmTaskErrorCache.Get(key)
+			Expect(found).To(BeTrue())
+			resource := getClusterResource(key)
+			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
 
 			recordIsUnmet(machineContext, name, true)
-			Expect(clusterResourceMap[key].IsUnmet).To(BeTrue())
-			Expect(clusterResourceMap[key].LastDetected).To(Equal(clusterResourceMap[key].LastRetried))
+			lastDetected := resource.LastDetected
+			resource = getClusterResource(key)
+			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
+			Expect(resource.LastDetected.After(lastDetected)).To(BeTrue())
 
 			recordIsUnmet(machineContext, name, false)
-			Expect(clusterResourceMap[key].IsUnmet).To(BeFalse())
-			Expect(clusterResourceMap[key].LastDetected).To(Equal(clusterResourceMap[key].LastRetried))
+			resource = getClusterResource(key)
+			Expect(resource).To(BeNil())
 
-			resetClusterResourceMap()
-			Expect(clusterResourceMap).NotTo(HaveKey(name))
-			Expect(clusterResourceMap[key]).To(BeNil())
-
-			recordIsUnmet(machineContext, name, false)
-			Expect(clusterResourceMap[key].IsUnmet).To(BeFalse())
-			Expect(clusterResourceMap[key].LastDetected).To(Equal(clusterResourceMap[key].LastRetried))
+			resetVMTaskErrorCache()
+			_, found = vmTaskErrorCache.Get(key)
+			Expect(found).To(BeFalse())
 
 			recordIsUnmet(machineContext, name, false)
-			Expect(clusterResourceMap[key].IsUnmet).To(BeFalse())
-			Expect(clusterResourceMap[key].LastDetected).To(Equal(clusterResourceMap[key].LastRetried))
+			resource = getClusterResource(key)
+			_, found = vmTaskErrorCache.Get(key)
+			Expect(found).To(BeFalse())
+			Expect(resource).To(BeNil())
+
+			recordIsUnmet(machineContext, name, false)
+			resource = getClusterResource(key)
+			Expect(resource).To(BeNil())
 
 			recordIsUnmet(machineContext, name, true)
-			Expect(clusterResourceMap[key].IsUnmet).To(BeTrue())
-			Expect(clusterResourceMap[key].LastDetected).To(Equal(clusterResourceMap[key].LastRetried))
+			_, found = vmTaskErrorCache.Get(key)
+			Expect(found).To(BeTrue())
+			resource = getClusterResource(key)
+			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
 		}
 	})
 
 	It("should return whether need to detect", func() {
 		for _, name := range []string{clusterKey, placementGroupKey} {
-			resetClusterResourceMap()
+			resetVMTaskErrorCache()
 			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 			elfCluster.Spec.Cluster = name
 			md := fake.NewMD()
@@ -96,8 +104,8 @@ var _ = Describe("TowerCache", func() {
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
 			key := getKey(machineContext, name)
 
-			Expect(clusterResourceMap).NotTo(HaveKey(key))
-			Expect(clusterResourceMap[key]).To(BeNil())
+			_, found := vmTaskErrorCache.Get(key)
+			Expect(found).To(BeFalse())
 			ok, err := canRetryVMOperation(machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
@@ -124,7 +132,7 @@ var _ = Describe("TowerCache", func() {
 	})
 
 	It("isELFScheduleVMErrorRecorded", func() {
-		resetClusterResourceMap()
+		resetVMTaskErrorCache()
 		elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 		elfCluster.Spec.Cluster = clusterKey
 		md := fake.NewMD()
@@ -145,7 +153,7 @@ var _ = Describe("TowerCache", func() {
 		Expect(msg).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
 		Expect(err).ShouldNot(HaveOccurred())
 
-		resetClusterResourceMap()
+		resetVMTaskErrorCache()
 		recordIsUnmet(machineContext, placementGroupKey, true)
 		ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
 		Expect(ok).To(BeTrue())
@@ -156,13 +164,13 @@ var _ = Describe("TowerCache", func() {
 
 func getKey(ctx *context.MachineContext, name string) string {
 	if name == clusterKey {
-		return getMemoryKey(name)
+		return getKeyForInsufficientMemoryError(name)
 	}
 
 	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
 	Expect(err).ShouldNot(HaveOccurred())
 
-	return getPlacementGroupKey(placementGroupName)
+	return getKeyForDuplicatePlacementGroupError(placementGroupName)
 }
 
 func recordIsUnmet(ctx *context.MachineContext, key string, isUnmet bool) {
@@ -176,10 +184,8 @@ func recordIsUnmet(ctx *context.MachineContext, key string, isUnmet bool) {
 
 func expireELFScheduleVMError(ctx *context.MachineContext, name string) {
 	key := getKey(ctx, name)
-	clusterResourceMap[key].LastDetected = clusterResourceMap[key].LastDetected.Add(-silenceTime)
-	clusterResourceMap[key].LastRetried = clusterResourceMap[key].LastRetried.Add(-silenceTime)
-}
-
-func resetClusterResourceMap() {
-	clusterResourceMap = make(map[string]*clusterResource)
+	resource := getClusterResource(key)
+	resource.LastDetected = resource.LastDetected.Add(-resourceSilenceTime)
+	resource.LastRetried = resource.LastRetried.Add(-resourceSilenceTime)
+	vmTaskErrorCache.Set(key, resource, resourceDuration)
 }

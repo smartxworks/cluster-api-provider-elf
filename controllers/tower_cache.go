@@ -26,16 +26,14 @@ import (
 )
 
 const (
-	silenceTime = time.Minute * 5
+	resourceSilenceTime = 5 * time.Minute
+	// resourceDuration is the lifespan of clusterResource.
+	resourceDuration = 10 * time.Minute
 )
 
-var clusterResourceMap = make(map[string]*clusterResource)
-var lock sync.RWMutex
+var lock sync.Mutex
 
 type clusterResource struct {
-	// IsUnmet indicates whether the resource does not meet the requirement.
-	// For example, true can indicate insufficient memory and not satisfy placement group policy.
-	IsUnmet bool
 	// LastDetected records the last resource detection time
 	LastDetected time.Time
 	// LastRetried records the time of the last attempt to detect resource
@@ -48,10 +46,10 @@ type clusterResource struct {
 // 1. ELF cluster has insufficient memory.
 // 2. Placement group not satisfy policy.
 func isELFScheduleVMErrorRecorded(ctx *context.MachineContext) (bool, string, error) {
-	lock.RLock()
-	defer lock.RUnlock()
+	lock.Lock()
+	defer lock.Unlock()
 
-	if resource, ok := clusterResourceMap[getMemoryKey(ctx.ElfCluster.Spec.Cluster)]; ok && resource.IsUnmet {
+	if resource := getClusterResource(getKeyForInsufficientMemoryError(ctx.ElfCluster.Spec.Cluster)); resource != nil {
 		return true, fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", ctx.ElfCluster.Spec.Cluster), nil
 	}
 
@@ -60,7 +58,7 @@ func isELFScheduleVMErrorRecorded(ctx *context.MachineContext) (bool, string, er
 		return false, "", err
 	}
 
-	if resource, ok := clusterResourceMap[getPlacementGroupKey(placementGroupName)]; ok && resource.IsUnmet {
+	if resource := getClusterResource(getKeyForDuplicatePlacementGroupError(placementGroupName)); resource != nil {
 		return true, fmt.Sprintf("Not satisfy policy detected for the placement group %s", placementGroupName), nil
 	}
 
@@ -69,31 +67,34 @@ func isELFScheduleVMErrorRecorded(ctx *context.MachineContext) (bool, string, er
 
 // recordElfClusterMemoryInsufficient records whether the memory is insufficient.
 func recordElfClusterMemoryInsufficient(ctx *context.MachineContext, isInsufficient bool) {
-	lock.Lock()
-	defer lock.Unlock()
-
-	clusterResourceMap[getMemoryKey(ctx.ElfCluster.Spec.Cluster)] = newClusterResource(isInsufficient)
+	key := getKeyForInsufficientMemoryError(ctx.ElfCluster.Spec.Cluster)
+	if isInsufficient {
+		vmTaskErrorCache.Set(key, newClusterResource(), resourceDuration)
+	} else {
+		vmTaskErrorCache.Delete(key)
+	}
 }
 
 // recordPlacementGroupPolicyNotSatisfied records whether the placement group not satisfy policy.
-func recordPlacementGroupPolicyNotSatisfied(ctx *context.MachineContext, isNotSatisfiedPolicy bool) error {
-	lock.Lock()
-	defer lock.Unlock()
-
+func recordPlacementGroupPolicyNotSatisfied(ctx *context.MachineContext, isPGPolicyNotSatisfied bool) error {
 	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
 	if err != nil {
 		return err
 	}
 
-	clusterResourceMap[getPlacementGroupKey(placementGroupName)] = newClusterResource(isNotSatisfiedPolicy)
+	key := getKeyForDuplicatePlacementGroupError(placementGroupName)
+	if isPGPolicyNotSatisfied {
+		vmTaskErrorCache.Set(key, newClusterResource(), resourceDuration)
+	} else {
+		vmTaskErrorCache.Delete(key)
+	}
 
 	return nil
 }
 
-func newClusterResource(isUnmet bool) *clusterResource {
+func newClusterResource() *clusterResource {
 	now := time.Now()
 	return &clusterResource{
-		IsUnmet:      isUnmet,
 		LastDetected: now,
 		LastRetried:  now,
 	}
@@ -105,7 +106,7 @@ func canRetryVMOperation(ctx *context.MachineContext) (bool, error) {
 	lock.Lock()
 	defer lock.Unlock()
 
-	if ok := canRetry(getMemoryKey(ctx.ElfCluster.Spec.Cluster)); ok {
+	if ok := canRetry(getKeyForInsufficientMemoryError(ctx.ElfCluster.Spec.Cluster)); ok {
 		return true, nil
 	}
 
@@ -114,19 +115,15 @@ func canRetryVMOperation(ctx *context.MachineContext) (bool, error) {
 		return false, err
 	}
 
-	return canRetry(getPlacementGroupKey(placementGroupName)), nil
+	return canRetry(getKeyForDuplicatePlacementGroupError(placementGroupName)), nil
 }
 
 func canRetry(key string) bool {
-	if resource, ok := clusterResourceMap[key]; ok {
-		if !resource.IsUnmet {
-			return false
-		}
-
-		if time.Now().Before(resource.LastDetected.Add(silenceTime)) {
+	if resource := getClusterResource(key); resource != nil {
+		if time.Now().Before(resource.LastDetected.Add(resourceSilenceTime)) {
 			return false
 		} else {
-			if time.Now().Before(resource.LastRetried.Add(silenceTime)) {
+			if time.Now().Before(resource.LastRetried.Add(resourceSilenceTime)) {
 				return false
 			} else {
 				resource.LastRetried = time.Now()
@@ -138,10 +135,23 @@ func canRetry(key string) bool {
 	return false
 }
 
-func getMemoryKey(clusterID string) string {
-	return fmt.Sprintf("%s-memory", clusterID)
+func getClusterResource(key string) *clusterResource {
+	if val, found := vmTaskErrorCache.Get(key); found {
+		if resource, ok := val.(*clusterResource); ok {
+			return resource
+		}
+
+		// Delete unexpected data.
+		vmTaskErrorCache.Delete(key)
+	}
+
+	return nil
 }
 
-func getPlacementGroupKey(placementGroup string) string {
-	return fmt.Sprintf("%s-placement-group", placementGroup)
+func getKeyForInsufficientMemoryError(clusterID string) string {
+	return fmt.Sprintf("insufficient:memory:%s", clusterID)
+}
+
+func getKeyForDuplicatePlacementGroupError(placementGroup string) string {
+	return fmt.Sprintf("pg:duplicate:%s", placementGroup)
 }
