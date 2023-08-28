@@ -58,7 +58,7 @@ type VMService interface {
 	GetVMNics(vmID string) ([]*models.VMNic, error)
 	GetVMTemplate(template string) (*models.ContentLibraryVMTemplate, error)
 	GetTask(id string) (*models.Task, error)
-	WaitTask(id string, timeout, interval time.Duration) (*models.Task, error)
+	WaitTask(ctx goctx.Context, id string, timeout, interval time.Duration) (*models.Task, error)
 	GetCluster(id string) (*models.Cluster, error)
 	GetHost(id string) (*models.Host, error)
 	GetHostsByCluster(clusterID string) (Hosts, error)
@@ -69,7 +69,7 @@ type VMService interface {
 	CreateVMPlacementGroup(name, clusterID string, vmPolicy models.VMVMPolicy) (*models.WithTaskVMPlacementGroup, error)
 	GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error)
 	AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error)
-	DeleteVMPlacementGroupsByName(placementGroupName string) error
+	DeleteVMPlacementGroupsByName(ctx goctx.Context, placementGroupName string) error
 }
 
 type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
@@ -613,9 +613,9 @@ func (svr *TowerVMService) GetTask(id string) (*models.Task, error) {
 }
 
 // WaitTask waits for task to complete and returns task.
-func (svr *TowerVMService) WaitTask(id string, timeout, interval time.Duration) (*models.Task, error) {
+func (svr *TowerVMService) WaitTask(ctx goctx.Context, id string, timeout, interval time.Duration) (*models.Task, error) {
 	var task *models.Task
-	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(ctx goctx.Context) (bool, error) {
 		var err error
 		task, err = svr.GetTask(id)
 		if err != nil {
@@ -792,7 +792,7 @@ func (svr *TowerVMService) AddVMsToPlacementGroup(placementGroup *models.VMPlace
 }
 
 // DeleteVMPlacementGroupsByName deletes placement groups by name synchronously.
-func (svr *TowerVMService) DeleteVMPlacementGroupsByName(placementGroupName string) error {
+func (svr *TowerVMService) DeleteVMPlacementGroupsByName(ctx goctx.Context, placementGroupName string) error {
 	deleteVMPlacementGroupParams := clientvmplacementgroup.NewDeleteVMPlacementGroupParams()
 	deleteVMPlacementGroupParams.RequestBody = &models.VMPlacementGroupDeletionParams{
 		Where: &models.VMPlacementGroupWhereInput{
@@ -810,7 +810,7 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByName(placementGroupName stri
 	}
 
 	taskID := *deleteVMPlacementGroupResp.Payload[0].TaskID
-	withLatestStatusTask, err := svr.WaitTask(taskID, config.WaitTaskTimeout, config.WaitTaskInterval)
+	withLatestStatusTask, err := svr.WaitTask(ctx, taskID, config.WaitTaskTimeout, config.WaitTaskInterval)
 	if err != nil {
 		return errors.Wrapf(err, "failed to wait for placement group deleting task to complete in %s: pgNamePrefix %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, placementGroupName, taskID)
 	}

@@ -21,15 +21,18 @@ jobs:
           fi
 
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Install go
-        uses: actions/setup-go@v2
+      - name: Calculate go version
+        run: echo "go_version=$(make go-version)" >> $GITHUB_ENV
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
         with:
-          go-version: 1.19
+          go-version: ${{ env.go_version }}
 
       - name: Login docker
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}

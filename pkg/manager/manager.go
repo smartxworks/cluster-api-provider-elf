@@ -59,15 +59,15 @@ func New(opts Options) (Manager, error) {
 	// Build the controller manager context.
 	controllerManagerContext := &context.ControllerManagerContext{
 		Context:                 goctx.Background(),
-		WatchNamespace:          opts.Namespace,
+		WatchNamespaces:         opts.Cache.Namespaces,
 		Namespace:               opts.PodNamespace,
 		Name:                    opts.PodName,
 		LeaderElectionID:        opts.LeaderElectionID,
 		LeaderElectionNamespace: opts.LeaderElectionNamespace,
-		MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
 		Client:                  mgr.GetClient(),
 		Logger:                  opts.Logger.WithName(opts.PodName),
 		Scheme:                  opts.Scheme,
+		WatchFilterValue:        opts.WatchFilterValue,
 	}
 
 	// Add the requested items to the manager.

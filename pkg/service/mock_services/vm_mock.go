@@ -5,6 +5,7 @@
 package mock_services
 
 import (
+	context "context"
 	reflect "reflect"
 	time "time"
 
@@ -129,17 +130,17 @@ func (mr *MockVMServiceMockRecorder) DeleteLabel(key, value, strict interface{})
 }
 
 // DeleteVMPlacementGroupsByName mocks base method.
-func (m *MockVMService) DeleteVMPlacementGroupsByName(placementGroupName string) error {
+func (m *MockVMService) DeleteVMPlacementGroupsByName(ctx context.Context, placementGroupName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteVMPlacementGroupsByName", placementGroupName)
+	ret := m.ctrl.Call(m, "DeleteVMPlacementGroupsByName", ctx, placementGroupName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteVMPlacementGroupsByName indicates an expected call of DeleteVMPlacementGroupsByName.
-func (mr *MockVMServiceMockRecorder) DeleteVMPlacementGroupsByName(placementGroupName interface{}) *gomock.Call {
+func (mr *MockVMServiceMockRecorder) DeleteVMPlacementGroupsByName(ctx, placementGroupName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVMPlacementGroupsByName", reflect.TypeOf((*MockVMService)(nil).DeleteVMPlacementGroupsByName), placementGroupName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVMPlacementGroupsByName", reflect.TypeOf((*MockVMService)(nil).DeleteVMPlacementGroupsByName), ctx, placementGroupName)
 }
 
 // FindByIDs mocks base method.
@@ -413,16 +414,16 @@ func (mr *MockVMServiceMockRecorder) UpsertLabel(key, value interface{}) *gomock
 }
 
 // WaitTask mocks base method.
-func (m *MockVMService) WaitTask(id string, timeout, interval time.Duration) (*models.Task, error) {
+func (m *MockVMService) WaitTask(ctx context.Context, id string, timeout, interval time.Duration) (*models.Task, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitTask", id, timeout, interval)
+	ret := m.ctrl.Call(m, "WaitTask", ctx, id, timeout, interval)
 	ret0, _ := ret[0].(*models.Task)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // WaitTask indicates an expected call of WaitTask.
-func (mr *MockVMServiceMockRecorder) WaitTask(id, timeout, interval interface{}) *gomock.Call {
+func (mr *MockVMServiceMockRecorder) WaitTask(ctx, id, timeout, interval interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitTask", reflect.TypeOf((*MockVMService)(nil).WaitTask), id, timeout, interval)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitTask", reflect.TypeOf((*MockVMService)(nil).WaitTask), ctx, id, timeout, interval)
 }

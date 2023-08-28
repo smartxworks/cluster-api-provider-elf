@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
+	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -37,7 +38,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
@@ -48,12 +48,6 @@ import (
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 )
 
-var (
-	clusterControlledType     = &infrav1.ElfCluster{}
-	clusterControlledTypeName = reflect.TypeOf(clusterControlledType).Elem().Name()
-	clusterControlledTypeGVK  = infrav1.GroupVersion.WithKind(clusterControlledTypeName)
-)
-
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;patch
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfclusters/status,verbs=get;update;patch
@@ -62,9 +56,12 @@ var (
 
 // AddClusterControllerToManager adds the cluster controller to the provided
 // manager.
-func AddClusterControllerToManager(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
+func AddClusterControllerToManager(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager, options controller.Options) error {
 	var (
-		controllerNameShort = fmt.Sprintf("%s-controller", strings.ToLower(clusterControlledTypeName))
+		clusterControlledType     = &infrav1.ElfCluster{}
+		clusterControlledTypeName = reflect.TypeOf(clusterControlledType).Elem().Name()
+		clusterControlledTypeGVK  = infrav1.GroupVersion.WithKind(clusterControlledTypeName)
+		controllerNameShort       = fmt.Sprintf("%s-controller", strings.ToLower(clusterControlledTypeName))
 	)
 
 	// Build the controller context.
@@ -84,10 +81,11 @@ func AddClusterControllerToManager(ctx *context.ControllerManagerContext, mgr ct
 		For(clusterControlledType).
 		// Watch the CAPI resource that owns this infrastructure resource.
 		Watches(
-			&source.Kind{Type: &clusterv1.Cluster{}},
+			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(capiutil.ClusterToInfrastructureMapFunc(ctx, clusterControlledTypeGVK, mgr.GetClient(), &infrav1.ElfCluster{})),
 		).
-		WithOptions(controller.Options{MaxConcurrentReconciles: ctx.MaxConcurrentReconciles}).
+		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(ctrl.LoggerFrom(ctx), ctx.WatchFilterValue)).
+		WithOptions(options).
 		Complete(reconciler)
 }
 
@@ -231,7 +229,7 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 
 func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) error {
 	placementGroupPrefix := towerresources.GetVMPlacementGroupNamePrefix(ctx.Cluster)
-	if err := ctx.VMService.DeleteVMPlacementGroupsByName(placementGroupPrefix); err != nil {
+	if err := ctx.VMService.DeleteVMPlacementGroupsByName(ctx, placementGroupPrefix); err != nil {
 		return err
 	} else {
 		ctx.Logger.Info(fmt.Sprintf("Placement groups with name prefix %s deleted", placementGroupPrefix))
