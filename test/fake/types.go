@@ -117,7 +117,9 @@ func NewElfMachine(elfCluster *infrav1.ElfCluster) *infrav1.ElfMachine {
 			MemoryMiB:         1,
 			Network: infrav1.NetworkSpec{
 				Devices: []infrav1.NetworkDeviceSpec{
-					{},
+					{
+						NetworkType: infrav1.NetworkTypeIPV4DHCP,
+					},
 				},
 			},
 		},
