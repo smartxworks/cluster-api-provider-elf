@@ -1026,10 +1026,10 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 		}
 	}
 
-	networkDevicesRequiringIP := ctx.ElfMachine.GetNetworkDevicesRequiringIP()
-	networkDevicesRequiringDHCP := ctx.ElfMachine.GetNetworkDevicesRequiringDHCP()
+	networkDevicesWithIP := ctx.ElfMachine.GetNetworkDevicesRequiringIP()
+	networkDevicesWithDHCP := ctx.ElfMachine.GetNetworkDevicesRequiringDHCP()
 
-	if len(ipToMachineAddressMap) < len(networkDevicesRequiringIP) {
+	if len(ipToMachineAddressMap) < len(networkDevicesWithIP) {
 		// Try to get VM NIC IP address from the K8s Node.
 		nodeIP, err := r.getK8sNodeIP(ctx, ctx.ElfMachine.Name)
 		if err == nil && nodeIP != "" {
@@ -1038,11 +1038,11 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 				Type:    clusterv1.MachineInternalIP,
 			}
 		} else if err != nil {
-			ctx.Logger.Error(err, "failed to get VM NIC IP address from the K8s Node", "Node", ctx.ElfMachine.Name)
+			ctx.Logger.Error(err, "failed to get VM NIC IP address from the K8s node", "Node", ctx.ElfMachine.Name)
 		}
 	}
 
-	if len(networkDevicesRequiringDHCP) > 0 {
+	if len(networkDevicesWithDHCP) > 0 {
 		dhcpIPNum := 0
 		for _, ip := range ipToMachineAddressMap {
 			if !ctx.ElfMachine.IsMachineStaticIP(ip.Address) {
@@ -1050,7 +1050,7 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 			}
 		}
 		// If not all DHCP NICs get IP, return false and wait for next requeue.
-		if dhcpIPNum < len(networkDevicesRequiringDHCP) {
+		if dhcpIPNum < len(networkDevicesWithDHCP) {
 			return false, nil
 		}
 	} else if len(ipToMachineAddressMap) < 1 {
