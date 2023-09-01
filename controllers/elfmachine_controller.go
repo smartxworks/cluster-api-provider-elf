@@ -980,10 +980,12 @@ func (r *ElfMachineReconciler) reconcileNode(ctx *context.MachineContext, vm *mo
 	return true, nil
 }
 
-// Ensure all the VM's NICs get IP addresses, otherwise requeue.
+// Ensure all the VM's NICs that need IP have obtained IP addresses and VM network ready, otherwise requeue.
+// 1. If there are DHCP VM NICs, it will ensure that all DHCP VM NICs obtain IP.
+// 2. If none of the VM NICs is the DHCP type, at least one IP must be obtained from Tower API or k8s node to ensure that the network is ready.
 //
 // In the scenario with many virtual machines, it could be slow for SMTX OS to synchronize VM information via vmtools.
-// So if Tower API returns empty IP address for the VM's 1st NIC, try to get its IP address from the corresponding K8s Node.
+// So if not enough IPs can be obtained from Tower API, try to get its IP address from the corresponding K8s Node.
 func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
 	defer func() {
 		if reterr != nil {
@@ -1024,9 +1026,10 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 		}
 	}
 
-	networkDevicesRequiringIP := ctx.ElfMachine.GetNetworkDevicesRequiringIP()
+	networkDevicesWithIP := ctx.ElfMachine.GetNetworkDevicesRequiringIP()
+	networkDevicesWithDHCP := ctx.ElfMachine.GetNetworkDevicesRequiringDHCP()
 
-	if len(ipToMachineAddressMap) < len(networkDevicesRequiringIP) {
+	if len(ipToMachineAddressMap) < len(networkDevicesWithIP) {
 		// Try to get VM NIC IP address from the K8s Node.
 		nodeIP, err := r.getK8sNodeIP(ctx, ctx.ElfMachine.Name)
 		if err == nil && nodeIP != "" {
@@ -1034,17 +1037,26 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx *context.MachineContext, vm 
 				Address: nodeIP,
 				Type:    clusterv1.MachineInternalIP,
 			}
+		} else if err != nil {
+			ctx.Logger.Error(err, "failed to get VM NIC IP address from the K8s node", "Node", ctx.ElfMachine.Name)
+		}
+	}
 
-			// If not all NICs get IP, return false and wait for next requeue.
-			if len(ipToMachineAddressMap) < len(networkDevicesRequiringIP) {
-				return false, nil
+	if len(networkDevicesWithDHCP) > 0 {
+		dhcpIPNum := 0
+		for _, ip := range ipToMachineAddressMap {
+			if !ctx.ElfMachine.IsMachineStaticIP(ip.Address) {
+				dhcpIPNum++
 			}
-		} else {
-			if err != nil {
-				ctx.Logger.Error(err, "failed to get VM NIC IP address from the K8s Node", "Node", ctx.ElfMachine.Name)
-			}
+		}
+		// If not all DHCP NICs get IP, return false and wait for next requeue.
+		if dhcpIPNum < len(networkDevicesWithDHCP) {
 			return false, nil
 		}
+	} else if len(ipToMachineAddressMap) < 1 {
+		// If none of the VM NICs is the DHCP type,
+		// at least one IP must be obtained from Tower API or k8s node to ensure that the network is ready, otherwise requeue.
+		return false, nil
 	}
 
 	for _, machineAddress := range ipToMachineAddressMap {
@@ -1157,11 +1169,6 @@ func (r *ElfMachineReconciler) deleteNode(ctx *context.MachineContext, nodeName 
 
 // getK8sNodeIP get the default network IP of K8s Node.
 func (r *ElfMachineReconciler) getK8sNodeIP(ctx *context.MachineContext, nodeName string) (string, error) {
-	// Return early if control plane is not initialized.
-	if !conditions.IsTrue(ctx.Cluster, clusterv1.ControlPlaneInitializedCondition) {
-		return "", nil
-	}
-
 	kubeClient, err := util.NewKubeClient(ctx, ctx.Client, ctx.Cluster)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to get client for Cluster %s/%s", ctx.Cluster.Namespace, ctx.Cluster.Name)

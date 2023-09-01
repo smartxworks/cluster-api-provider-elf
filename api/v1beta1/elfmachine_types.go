@@ -250,6 +250,36 @@ func (m *ElfMachine) GetNetworkDevicesRequiringIP() []NetworkDeviceSpec {
 	return networkDevices
 }
 
+// GetNetworkDevicesRequiringDHCP returns a slice of NetworkDeviceSpec which requires DHCP IP.
+func (m *ElfMachine) GetNetworkDevicesRequiringDHCP() []NetworkDeviceSpec {
+	networkDevices := []NetworkDeviceSpec{}
+
+	for index := range m.Spec.Network.Devices {
+		if m.Spec.Network.Devices[index].NetworkType == NetworkTypeIPV4DHCP {
+			networkDevices = append(networkDevices, m.Spec.Network.Devices[index])
+		}
+	}
+
+	return networkDevices
+}
+
+// IsMachineStaticIP returns true if the IP is the static IP for the Machine.
+func (m *ElfMachine) IsMachineStaticIP(ip string) bool {
+	for index := range m.Spec.Network.Devices {
+		if m.Spec.Network.Devices[index].NetworkType != NetworkTypeIPV4 {
+			continue
+		}
+
+		for _, staticIP := range m.Spec.Network.Devices[index].IPAddrs {
+			if ip == staticIP {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func (m *ElfMachine) GetVMDisconnectionTimestamp() *metav1.Time {
 	if m.Annotations == nil {
 		return nil
