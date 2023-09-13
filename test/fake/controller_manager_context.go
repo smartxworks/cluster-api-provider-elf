@@ -23,6 +23,7 @@ import (
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -50,18 +51,24 @@ const (
 // NewControllerManagerContext returns a fake ControllerManagerContext for unit
 // testing reconcilers and webhooks with a fake client. You can choose to
 // initialize it with a slice of runtime.Object.
-func NewControllerManagerContext(initObjects ...runtime.Object) *context.ControllerManagerContext {
+func NewControllerManagerContext(initObjects ...client.Object) *context.ControllerManagerContext {
 	scheme := runtime.NewScheme()
 	_ = cgscheme.AddToScheme(scheme)
 	_ = clusterv1.AddToScheme(scheme)
 	_ = controlplanev1.AddToScheme(scheme)
 	_ = infrav1.AddToScheme(scheme)
 
+	clientWithObjects := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(
+		&infrav1.ElfCluster{},
+		&infrav1.ElfMachine{},
+	).WithObjects(initObjects...).Build()
+
 	return &context.ControllerManagerContext{
 		Context:                 goctx.Background(),
-		Client:                  fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(initObjects...).Build(),
+		Client:                  clientWithObjects,
 		Logger:                  ctrllog.Log.WithName(ControllerManagerName),
 		Scheme:                  scheme,
+		Namespace:               ControllerManagerNamespace,
 		Name:                    ControllerManagerName,
 		LeaderElectionNamespace: LeaderElectionNamespace,
 		LeaderElectionID:        LeaderElectionID,
