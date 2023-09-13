@@ -35,12 +35,6 @@ type AddToManagerFunc func(*context.ControllerManagerContext, ctrlmgr.Manager) e
 type Options struct {
 	ctrlmgr.Options
 
-	// MaxConcurrentReconciles the maximum number of allowed, concurrent
-	// reconciles.
-	//
-	// Defaults to the eponymous constant in this package.
-	MaxConcurrentReconciles int
-
 	// LeaderElectionNamespace is the namespace in which the pod running the
 	// controller maintains a leader election lock
 	//
@@ -58,6 +52,11 @@ type Options struct {
 	// the manager's Options in order to explicitly decide what controllers
 	// and webhooks to add to the manager.
 	AddToManager AddToManagerFunc
+
+	// WatchFilterValue is used to filter incoming objects by label.
+	//
+	// Defaults to the empty string and by that not filter anything.
+	WatchFilterValue string
 }
 
 func (o *Options) defaults() {

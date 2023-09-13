@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
+	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -45,7 +46,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
@@ -75,7 +75,7 @@ type ElfMachineReconciler struct {
 
 // AddMachineControllerToManager adds the machine controller to the provided
 // manager.
-func AddMachineControllerToManager(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
+func AddMachineControllerToManager(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager, options controller.Options) error {
 	var (
 		controlledType     = &infrav1.ElfMachine{}
 		controlledTypeName = reflect.TypeOf(controlledType).Elem().Name()
@@ -101,10 +101,11 @@ func AddMachineControllerToManager(ctx *context.ControllerManagerContext, mgr ct
 		For(controlledType).
 		// Watch the CAPI resource that owns this infrastructure resource.
 		Watches(
-			&source.Kind{Type: &clusterv1.Machine{}},
+			&clusterv1.Machine{},
 			handler.EnqueueRequestsFromMapFunc(capiutil.MachineToInfrastructureMapFunc(controlledTypeGVK)),
 		).
-		WithOptions(controller.Options{MaxConcurrentReconciles: ctx.MaxConcurrentReconciles}).
+		WithOptions(options).
+		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(ctrl.LoggerFrom(ctx), ctx.WatchFilterValue)).
 		Complete(reconciler)
 }
 
