@@ -84,10 +84,10 @@ func InitFlags(fs *pflag.FlagSet) {
 		"Namespace that the controller performs leader election in. If unspecified, the controller will discover which namespace it is running in.",
 	)
 
-	fs.IntVar(&elfClusterConcurrency, "elfcluster-concurrency", 10,
+	fs.IntVar(&elfClusterConcurrency, "max-elfcluster-concurrent-reconciles", 10,
 		"Number of ELF clusters to process simultaneously")
 
-	fs.IntVar(&elfMachineConcurrency, "elfmachine-concurrency", 10,
+	fs.IntVar(&elfMachineConcurrency, "max-elfmachine-concurrent-reconciles", 10,
 		"Number of ELF machines to process simultaneously")
 
 	fs.StringVar(&managerOpts.PodName, "pod-name", defaultPodName,
