@@ -189,10 +189,36 @@ func IsPowerOnVMTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "Start VM")
 }
 
+func IsUpdateVMTask(task *models.Task) bool {
+	return strings.Contains(GetTowerString(task.Description), "Edit VM")
+}
+
 func IsVMMigrationTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "performing a live migration")
 }
 
 func IsPlacementGroupTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "VM placement group") // Update VM placement group
+}
+
+// GPUCanBeUsedForVM returns whether the virtual machine can use the specified GPU.
+func GPUCanBeUsedForVM(gpuDevice *models.GpuDevice, vm string) bool {
+	if len(gpuDevice.Vms) == 0 ||
+		*gpuDevice.Vms[0].ID == vm ||
+		*gpuDevice.Vms[0].Name == vm {
+		return true
+	}
+
+	return false
+}
+
+func FilterGPUsCanNotBeUsedForVM(gpuDevices []*models.GpuDevice, vm string) []*models.GpuDevice {
+	var gpus []*models.GpuDevice
+	for i := 0; i < len(gpuDevices); i++ {
+		if GPUCanBeUsedForVM(gpuDevices[i], vm) {
+			gpus = append(gpus, gpuDevices[i])
+		}
+	}
+
+	return gpus
 }

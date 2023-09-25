@@ -146,6 +146,37 @@ type NetworkDeviceRouteSpec struct {
 	Network string `json:"network,omitempty"`
 }
 
+// GPUPassthroughDeviceSpec defines virtual machine's GPU configuration
+type GPUPassthroughDeviceSpec struct {
+	// GPUModel is the GPU model.
+	GPUModel string `json:"gpuModel,omitempty"`
+
+	// Count is the number of GPU. Defaults to 1.
+	// +optional
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=1
+	Count int32 `json:"count,omitempty"`
+}
+
+// VGPUDeviceSpec defines virtual machine's VGPU configuration
+type VGPUDeviceSpec struct {
+	// VGPUType is the vGPU type.
+	// +kubebuilder:validation:Required
+	VGPUType string `json:"vgpuType,omitempty"`
+
+	// Count is the number of vGPU. Defaults to 1.
+	// +optional
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=1
+	Count int32 `json:"count,omitempty"`
+}
+
+// GPUStatus provides information about one of a VM's GPU device.
+type GPUStatus struct {
+	GPUID string `json:"gpuId,omitempty"`
+	Name  string `json:"name,omitempty"`
+}
+
 //+kubebuilder:object:generate=false
 
 // PatchStringValue is for patching resources.

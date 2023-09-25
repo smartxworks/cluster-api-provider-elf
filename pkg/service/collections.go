@@ -159,3 +159,12 @@ func And(filters ...Func) Func {
 		return true
 	}
 }
+
+// IDs returns the IDs of all hosts.
+func (s Hosts) IDs() []string {
+	res := make([]string, 0, len(s))
+	for _, value := range s {
+		res = append(res, *value.ID)
+	}
+	return res
+}

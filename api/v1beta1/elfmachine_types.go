@@ -75,6 +75,14 @@ type ElfMachineSpec struct {
 	// +optional
 	DiskGiB int32 `json:"diskGiB,omitempty"`
 
+	// GPUDevices is the list of GPUs used by the virtual machine.
+	// +optional
+	GPUDevices []GPUPassthroughDeviceSpec `json:"gpuDevices,omitempty"`
+
+	// VGPUDevices is the list of vGPUs used by the virtual machine.
+	// +optional
+	VGPUDevices []VGPUDeviceSpec `json:"vgpuDevices,omitempty"`
+
 	// +optional
 	HA bool `json:"ha,omitempty"`
 
@@ -105,6 +113,11 @@ type ElfMachineStatus struct {
 	// network interfaces.
 	// +optional
 	Network []NetworkStatus `json:"network,omitempty"`
+
+	// GPUDevices returns the GPU devices status for each of the machine's configured
+	// GPU devices.
+	// +optional
+	GPUDevices []GPUStatus `json:"gpuDevices,omitempty"`
 
 	// FailureReason will be set in the event that there is a terminal problem
 	// reconciling the Machine and will contain a succinct value suitable
@@ -298,6 +311,10 @@ func (m *ElfMachine) GetVMDisconnectionTimestamp() *metav1.Time {
 	}
 
 	return nil
+}
+
+func (m *ElfMachine) HasGPUDevice() bool {
+	return len(m.Spec.GPUDevices) > 0 || len(m.Spec.VGPUDevices) > 0
 }
 
 //+kubebuilder:object:root=true

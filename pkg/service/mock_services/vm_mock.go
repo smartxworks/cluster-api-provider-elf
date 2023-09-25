@@ -13,7 +13,6 @@ import (
 	models "github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	v1beta1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	service "github.com/smartxworks/cluster-api-provider-elf/pkg/service"
-	v1beta10 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 // MockVMService is a mock of VMService interface.
@@ -37,6 +36,21 @@ func NewMockVMService(ctrl *gomock.Controller) *MockVMService {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockVMService) EXPECT() *MockVMServiceMockRecorder {
 	return m.recorder
+}
+
+// AddGPUDevices mocks base method.
+func (m *MockVMService) AddGPUDevices(id string, gpus []*models.VMGpuOperationParams) (*models.Task, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddGPUDevices", id, gpus)
+	ret0, _ := ret[0].(*models.Task)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddGPUDevices indicates an expected call of AddGPUDevices.
+func (mr *MockVMServiceMockRecorder) AddGPUDevices(id, gpus interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddGPUDevices", reflect.TypeOf((*MockVMService)(nil).AddGPUDevices), id, gpus)
 }
 
 // AddLabelsToVM mocks base method.
@@ -70,18 +84,18 @@ func (mr *MockVMServiceMockRecorder) AddVMsToPlacementGroup(placementGroup, vmID
 }
 
 // Clone mocks base method.
-func (m *MockVMService) Clone(elfCluster *v1beta1.ElfCluster, machine *v1beta10.Machine, elfMachine *v1beta1.ElfMachine, bootstrapData, host string) (*models.WithTaskVM, error) {
+func (m *MockVMService) Clone(elfCluster *v1beta1.ElfCluster, elfMachine *v1beta1.ElfMachine, bootstrapData, host string, machineGPUDevices []*models.GpuDevice) (*models.WithTaskVM, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Clone", elfCluster, machine, elfMachine, bootstrapData, host)
+	ret := m.ctrl.Call(m, "Clone", elfCluster, elfMachine, bootstrapData, host, machineGPUDevices)
 	ret0, _ := ret[0].(*models.WithTaskVM)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Clone indicates an expected call of Clone.
-func (mr *MockVMServiceMockRecorder) Clone(elfCluster, machine, elfMachine, bootstrapData, host interface{}) *gomock.Call {
+func (mr *MockVMServiceMockRecorder) Clone(elfCluster, elfMachine, bootstrapData, host, machineGPUDevices interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockVMService)(nil).Clone), elfCluster, machine, elfMachine, bootstrapData, host)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockVMService)(nil).Clone), elfCluster, elfMachine, bootstrapData, host, machineGPUDevices)
 }
 
 // CreateVMPlacementGroup mocks base method.
@@ -156,6 +170,36 @@ func (m *MockVMService) FindByIDs(ids []string) ([]*models.VM, error) {
 func (mr *MockVMServiceMockRecorder) FindByIDs(ids interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByIDs", reflect.TypeOf((*MockVMService)(nil).FindByIDs), ids)
+}
+
+// FindGPUDevices mocks base method.
+func (m *MockVMService) FindGPUDevices(hostIDs []string) ([]*models.GpuDevice, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindGPUDevices", hostIDs)
+	ret0, _ := ret[0].([]*models.GpuDevice)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindGPUDevices indicates an expected call of FindGPUDevices.
+func (mr *MockVMServiceMockRecorder) FindGPUDevices(hostIDs interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindGPUDevices", reflect.TypeOf((*MockVMService)(nil).FindGPUDevices), hostIDs)
+}
+
+// FindGPUDevicesByIDs mocks base method.
+func (m *MockVMService) FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDevice, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindGPUDevicesByIDs", gpuIDs)
+	ret0, _ := ret[0].([]*models.GpuDevice)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindGPUDevicesByIDs indicates an expected call of FindGPUDevicesByIDs.
+func (mr *MockVMServiceMockRecorder) FindGPUDevicesByIDs(gpuIDs interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindGPUDevicesByIDs", reflect.TypeOf((*MockVMService)(nil).FindGPUDevicesByIDs), gpuIDs)
 }
 
 // FindVMsByName mocks base method.
@@ -366,6 +410,21 @@ func (m *MockVMService) PowerOn(uuid string) (*models.Task, error) {
 func (mr *MockVMServiceMockRecorder) PowerOn(uuid interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PowerOn", reflect.TypeOf((*MockVMService)(nil).PowerOn), uuid)
+}
+
+// RemoveGPUDevices mocks base method.
+func (m *MockVMService) RemoveGPUDevices(id string, gpus []*models.VMGpuOperationParams) (*models.Task, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveGPUDevices", id, gpus)
+	ret0, _ := ret[0].(*models.Task)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RemoveGPUDevices indicates an expected call of RemoveGPUDevices.
+func (mr *MockVMServiceMockRecorder) RemoveGPUDevices(id, gpus interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveGPUDevices", reflect.TypeOf((*MockVMService)(nil).RemoveGPUDevices), id, gpus)
 }
 
 // ShutDown mocks base method.
