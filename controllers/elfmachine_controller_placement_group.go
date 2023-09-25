@@ -94,7 +94,7 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 		return nil, err
 	}
 
-	task, err := ctx.VMService.WaitTask(*withTaskVMPlacementGroup.TaskID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval)
+	task, err := ctx.VMService.WaitTask(ctx, *withTaskVMPlacementGroup.TaskID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval)
 	if err != nil {
 		// The default timeout for Tower to create a placement group is one minute.
 		// When current task times out, duplicate placement groups may or may not appear.
@@ -564,7 +564,7 @@ func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContex
 	}
 
 	taskID := *task.ID
-	task, err = ctx.VMService.WaitTask(taskID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval)
+	task, err = ctx.VMService.WaitTask(ctx, taskID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval)
 	if err != nil {
 		return errors.Wrapf(err, "failed to wait for placement group updating task to complete in %s: pgName %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, *placementGroup.Name, taskID)
 	}
@@ -630,7 +630,7 @@ func (r *ElfMachineReconciler) deletePlacementGroup(ctx *context.MachineContext)
 		return false, nil
 	}
 
-	if err := ctx.VMService.DeleteVMPlacementGroupsByName(*placementGroup.Name); err != nil {
+	if err := ctx.VMService.DeleteVMPlacementGroupsByName(ctx, *placementGroup.Name); err != nil {
 		return false, err
 	} else {
 		ctx.Logger.Info(fmt.Sprintf("Placement group %s deleted", *placementGroup.Name))

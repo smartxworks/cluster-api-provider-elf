@@ -18,15 +18,25 @@ package main
 
 import (
 	"flag"
-	"math/rand"
+	"fmt"
 	"os"
+	goruntime "runtime"
 	"time"
 
+	"github.com/spf13/pflag"
+	cliflag "k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/logs"
+	logsv1 "k8s.io/component-base/logs/api/v1"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
-	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/controllers/remote"
+	"sigs.k8s.io/cluster-api/feature"
+	"sigs.k8s.io/cluster-api/util/flags"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
 	ctrlsig "sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/smartxworks/cluster-api-provider-elf/controllers"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
@@ -37,88 +47,147 @@ import (
 )
 
 var (
-	setupLog = ctrllog.Log.WithName("entrypoint")
+	setupLog       = ctrl.Log.WithName("entrypoint")
+	logOptions     = logs.NewOptions()
+	controllerName = "cluster-api-elf-manager"
 
-	managerOpts manager.Options
-	syncPeriod  time.Duration
+	enableContentionProfiling   bool
+	leaderElectionLeaseDuration time.Duration
+	leaderElectionRenewDeadline time.Duration
+	leaderElectionRetryPeriod   time.Duration
+	managerOpts                 manager.Options
+	restConfigBurst             int
+	restConfigQPS               float32
+	syncPeriod                  time.Duration
+	webhookOpts                 webhook.Options
+	watchNamespace              string
+
+	elfClusterConcurrency int
+	elfMachineConcurrency int
+
+	tlsOptions = flags.TLSOptions{}
 
 	defaultSyncPeriod       = manager.DefaultSyncPeriod
 	defaultLeaderElectionID = manager.DefaultLeaderElectionID
-
-	defaultWebhookPort = manager.DefaultWebhookServiceContainerPort
+	defaultPodName          = manager.DefaultPodName
+	defaultWebhookPort      = manager.DefaultWebhookServiceContainerPort
 )
 
-func main() {
-	rand.Seed(time.Now().UnixNano())
+// InitFlags initializes the flags.
+func InitFlags(fs *pflag.FlagSet) {
+	// Flags specific to CAPE
 
-	klog.InitFlags(nil)
-	ctrllog.SetLogger(klogr.New())
-	if err := flag.Set("v", "2"); err != nil {
-		klog.Fatalf("failed to set log level: %v", err)
-	}
-
-	flag.StringVar(
-		&managerOpts.MetricsBindAddress,
-		"metrics-bind-addr",
-		"localhost:8080",
-		"The address the metric endpoint binds to.")
-	flag.BoolVar(
-		&managerOpts.LeaderElection,
-		"leader-elect",
-		true,
-		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	flag.StringVar(
-		&managerOpts.LeaderElectionID,
-		"leader-election-id",
-		defaultLeaderElectionID,
+	fs.StringVar(&managerOpts.LeaderElectionID, "leader-election-id", defaultLeaderElectionID,
 		"Name of the config map to use as the locking resource when configuring leader election.")
-	flag.StringVar(
-		&managerOpts.Namespace,
-		"namespace",
-		"",
-		"Namespace that the controller watches to reconcile cluster-api objects. If unspecified, the controller watches for cluster-api objects across all namespaces.")
-	flag.StringVar(
-		&managerOpts.LeaderElectionNamespace,
-		"leader-election-namespace",
-		"",
+
+	flag.StringVar(&managerOpts.LeaderElectionNamespace, "leader-election-namespace", "",
 		"Namespace that the controller performs leader election in. If unspecified, the controller will discover which namespace it is running in.",
 	)
-	flag.DurationVar(
-		&syncPeriod,
-		"sync-period",
-		defaultSyncPeriod,
-		"The interval at which cluster-api objects are synchronized")
-	flag.IntVar(
-		&managerOpts.MaxConcurrentReconciles,
-		"max-concurrent-reconciles",
-		10,
-		"The maximum number of allowed, concurrent reconciles.")
-	flag.IntVar(
-		&managerOpts.Port,
-		"webhook-port",
-		defaultWebhookPort,
-		"Webhook Server port (set to 0 to disable)")
-	flag.StringVar(
-		&managerOpts.HealthProbeBindAddress,
-		"health-addr",
-		":9440",
-		"The address the health endpoint binds to.",
-	)
-	flag.IntVar(
-		&config.MaxConcurrentVMCreations,
-		"max-concurrent-vm-creations",
-		config.MaxConcurrentVMCreations,
+
+	fs.IntVar(&elfClusterConcurrency, "max-elfcluster-concurrent-reconciles", 10,
+		"Number of ELF clusters to process simultaneously")
+
+	fs.IntVar(&elfMachineConcurrency, "max-elfmachine-concurrent-reconciles", 10,
+		"Number of ELF machines to process simultaneously")
+
+	fs.StringVar(&managerOpts.PodName, "pod-name", defaultPodName,
+		"The name of the pod running the controller manager.")
+
+	fs.IntVar(&config.MaxConcurrentVMCreations, "max-concurrent-vm-creations", config.MaxConcurrentVMCreations,
 		"The maximum number of concurrent virtual machine creations.")
 
-	flag.Parse()
+	// Flags common between CAPI and CAPE
 
-	if managerOpts.Namespace != "" {
-		setupLog.Info(
-			"Watching objects only in namespace for reconciliation",
-			"namespace", managerOpts.Namespace)
+	logsv1.AddFlags(logOptions, fs)
+
+	fs.StringVar(&managerOpts.MetricsBindAddress, "metrics-bind-addr", "localhost:8080",
+		"The address the metric endpoint binds to.")
+
+	fs.BoolVar(&managerOpts.LeaderElection, "leader-elect", true,
+		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+
+	fs.DurationVar(&leaderElectionLeaseDuration, "leader-elect-lease-duration", 15*time.Second,
+		"Interval at which non-leader candidates will wait to force acquire leadership (duration string)")
+
+	fs.DurationVar(&leaderElectionRenewDeadline, "leader-elect-renew-deadline", 10*time.Second,
+		"Duration that the leading controller manager will retry refreshing leadership before giving up (duration string)")
+
+	fs.DurationVar(&leaderElectionRetryPeriod, "leader-elect-retry-period", 2*time.Second,
+		"Duration the LeaderElector clients should wait between tries of actions (duration string)")
+
+	fs.StringVar(&watchNamespace, "namespace", "",
+		"Namespace that the controller watches to reconcile cluster-api objects. If unspecified, the controller watches for cluster-api objects across all namespaces.")
+
+	fs.StringVar(&managerOpts.WatchFilterValue, "watch-filter", "",
+		fmt.Sprintf("Label value that the controller watches to reconcile cluster-api objects. Label key is always %s. If unspecified, the controller watches for all cluster-api objects.", clusterv1.WatchLabel))
+
+	fs.StringVar(&managerOpts.PprofBindAddress, "profiler-address", "",
+		"Bind address to expose the pprof profiler (e.g. localhost:6060)")
+
+	fs.BoolVar(&enableContentionProfiling, "contention-profiling", false,
+		"Enable block profiling, if profiler-address is set.")
+
+	fs.DurationVar(&syncPeriod, "sync-period", defaultSyncPeriod,
+		"The minimum interval at which watched resources are reconciled (e.g. 15m)")
+
+	fs.Float32Var(&restConfigQPS, "kube-api-qps", 20,
+		"Maximum queries per second from the controller client to the Kubernetes API server. Defaults to 20")
+
+	fs.IntVar(&restConfigBurst, "kube-api-burst", 30,
+		"Maximum number of queries that should be allowed in one burst from the controller client to the Kubernetes API server. Default 30")
+
+	fs.IntVar(&webhookOpts.Port, "webhook-port", defaultWebhookPort,
+		"Webhook Server port")
+
+	fs.StringVar(&webhookOpts.CertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs/",
+		"Webhook cert dir, only used when webhook-port is specified.")
+
+	fs.StringVar(&managerOpts.HealthProbeBindAddress, "health-addr", ":9440",
+		"The address the health endpoint binds to.")
+
+	flags.AddTLSOptions(fs, &tlsOptions)
+
+	feature.MutableGates.AddFlag(fs)
+}
+
+func main() {
+	InitFlags(pflag.CommandLine)
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
+	if err := pflag.CommandLine.Set("v", "2"); err != nil {
+		setupLog.Error(err, "failed to set log level: %v")
+		os.Exit(1)
+	}
+	pflag.Parse()
+
+	if err := logsv1.ValidateAndApply(logOptions, nil); err != nil {
+		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
 	}
 
-	managerOpts.SyncPeriod = &syncPeriod
+	// klog.Background will automatically use the right logger.
+	ctrl.SetLogger(klog.Background())
+
+	managerOpts.KubeConfig = ctrl.GetConfigOrDie()
+	managerOpts.KubeConfig.QPS = restConfigQPS
+	managerOpts.KubeConfig.Burst = restConfigBurst
+	managerOpts.KubeConfig.UserAgent = remote.DefaultClusterAPIUserAgent(controllerName)
+
+	if watchNamespace != "" {
+		managerOpts.Cache.Namespaces = []string{watchNamespace}
+		setupLog.Info(
+			"Watching objects only in namespace for reconciliation",
+			"namespace", watchNamespace)
+	}
+
+	if managerOpts.PprofBindAddress != "" && enableContentionProfiling {
+		goruntime.SetBlockProfileRate(1)
+	}
+
+	managerOpts.Cache.SyncPeriod = &syncPeriod
+	managerOpts.LeaseDuration = &leaderElectionLeaseDuration
+	managerOpts.RenewDeadline = &leaderElectionRenewDeadline
+	managerOpts.RetryPeriod = &leaderElectionRetryPeriod
 
 	// Create a function that adds all of the controllers and webhooks to the manager.
 	addToManager := func(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
@@ -131,16 +200,24 @@ func main() {
 			}
 		}
 
-		if err := controllers.AddClusterControllerToManager(ctx, mgr); err != nil {
+		if err := controllers.AddClusterControllerToManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: elfClusterConcurrency}); err != nil {
 			return err
 		}
 
-		if err := controllers.AddMachineControllerToManager(ctx, mgr); err != nil {
+		if err := controllers.AddMachineControllerToManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: elfMachineConcurrency}); err != nil {
 			return err
 		}
 
 		return nil
 	}
+
+	tlsOptionOverrides, err := flags.GetTLSOptionOverrideFuncs(tlsOptions)
+	if err != nil {
+		setupLog.Error(err, "unable to add TLS settings to the webhook server")
+		os.Exit(1)
+	}
+	webhookOpts.TLSOpts = tlsOptionOverrides
+	managerOpts.WebhookServer = webhook.NewServer(webhookOpts)
 
 	setupLog.Info("creating controller manager", "capeVersion", version.CAPEVersion(), "version", version.Get().String())
 	managerOpts.AddToManager = addToManager

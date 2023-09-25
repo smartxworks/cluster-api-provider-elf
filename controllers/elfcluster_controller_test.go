@@ -19,7 +19,6 @@ package controllers
 import (
 	"bytes"
 	goctx "context"
-	"flag"
 	"fmt"
 	"time"
 
@@ -64,13 +63,6 @@ var _ = Describe("ElfClusterReconciler", func() {
 	ctx := goctx.Background()
 
 	BeforeEach(func() {
-		// set log
-		if err := flag.Set("logtostderr", "false"); err != nil {
-			_ = fmt.Errorf("Error setting logtostderr flag")
-		}
-		if err := flag.Set("v", "6"); err != nil {
-			_ = fmt.Errorf("Error setting v flag")
-		}
 		logBuffer = new(bytes.Buffer)
 		klog.SetOutput(logBuffer)
 
@@ -215,7 +207,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
 
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return(errors.New("some error"))
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return(errors.New("some error"))
 
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
@@ -224,7 +216,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
 			task.Status = models.NewTaskStatus(models.TaskStatusSUCCESSED)
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return(nil)
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return(nil)
 			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelClusterName(), elfCluster.Name, true).Return("labelid", nil)
 			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelVIP(), elfCluster.Spec.ControlPlaneEndpoint.Host, false).Return("labelid", nil)
 			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelNamespace(), elfCluster.Namespace, true).Return("", nil)
