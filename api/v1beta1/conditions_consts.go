@@ -76,15 +76,15 @@ const (
 	// are automatically re-tried by the controller.
 	UpdatingFailedReason = "UpdatingFailed"
 
-	// RemovingGPUFailedReason (Severity=Warning) documents an ElfMachine controller detecting
-	// an error while removing GPU devices; those kind of errors are usually transient and failed provisioning
+	// DetachingGPUFailedReason (Severity=Warning) documents an ElfMachine controller detecting
+	// an error while detaching GPU devices; those kind of errors are usually transient and failed provisioning
 	// are automatically re-tried by the controller.
-	RemovingGPUFailedReason = "RemovingGPUFailed"
+	DetachingGPUFailedReason = "DetachingGPUFailed"
 
-	// AddingGPUFailedReason (Severity=Warning) documents an ElfMachine controller detecting
-	// an error while adding GPU devices; those kind of errors are usually transient and failed provisioning
+	// AttachingGPUFailedReason (Severity=Warning) documents an ElfMachine controller detecting
+	// an error while attaching GPU devices; those kind of errors are usually transient and failed provisioning
 	// are automatically re-tried by the controller.
-	AddingGPUFailedReason = "AddingGPUFailed"
+	AttachingGPUFailedReason = "AttachingGPUFailed"
 
 	// TaskFailureReason (Severity=Warning) documents an ElfMachine task failure; the reconcile look will automatically
 	// retry the operation, but a user intervention might be required to fix the problem.

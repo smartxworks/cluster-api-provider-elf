@@ -148,8 +148,8 @@ type NetworkDeviceRouteSpec struct {
 
 // GPUPassthroughDeviceSpec defines virtual machine's GPU configuration
 type GPUPassthroughDeviceSpec struct {
-	// GPUModel is the GPU model.
-	GPUModel string `json:"gpuModel,omitempty"`
+	// Model is the model name of a physical GPU, e.g. 'A16'.
+	Model string `json:"model,omitempty"`
 
 	// Count is the number of GPU. Defaults to 1.
 	// +optional
@@ -160,9 +160,9 @@ type GPUPassthroughDeviceSpec struct {
 
 // VGPUDeviceSpec defines virtual machine's VGPU configuration
 type VGPUDeviceSpec struct {
-	// VGPUType is the vGPU type.
+	// Type is the type name of a virtual GPU, e.g. "NVIDIA A16-16A".
 	// +kubebuilder:validation:Required
-	VGPUType string `json:"vgpuType,omitempty"`
+	Type string `json:"type,omitempty"`
 
 	// Count is the number of vGPU. Defaults to 1.
 	// +optional

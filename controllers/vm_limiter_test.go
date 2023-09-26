@@ -126,7 +126,7 @@ var _ = Describe("Placement Group Operation Limiter", func() {
 	})
 })
 
-var _ = Describe("Lock GPU", func() {
+var _ = Describe("Lock GPU devices for VM", func() {
 	var clusterID, vmName, hostID, gpuID string
 
 	BeforeEach(func() {

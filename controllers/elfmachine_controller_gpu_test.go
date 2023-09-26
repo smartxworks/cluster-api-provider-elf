@@ -78,7 +78,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 	Context("selectHostAndGPUsForVM", func() {
 
 		BeforeEach(func() {
-			elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{GPUModel: gpuModel, Count: 1})
+			elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{Model: gpuModel, Count: 1})
 		})
 
 		It("should not handle ElfMachine without GPU", func() {
@@ -148,7 +148,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host, preferredHost), nil)
-			mockVMService.EXPECT().FindGPUDevicesByHostIDs([]string{*host.ID, *preferredHost.ID}).Return(gpusDevices, nil)
+			mockVMService.EXPECT().FindGPUDevicesByHostIDs(gomock.InAnyOrder([]string{*host.ID, *preferredHost.ID})).Return(gpusDevices, nil)
 
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -161,7 +161,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 
 	Context("reconcileGPUDevices", func() {
 		BeforeEach(func() {
-			elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{GPUModel: gpuModel, Count: 1})
+			elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{Model: gpuModel, Count: 1})
 		})
 
 		It("should not handle ElfMachine without GPU", func() {
@@ -261,7 +261,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 
 	Context("addGPUDevicesForVM", func() {
 		BeforeEach(func() {
-			elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{GPUModel: gpuModel, Count: 1})
+			elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{Model: gpuModel, Count: 1})
 		})
 
 		It("should migrate VM when current host does not have enough GPU devices", func() {
@@ -328,7 +328,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(unexpectedError.Error()))
 			Expect(ok).To(BeFalse())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.AddingGPUFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.AttachingGPUFailedReason}})
 			Expect(elfMachine.Status.TaskRef).To(BeEmpty())
 		})
 	})
@@ -348,7 +348,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			err := reconciler.removeVMGPUDevices(machineContext, vm)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(unexpectedError.Error()))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.RemovingGPUFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.DetachingGPUFailedReason}})
 			Expect(elfMachine.Status.TaskRef).To(BeEmpty())
 
 			mockVMService.EXPECT().RemoveGPUDevices(elfMachine.Status.VMRef, gomock.Len(1)).Return(task, nil)

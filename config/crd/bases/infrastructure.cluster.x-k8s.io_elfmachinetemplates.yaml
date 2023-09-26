@@ -70,8 +70,9 @@ spec:
                               format: int32
                               minimum: 1
                               type: integer
-                            gpuModel:
-                              description: GPUModel is the GPU model.
+                            model:
+                              description: Model is the model name of a physical GPU,
+                                e.g. 'A16'.
                               type: string
                           type: object
                         type: array
@@ -198,8 +199,9 @@ spec:
                               format: int32
                               minimum: 1
                               type: integer
-                            vgpuType:
-                              description: VGPUType is the vGPU type.
+                            type:
+                              description: Type is the type name of a virtual GPU,
+                                e.g. "NVIDIA A16-16A".
                               type: string
                           type: object
                         type: array

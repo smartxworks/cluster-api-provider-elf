@@ -162,7 +162,7 @@ func selectGPUDevicesForVM(hostGPUDevices []*models.GpuDevice, requiredGPUDevice
 
 	var selectedGPUDevices []*models.GpuDevice
 	for i := 0; i < len(requiredGPUDevices); i++ {
-		if gpus, ok := modelGPUDeviceMap[requiredGPUDevices[i].GPUModel]; !ok {
+		if gpus, ok := modelGPUDeviceMap[requiredGPUDevices[i].Model]; !ok {
 			return nil
 		} else {
 			if len(gpus) < int(requiredGPUDevices[i].Count) {
@@ -171,7 +171,7 @@ func selectGPUDevicesForVM(hostGPUDevices []*models.GpuDevice, requiredGPUDevice
 
 			selectedGPUDevices = append(selectedGPUDevices, gpus[:int(requiredGPUDevices[i].Count)]...)
 			// Remove selected GPU devices.
-			modelGPUDeviceMap[requiredGPUDevices[i].GPUModel] = gpus[int(requiredGPUDevices[i].Count):]
+			modelGPUDeviceMap[requiredGPUDevices[i].Model] = gpus[int(requiredGPUDevices[i].Count):]
 		}
 	}
 
@@ -253,11 +253,11 @@ func (r *ElfMachineReconciler) addGPUDevicesForVM(ctx *context.MachineContext, v
 
 	task, err := ctx.VMService.AddGPUDevices(ctx.ElfMachine.Status.VMRef, gpus)
 	if err != nil {
-		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.AddingGPUFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.AttachingGPUFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 
 		unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 
-		return false, errors.Wrapf(err, "failed to trigger adding GPU devices for VM %s", ctx)
+		return false, errors.Wrapf(err, "failed to trigger attaching GPU devices for VM %s", ctx)
 	}
 
 	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.UpdatingReason, clusterv1.ConditionSeverityInfo, "")
@@ -281,9 +281,9 @@ func (r *ElfMachineReconciler) removeVMGPUDevices(ctx *context.MachineContext, v
 
 	task, err := ctx.VMService.RemoveGPUDevices(ctx.ElfMachine.Status.VMRef, staleGPUs)
 	if err != nil {
-		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.RemovingGPUFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.DetachingGPUFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 
-		return errors.Wrapf(err, "failed to trigger remove stale GPU devices for VM %s", ctx)
+		return errors.Wrapf(err, "failed to trigger detaching stale GPU devices for VM %s", ctx)
 	}
 
 	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.UpdatingReason, clusterv1.ConditionSeverityInfo, "")
