@@ -70,7 +70,7 @@ type VMService interface {
 	GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error)
 	AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error)
 	DeleteVMPlacementGroupsByName(ctx goctx.Context, placementGroupName string) error
-	FindGPUDevices(hostIDs []string) ([]*models.GpuDevice, error)
+	FindGPUDevicesByHostIDs(hostIDs []string) ([]*models.GpuDevice, error)
 	FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDevice, error)
 }
 
@@ -879,7 +879,7 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByName(ctx goctx.Context, plac
 	return nil
 }
 
-func (svr *TowerVMService) FindGPUDevices(hostIDs []string) ([]*models.GpuDevice, error) {
+func (svr *TowerVMService) FindGPUDevicesByHostIDs(hostIDs []string) ([]*models.GpuDevice, error) {
 	if len(hostIDs) == 0 {
 		return nil, nil
 	}

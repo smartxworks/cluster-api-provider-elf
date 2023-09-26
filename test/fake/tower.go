@@ -150,3 +150,12 @@ func NewWithTaskVMPlacementGroup(placementGroup *models.VMPlacementGroup, task *
 		TaskID: task.ID,
 	}
 }
+
+func NewTowerGPU() *models.GpuDevice {
+	return &models.GpuDevice{
+		ID:      pointer.String(ID()),
+		LocalID: pointer.String(UUID()),
+		Name:    pointer.String(ID()),
+		Model:   pointer.String("A16"),
+	}
+}

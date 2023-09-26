@@ -212,7 +212,7 @@ func GPUCanBeUsedForVM(gpuDevice *models.GpuDevice, vm string) bool {
 	return false
 }
 
-func FilterGPUsCanNotBeUsedForVM(gpuDevices []*models.GpuDevice, vm string) []*models.GpuDevice {
+func FilterOutGPUsCanNotBeUsedForVM(gpuDevices []*models.GpuDevice, vm string) []*models.GpuDevice {
 	var gpus []*models.GpuDevice
 	for i := 0; i < len(gpuDevices); i++ {
 		if GPUCanBeUsedForVM(gpuDevices[i], vm) {

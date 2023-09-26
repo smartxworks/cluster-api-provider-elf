@@ -313,7 +313,7 @@ func (m *ElfMachine) GetVMDisconnectionTimestamp() *metav1.Time {
 	return nil
 }
 
-func (m *ElfMachine) HasGPUDevice() bool {
+func (m *ElfMachine) RequiresGPUDevices() bool {
 	return len(m.Spec.GPUDevices) > 0 || len(m.Spec.VGPUDevices) > 0
 }
 

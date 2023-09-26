@@ -172,19 +172,19 @@ func (mr *MockVMServiceMockRecorder) FindByIDs(ids interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByIDs", reflect.TypeOf((*MockVMService)(nil).FindByIDs), ids)
 }
 
-// FindGPUDevices mocks base method.
-func (m *MockVMService) FindGPUDevices(hostIDs []string) ([]*models.GpuDevice, error) {
+// FindGPUDevicesByHostIDs mocks base method.
+func (m *MockVMService) FindGPUDevicesByHostIDs(hostIDs []string) ([]*models.GpuDevice, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindGPUDevices", hostIDs)
+	ret := m.ctrl.Call(m, "FindGPUDevicesByHostIDs", hostIDs)
 	ret0, _ := ret[0].([]*models.GpuDevice)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// FindGPUDevices indicates an expected call of FindGPUDevices.
-func (mr *MockVMServiceMockRecorder) FindGPUDevices(hostIDs interface{}) *gomock.Call {
+// FindGPUDevicesByHostIDs indicates an expected call of FindGPUDevicesByHostIDs.
+func (mr *MockVMServiceMockRecorder) FindGPUDevicesByHostIDs(hostIDs interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindGPUDevices", reflect.TypeOf((*MockVMService)(nil).FindGPUDevices), hostIDs)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindGPUDevicesByHostIDs", reflect.TypeOf((*MockVMService)(nil).FindGPUDevicesByHostIDs), hostIDs)
 }
 
 // FindGPUDevicesByIDs mocks base method.

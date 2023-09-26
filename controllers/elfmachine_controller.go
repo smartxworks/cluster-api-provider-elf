@@ -307,8 +307,8 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 		// locked by the virtual machine may not be unlocked.
 		// For example, the Cluster or ElfMachine was deleted during a pause.
 		if !ctrlutil.ContainsFinalizer(ctx.ElfMachine, infrav1.MachineFinalizer) &&
-			ctx.ElfMachine.HasGPUDevice() {
-			unlockVMGPUDevices(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
+			ctx.ElfMachine.RequiresGPUDevices() {
+			unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 		}
 	}()
 
@@ -521,6 +521,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 
 		var hostID *string
 		var gpuDevices []*models.GpuDevice
+		// The virtual machine of the Control Plane does not support GPU Devices.
 		if machineutil.IsControlPlaneMachine(ctx.Machine) {
 			hostID, err = r.preCheckPlacementGroup(ctx)
 			if err != nil || hostID == nil {
@@ -539,8 +540,8 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		if err != nil {
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
 
-			if ctx.ElfMachine.HasGPUDevice() {
-				unlockVMGPUDevices(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
+			if ctx.ElfMachine.RequiresGPUDevices() {
+				unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 			}
 
 			if service.IsVMDuplicate(err) {
@@ -620,7 +621,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		return vm, false, err
 	}
 
-	if ok, err := r.reconcileVMGPUDevices(ctx, vm); err != nil || !ok {
+	if ok, err := r.reconcileGPUDevices(ctx, vm); err != nil || !ok {
 		return vm, false, err
 	}
 
@@ -893,12 +894,12 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 				setVMDuplicate(ctx.ElfMachine.Name)
 			}
 
-			if ctx.ElfMachine.HasGPUDevice() {
-				unlockVMGPUDevices(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
+			if ctx.ElfMachine.RequiresGPUDevices() {
+				unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 			}
 		case service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task):
-			if ctx.ElfMachine.HasGPUDevice() {
-				unlockVMGPUDevices(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
+			if ctx.ElfMachine.RequiresGPUDevices() {
+				unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 			}
 		case service.IsMemoryInsufficientError(errorMessage):
 			recordElfClusterMemoryInsufficient(ctx, true)
@@ -919,8 +920,8 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		ctx.Logger.Info("VM task succeeded", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", service.GetTowerString(task.Description))
 
 		if service.IsCloneVMTask(task) || service.IsUpdateVMTask(task) {
-			if ctx.ElfMachine.HasGPUDevice() {
-				unlockVMGPUDevices(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
+			if ctx.ElfMachine.RequiresGPUDevices() {
+				unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 			}
 		}
 

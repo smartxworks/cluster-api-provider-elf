@@ -155,10 +155,10 @@ const gpuLockTimeout = time.Minute * 8
 var gpuLock sync.Mutex
 var lockedGPUMap = make(map[string]lockedClusterGPUMap)
 
-// lockVMGPUDevices locks the GPU devices required to create or start a virtual machine.
+// lockGPUDevicesForVM locks the GPU devices required to create or start a virtual machine.
 // The GPU devices will be unlocked when the task is completed or times out.
 // This prevents multiple virtual machines from being allocated the same GPU.
-func lockVMGPUDevices(clusterID, vmName, hostID string, gpuDeviceIDs []string) bool {
+func lockGPUDevicesForVM(clusterID, vmName, hostID string, gpuDeviceIDs []string) bool {
 	gpuLock.Lock()
 	defer gpuLock.Unlock()
 
@@ -189,21 +189,24 @@ func getLockedClusterGPUIDs(clusterID string) sets.Set[string] {
 	return getLockedClusterGPUIDsWithoutLock(clusterID)
 }
 
-func getLockedVMGPUDevices(clusterID, vmName string) *lockedVMGPUs {
+func getGPUDevicesLockedByVM(clusterID, vmName string) *lockedVMGPUs {
 	gpuLock.Lock()
 	defer gpuLock.Unlock()
 
 	lockedClusterGPUs := getLockedClusterGPUs(clusterID)
-	vmGPUs, ok := lockedClusterGPUs[vmName]
-	if ok {
-		return &vmGPUs
+	if vmGPUs, ok := lockedClusterGPUs[vmName]; ok {
+		if time.Now().Before(vmGPUs.LockedAt.Add(gpuLockTimeout)) {
+			return &vmGPUs
+		}
+
+		delete(lockedClusterGPUs, vmName)
 	}
 
 	return nil
 }
 
-// unlockVMGPUDevices unlocks the GPU devices locked by the virtual machine.
-func unlockVMGPUDevices(clusterID, vmName string) {
+// unlockGPUDevicesLockedByVM unlocks the GPU devices locked by the virtual machine.
+func unlockGPUDevicesLockedByVM(clusterID, vmName string) {
 	gpuLock.Lock()
 	defer gpuLock.Unlock()
 
