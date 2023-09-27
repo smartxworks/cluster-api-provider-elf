@@ -201,7 +201,7 @@ spec:
                               type: integer
                             type:
                               description: Type is the type name of a virtual GPU,
-                                e.g. "NVIDIA A16-16A".
+                                e.g. 'NVIDIA A16-16A'.
                               type: string
                           type: object
                         type: array

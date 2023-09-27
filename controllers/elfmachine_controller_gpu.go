@@ -184,13 +184,14 @@ func (r *ElfMachineReconciler) reconcileGPUDevices(ctx *context.MachineContext, 
 		return true, nil
 	}
 
-	if *vm.Status != models.VMStatusSTOPPED {
-		gpuDevices := make([]infrav1.GPUStatus, len(vm.GpuDevices))
-		for i := 0; i < len(vm.GpuDevices); i++ {
-			gpuDevices[i] = infrav1.GPUStatus{GPUID: *vm.GpuDevices[i].ID, Name: *vm.GpuDevices[i].Name}
-		}
-		ctx.ElfMachine.Status.GPUDevices = gpuDevices
+	// Ensure GPUStatus is set or up to date.
+	gpuDevices := make([]infrav1.GPUStatus, len(vm.GpuDevices))
+	for i := 0; i < len(vm.GpuDevices); i++ {
+		gpuDevices[i] = infrav1.GPUStatus{GPUID: *vm.GpuDevices[i].ID, Name: *vm.GpuDevices[i].Name}
+	}
+	ctx.ElfMachine.Status.GPUDevices = gpuDevices
 
+	if *vm.Status != models.VMStatusSTOPPED {
 		return true, nil
 	}
 

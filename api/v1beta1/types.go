@@ -160,7 +160,7 @@ type GPUPassthroughDeviceSpec struct {
 
 // VGPUDeviceSpec defines virtual machine's VGPU configuration
 type VGPUDeviceSpec struct {
-	// Type is the type name of a virtual GPU, e.g. "NVIDIA A16-16A".
+	// Type is the type name of a virtual GPU, e.g. 'NVIDIA A16-16A'.
 	// +kubebuilder:validation:Required
 	Type string `json:"type,omitempty"`
 

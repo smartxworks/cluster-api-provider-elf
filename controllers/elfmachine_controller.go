@@ -540,10 +540,6 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		if err != nil {
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
 
-			if ctx.ElfMachine.RequiresGPUDevices() {
-				unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
-			}
-
 			if service.IsVMDuplicate(err) {
 				vm, err := ctx.VMService.GetByName(ctx.ElfMachine.Name)
 				if err != nil {
@@ -552,6 +548,11 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 
 				ctx.ElfMachine.SetVM(util.GetVMRef(vm))
 			} else {
+				// Duplicate VM error does not require unlocking GPU devices.
+				if ctx.ElfMachine.RequiresGPUDevices() {
+					unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
+				}
+
 				ctx.Logger.Error(err, "failed to create VM",
 					"vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
 
