@@ -296,7 +296,7 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 .PHONY: docker-build
 docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager
-	docker build --platform linux/$(ARCH) --build-arg ARCH=$(ARCH) --build-arg ldflags="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(IMAGE_TAG)
+	docker build --build-arg ARCH=$(ARCH) --build-arg ldflags="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(IMAGE_TAG)
 
 .PHONY: docker-push
 docker-push: ## Push the docker image
@@ -304,6 +304,7 @@ docker-push: ## Push the docker image
 
 .PHONY: docker-pull-prerequisites
 docker-pull-prerequisites:
+	docker pull docker.io/docker/dockerfile:1.4
 	docker pull gcr.io/distroless/static:latest
 
 ## --------------------------------------
