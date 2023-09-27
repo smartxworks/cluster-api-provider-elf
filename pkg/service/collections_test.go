@@ -41,6 +41,7 @@ func TestHostCollection(t *testing.T) {
 		g.Expect(hosts.Get(*TowerString("404"))).To(gomega.BeNil())
 		g.Expect(hosts.Find(sets.Set[string]{}.Insert(*host1.ID)).Contains(*host1.ID)).To(gomega.BeTrue())
 		g.Expect(hosts.Find(sets.Set[string]{}.Insert(*host1.ID)).Len()).To(gomega.Equal(1))
+		g.Expect(hosts.IDs()).To(gomega.ContainElements(*host1.ID, *host2.ID))
 	})
 
 	t.Run("Available", func(t *testing.T) {

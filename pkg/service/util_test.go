@@ -100,3 +100,27 @@ func TestIsAvailableHost(t *testing.T) {
 		g.Expect(message).To(gomega.ContainSubstring("3"))
 	})
 }
+
+func TestGPUCanBeUsedForVM(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	t.Run("should return false when GPU can not be used for VM", func(t *testing.T) {
+		g.Expect(GPUCanBeUsedForVM(&models.GpuDevice{Vms: []*models.NestedVM{{ID: TowerString("id2"), Name: TowerString("vm2")}, {ID: TowerString("id"), Name: TowerString("vm")}}}, "vm")).To(gomega.BeFalse())
+	})
+
+	t.Run("should return false when GPU can not be used for VM", func(t *testing.T) {
+		g.Expect(GPUCanBeUsedForVM(&models.GpuDevice{}, "vm")).To(gomega.BeTrue())
+		g.Expect(GPUCanBeUsedForVM(&models.GpuDevice{Vms: []*models.NestedVM{{ID: TowerString("vm")}}}, "vm")).To(gomega.BeTrue())
+		g.Expect(GPUCanBeUsedForVM(&models.GpuDevice{Vms: []*models.NestedVM{{ID: TowerString("id"), Name: TowerString("vm")}}}, "vm")).To(gomega.BeTrue())
+	})
+}
+
+func TestFilterOutGPUsCanNotBeUsedForVM(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	t.Run("should filter GPUs", func(t *testing.T) {
+		g.Expect(FilterOutGPUsCanNotBeUsedForVM([]*models.GpuDevice{}, "vm")).To(gomega.BeEmpty())
+		g.Expect(FilterOutGPUsCanNotBeUsedForVM([]*models.GpuDevice{{Vms: []*models.NestedVM{{ID: TowerString("id2"), Name: TowerString("vm2")}}}}, "vm")).To(gomega.BeEmpty())
+		g.Expect(FilterOutGPUsCanNotBeUsedForVM([]*models.GpuDevice{{Vms: []*models.NestedVM{{ID: TowerString("id"), Name: TowerString("vm")}}}}, "vm")).To(gomega.HaveLen(1))
+	})
+}

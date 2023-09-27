@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 )
@@ -137,4 +138,107 @@ func getKeyForVM(name string) string {
 
 func getKeyForVMDuplicate(name string) string {
 	return fmt.Sprintf("vm:duplicate:%s", name)
+}
+
+/* GPU */
+
+type lockedVMGPUs struct {
+	HostID       string    `json:"hostId"`
+	GPUDeviceIDs []string  `json:"gpuDeviceIds"`
+	LockedAt     time.Time `json:"lockedAt"`
+}
+
+type lockedClusterGPUMap map[string]lockedVMGPUs
+
+const gpuLockTimeout = time.Minute * 8
+
+var gpuLock sync.Mutex
+var lockedGPUMap = make(map[string]lockedClusterGPUMap)
+
+// lockGPUDevicesForVM locks the GPU devices required to create or start a virtual machine.
+// The GPU devices will be unlocked when the task is completed or times out.
+// This prevents multiple virtual machines from being allocated the same GPU.
+func lockGPUDevicesForVM(clusterID, vmName, hostID string, gpuDeviceIDs []string) bool {
+	gpuLock.Lock()
+	defer gpuLock.Unlock()
+
+	lockedClusterGPUIDs := getLockedClusterGPUIDsWithoutLock(clusterID)
+	for i := 0; i < len(gpuDeviceIDs); i++ {
+		if lockedClusterGPUIDs.Has(gpuDeviceIDs[i]) {
+			return false
+		}
+	}
+
+	lockedClusterGPUs := getLockedClusterGPUs(clusterID)
+	lockedClusterGPUs[vmName] = lockedVMGPUs{
+		HostID:       hostID,
+		GPUDeviceIDs: gpuDeviceIDs,
+		LockedAt:     time.Now(),
+	}
+
+	lockedGPUMap[clusterID] = lockedClusterGPUs
+
+	return true
+}
+
+// getLockedClusterGPUIDs returns the locked GPU devices of the specified cluster.
+func getLockedClusterGPUIDs(clusterID string) sets.Set[string] {
+	gpuLock.Lock()
+	defer gpuLock.Unlock()
+
+	return getLockedClusterGPUIDsWithoutLock(clusterID)
+}
+
+func getGPUDevicesLockedByVM(clusterID, vmName string) *lockedVMGPUs {
+	gpuLock.Lock()
+	defer gpuLock.Unlock()
+
+	lockedClusterGPUs := getLockedClusterGPUs(clusterID)
+	if vmGPUs, ok := lockedClusterGPUs[vmName]; ok {
+		if time.Now().Before(vmGPUs.LockedAt.Add(gpuLockTimeout)) {
+			return &vmGPUs
+		}
+
+		delete(lockedClusterGPUs, vmName)
+	}
+
+	return nil
+}
+
+// unlockGPUDevicesLockedByVM unlocks the GPU devices locked by the virtual machine.
+func unlockGPUDevicesLockedByVM(clusterID, vmName string) {
+	gpuLock.Lock()
+	defer gpuLock.Unlock()
+
+	lockedClusterGPUs := getLockedClusterGPUs(clusterID)
+	delete(lockedClusterGPUs, vmName)
+
+	if len(lockedClusterGPUs) == 0 {
+		delete(lockedGPUMap, clusterID)
+	} else {
+		lockedGPUMap[clusterID] = lockedClusterGPUs
+	}
+}
+
+func getLockedClusterGPUs(clusterID string) lockedClusterGPUMap {
+	if _, ok := lockedGPUMap[clusterID]; ok {
+		return lockedGPUMap[clusterID]
+	}
+
+	return make(map[string]lockedVMGPUs)
+}
+
+func getLockedClusterGPUIDsWithoutLock(clusterID string) sets.Set[string] {
+	gpuIDs := sets.Set[string]{}
+
+	lockedClusterGPUs := getLockedClusterGPUs(clusterID)
+	for vmName, lockedGPUs := range lockedClusterGPUs {
+		if time.Now().Before(lockedGPUs.LockedAt.Add(gpuLockTimeout)) {
+			gpuIDs.Insert(lockedGPUs.GPUDeviceIDs...)
+		} else {
+			delete(lockedClusterGPUs, vmName)
+		}
+	}
+
+	return gpuIDs
 }

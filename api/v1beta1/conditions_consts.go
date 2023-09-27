@@ -76,6 +76,16 @@ const (
 	// are automatically re-tried by the controller.
 	UpdatingFailedReason = "UpdatingFailed"
 
+	// DetachingGPUFailedReason (Severity=Warning) documents an ElfMachine controller detecting
+	// an error while detaching GPU devices; those kind of errors are usually transient and failed provisioning
+	// are automatically re-tried by the controller.
+	DetachingGPUFailedReason = "DetachingGPUFailed"
+
+	// AttachingGPUFailedReason (Severity=Warning) documents an ElfMachine controller detecting
+	// an error while attaching GPU devices; those kind of errors are usually transient and failed provisioning
+	// are automatically re-tried by the controller.
+	AttachingGPUFailedReason = "AttachingGPUFailed"
+
 	// TaskFailureReason (Severity=Warning) documents an ElfMachine task failure; the reconcile look will automatically
 	// retry the operation, but a user intervention might be required to fix the problem.
 	TaskFailureReason = "TaskFailure"
@@ -95,6 +105,10 @@ const (
 	// WaitingForAvailableHostRequiredByPlacementGroupReason (Severity=Info) documents an ElfMachine
 	// waiting for an available host required by placement group to create VM.
 	WaitingForAvailableHostRequiredByPlacementGroupReason = "WaitingForAvailableHostRequiredByPlacementGroup"
+
+	// WaitingForAvailableHostWithEnoughGPUsReason (Severity=Info) documents an ElfMachine
+	// waiting for an available host with enough GPUs to create VM.
+	WaitingForAvailableHostWithEnoughGPUsReason = "WaitingForAvailableHostWithEnoughGPUs"
 )
 
 // Conditions and Reasons related to make connections to a Tower. Can currently be used by ElfCluster and ElfMachine

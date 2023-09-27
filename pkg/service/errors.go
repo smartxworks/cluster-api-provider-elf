@@ -40,6 +40,7 @@ const (
 	PlacementGroupMustError   = "PlacementGroupMustFilter"
 	PlacementGroupPriorError  = "PlacementGroupPriorFilter"
 	VMDuplicateError          = "VM_DUPLICATED_NAME"
+	GPUAssignFailed           = "GPU_ASSIGN_FAILED"
 )
 
 func IsVMNotFound(err error) bool {
@@ -56,6 +57,10 @@ func IsVMDuplicateError(message string) bool {
 
 func IsShutDownTimeout(message string) bool {
 	return strings.Contains(message, "JOB_VM_SHUTDOWN_TIMEOUT")
+}
+
+func IsGPUAssignFailed(message string) bool {
+	return strings.Contains(message, GPUAssignFailed)
 }
 
 func IsTaskNotFound(err error) bool {
@@ -89,6 +94,15 @@ func FormatCloudInitError(message string) string {
 	msg = strings.TrimSpace(msg)
 
 	return msg
+}
+
+func ParseGPUAssignFailed(message string) string {
+	index := strings.LastIndex(message, GPUAssignFailed)
+	if index == -1 {
+		return message
+	}
+
+	return message[index:]
 }
 
 func IsMemoryInsufficientError(message string) bool {
