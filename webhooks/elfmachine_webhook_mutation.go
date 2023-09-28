@@ -33,6 +33,10 @@ import (
 )
 
 func (m *ElfMachineMutation) SetupWebhookWithManager(mgr ctrl.Manager) error {
+	if m.decoder == nil {
+		m.decoder = admission.NewDecoder(mgr.GetScheme())
+	}
+
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register("/mutate-infrastructure-cluster-x-k8s-io-v1beta1-elfmachine", &webhook.Admission{Handler: m})
 	return ctrl.NewWebhookManagedBy(mgr).
