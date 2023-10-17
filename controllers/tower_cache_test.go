@@ -21,7 +21,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
@@ -146,12 +149,14 @@ var _ = Describe("TowerCache", func() {
 		Expect(ok).To(BeFalse())
 		Expect(msg).To(Equal(""))
 		Expect(err).ShouldNot(HaveOccurred())
+		expectConditions(elfMachine, []conditionAssertion{})
 
 		recordIsUnmet(machineContext, clusterKey, true)
 		ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
 		Expect(err).ShouldNot(HaveOccurred())
+		expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForELFClusterWithSufficientMemoryReason}})
 
 		resetVMTaskErrorCache()
 		recordIsUnmet(machineContext, placementGroupKey, true)
@@ -159,6 +164,7 @@ var _ = Describe("TowerCache", func() {
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(ContainSubstring("Not satisfy policy detected for the placement group"))
 		Expect(err).ShouldNot(HaveOccurred())
+		expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForPlacementGroupPolicySatisfiedReason}})
 	})
 })
 

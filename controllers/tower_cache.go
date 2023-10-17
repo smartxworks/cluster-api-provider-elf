@@ -21,6 +21,10 @@ import (
 	"sync"
 	"time"
 
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util/conditions"
+
+	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 )
@@ -50,6 +54,8 @@ func isELFScheduleVMErrorRecorded(ctx *context.MachineContext) (bool, string, er
 	defer lock.Unlock()
 
 	if resource := getClusterResource(getKeyForInsufficientMemoryError(ctx.ElfCluster.Spec.Cluster)); resource != nil {
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForELFClusterWithSufficientMemoryReason, clusterv1.ConditionSeverityInfo, "")
+
 		return true, fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", ctx.ElfCluster.Spec.Cluster), nil
 	}
 
@@ -59,6 +65,8 @@ func isELFScheduleVMErrorRecorded(ctx *context.MachineContext) (bool, string, er
 	}
 
 	if resource := getClusterResource(getKeyForDuplicatePlacementGroupError(placementGroupName)); resource != nil {
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForPlacementGroupPolicySatisfiedReason, clusterv1.ConditionSeverityInfo, "")
+
 		return true, fmt.Sprintf("Not satisfy policy detected for the placement group %s", placementGroupName), nil
 	}
 
