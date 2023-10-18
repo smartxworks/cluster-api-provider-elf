@@ -102,6 +102,14 @@ const (
 	// are automatically re-tried by the controller.
 	JoiningPlacementGroupFailedReason = "JoiningPlacementGroupFailed"
 
+	// WaitingForPlacementGroupPolicySatisfiedReason (Severity=Warning) documents an ElfMachine
+	// waiting for placement group policy be satisfied for VM to joining placement group.
+	WaitingForPlacementGroupPolicySatisfiedReason = "WaitingForPlacementGroupPolicySatisfied"
+
+	// WaitingForELFClusterWithSufficientMemoryReason (Severity=Info) documents an ElfMachine
+	// waiting for ELF cluster with sufficient memory to create or power on VM.
+	WaitingForELFClusterWithSufficientMemoryReason = "WaitingForELFClusterWithSufficientMemory"
+
 	// WaitingForAvailableHostRequiredByPlacementGroupReason (Severity=Info) documents an ElfMachine
 	// waiting for an available host required by placement group to create VM.
 	WaitingForAvailableHostRequiredByPlacementGroupReason = "WaitingForAvailableHostRequiredByPlacementGroup"
