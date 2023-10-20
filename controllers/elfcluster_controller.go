@@ -212,8 +212,10 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 
 	// if cluster need to force delete, skipping infra resource deletion and remove the finalizer.
 	if !ctx.ElfCluster.HasForceDeleteCluster() {
-		if err := r.reconcileDeleteVMPlacementGroups(ctx); err != nil {
+		if ok, err := r.reconcileDeleteVMPlacementGroups(ctx); err != nil {
 			return reconcile.Result{}, errors.Wrapf(err, "failed to delete vm placement groups")
+		} else if !ok {
+			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 		}
 
 		if err := r.reconcileDeleteLabels(ctx); err != nil {
@@ -227,15 +229,19 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 	return reconcile.Result{}, nil
 }
 
-func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) error {
+func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) (bool, error) {
 	placementGroupPrefix := towerresources.GetVMPlacementGroupNamePrefix(ctx.Cluster)
-	if err := ctx.VMService.DeleteVMPlacementGroupsByName(ctx, placementGroupPrefix); err != nil {
-		return err
+	if pgNames, err := ctx.VMService.DeleteVMPlacementGroupsByName(ctx, placementGroupPrefix); err != nil {
+		return false, err
+	} else if len(pgNames) > 0 {
+		ctx.Logger.Info("Waiting for placement groups to be deleted", "placementGroupCount", len(pgNames))
+
+		return false, nil
 	} else {
 		ctx.Logger.Info(fmt.Sprintf("Placement groups with name prefix %s deleted", placementGroupPrefix))
 	}
 
-	return nil
+	return true, nil
 }
 
 func (r *ElfClusterReconciler) reconcileDeleteLabels(ctx *context.ClusterContext) error {

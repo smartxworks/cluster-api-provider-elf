@@ -207,21 +207,26 @@ var _ = Describe("ElfClusterReconciler", func() {
 			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
 
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return(errors.New("some error"))
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return(nil, errors.New("some error"))
 
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
 
-			logBuffer = new(bytes.Buffer)
-			klog.SetOutput(logBuffer)
 			task.Status = models.NewTaskStatus(models.TaskStatusSUCCESSED)
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return(nil)
+			logBuffer.Reset()
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return([]string{"pgName"}, nil)
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
+			Expect(result).NotTo(BeZero())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for placement groups to be deleted"))
+
+			logBuffer.Reset()
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), towerresources.GetVMPlacementGroupNamePrefix(cluster)).Return(nil, nil)
 			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelClusterName(), elfCluster.Name, true).Return("labelid", nil)
 			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelVIP(), elfCluster.Spec.ControlPlaneEndpoint.Host, false).Return("labelid", nil)
 			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelNamespace(), elfCluster.Namespace, true).Return("", nil)
 			mockVMService.EXPECT().DeleteLabel(towerresources.GetVMLabelManaged(), "true", true).Return("", nil)
-
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(result).To(BeZero())
 			Expect(err).NotTo(HaveOccurred())

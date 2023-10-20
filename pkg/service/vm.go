@@ -69,7 +69,7 @@ type VMService interface {
 	CreateVMPlacementGroup(name, clusterID string, vmPolicy models.VMVMPolicy) (*models.WithTaskVMPlacementGroup, error)
 	GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error)
 	AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error)
-	DeleteVMPlacementGroupsByName(ctx goctx.Context, placementGroupName string) error
+	DeleteVMPlacementGroupsByName(ctx goctx.Context, placementGroupName string) ([]string, error)
 	FindGPUDevicesByHostIDs(hostIDs []string) ([]*models.GpuDevice, error)
 	FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDevice, error)
 }
@@ -848,35 +848,60 @@ func (svr *TowerVMService) AddVMsToPlacementGroup(placementGroup *models.VMPlace
 	return &models.Task{ID: updateVMPlacementGroupResp.Payload[0].TaskID}, nil
 }
 
-// DeleteVMPlacementGroupsByName deletes placement groups by name synchronously.
-func (svr *TowerVMService) DeleteVMPlacementGroupsByName(ctx goctx.Context, placementGroupName string) error {
-	deleteVMPlacementGroupParams := clientvmplacementgroup.NewDeleteVMPlacementGroupParams()
-	deleteVMPlacementGroupParams.RequestBody = &models.VMPlacementGroupDeletionParams{
+// DeleteVMPlacementGroupsByName deletes placement groups by name.
+//
+// The return value:
+// 1. A empty slice indicates that all specified placements have been deleted.
+// 2. A non-empty slice indicates that the names of the placement groups being deleted.
+func (svr *TowerVMService) DeleteVMPlacementGroupsByName(ctx goctx.Context, placementGroupName string) ([]string, error) {
+	// Deleting placement groups in batches, Tower will create a deletion task
+	// for each placement group.
+	// Some tasks may fail, and failed tasks need to be deleted again.
+	// Therefore, need to query and confirm whether all placement groups have been deleted.
+	getVMPlacementGroupsParams := clientvmplacementgroup.NewGetVMPlacementGroupsParams()
+	getVMPlacementGroupsParams.RequestBody = &models.GetVMPlacementGroupsRequestBody{
 		Where: &models.VMPlacementGroupWhereInput{
 			NameStartsWith: TowerString(placementGroupName),
 		},
 	}
 
-	deleteVMPlacementGroupResp, err := svr.Session.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams)
+	getVMPlacementGroupsResp, err := svr.Session.VMPlacementGroup.GetVMPlacementGroups(getVMPlacementGroupsParams)
 	if err != nil {
-		return err
+		return nil, err
+	} else if len(getVMPlacementGroupsResp.Payload) == 0 {
+		return nil, nil
 	}
 
-	if len(deleteVMPlacementGroupResp.Payload) == 0 {
-		return nil
+	placementGroups := getVMPlacementGroupsResp.Payload
+	var deletedPGNames, performingOperationPGNames []string
+	for i := 0; i < len(placementGroups); i++ {
+		// EntityAsyncStatus != nil means placement group is performing an operation(deletion etc.).
+		// Cannot delete a placement group that is being deleted,
+		// otherwise multiple deletion tasks will occur at the same time,
+		// and the redundant tasks will eventually fail.
+		if placementGroups[i].EntityAsyncStatus != nil {
+			performingOperationPGNames = append(performingOperationPGNames, *placementGroups[i].Name)
+		} else {
+			deletedPGNames = append(deletedPGNames, *placementGroups[i].Name)
+		}
 	}
 
-	taskID := *deleteVMPlacementGroupResp.Payload[0].TaskID
-	withLatestStatusTask, err := svr.WaitTask(ctx, taskID, config.WaitTaskTimeout, config.WaitTaskInterval)
-	if err != nil {
-		return errors.Wrapf(err, "failed to wait for placement group deleting task to complete in %s: pgNamePrefix %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, placementGroupName, taskID)
+	if len(deletedPGNames) == 0 {
+		return performingOperationPGNames, nil
 	}
 
-	if *withLatestStatusTask.Status == models.TaskStatusFAILED {
-		return errors.Errorf("failed to delete placement group %s in task %s", placementGroupName, *withLatestStatusTask.ID)
+	deleteVMPlacementGroupParams := clientvmplacementgroup.NewDeleteVMPlacementGroupParams()
+	deleteVMPlacementGroupParams.RequestBody = &models.VMPlacementGroupDeletionParams{
+		Where: &models.VMPlacementGroupWhereInput{
+			NameIn: deletedPGNames,
+		},
 	}
 
-	return nil
+	if _, err := svr.Session.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams); err != nil {
+		return nil, err
+	}
+
+	return append(deletedPGNames, performingOperationPGNames...), nil
 }
 
 func (svr *TowerVMService) FindGPUDevicesByHostIDs(hostIDs []string) ([]*models.GpuDevice, error) {

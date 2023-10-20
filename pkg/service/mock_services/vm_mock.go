@@ -144,11 +144,12 @@ func (mr *MockVMServiceMockRecorder) DeleteLabel(key, value, strict interface{})
 }
 
 // DeleteVMPlacementGroupsByName mocks base method.
-func (m *MockVMService) DeleteVMPlacementGroupsByName(ctx context.Context, placementGroupName string) error {
+func (m *MockVMService) DeleteVMPlacementGroupsByName(ctx context.Context, placementGroupName string) ([]string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteVMPlacementGroupsByName", ctx, placementGroupName)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // DeleteVMPlacementGroupsByName indicates an expected call of DeleteVMPlacementGroupsByName.
