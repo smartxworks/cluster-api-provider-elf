@@ -99,6 +99,16 @@ type NetworkSpec struct {
 	PreferredAPIServerCIDR string `json:"preferredAPIServerCidr,omitempty"`
 }
 
+func (n *NetworkSpec) RequiresStaticIPs() bool {
+	for i := 0; i < len(n.Devices); i++ {
+		if n.Devices[i].NetworkType == NetworkTypeIPV4 && len(n.Devices[i].IPAddrs) == 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 // NetworkDeviceSpec defines the network configuration for a virtual machine's
 // network device.
 type NetworkDeviceSpec struct {

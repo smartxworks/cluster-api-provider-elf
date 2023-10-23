@@ -1710,6 +1710,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should wait VM network ready", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineStaticIPFinalizer)
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.EntityAsyncStatus = nil
 			elfMachine.Status.VMRef = *vm.LocalID
@@ -2894,7 +2895,23 @@ var _ = Describe("ElfMachineReconciler", func() {
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
 		})
 
+		It("should wait for MachineStaticIPFinalizer", func() {
+			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
+				{NetworkType: infrav1.NetworkTypeIPV4},
+			}
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for CAPE-IP to set MachineStaticIPFinalizer on ElfMachine"))
+		})
+
 		It("should wait for IP allocation", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineStaticIPFinalizer)
 			placementGroup := fake.NewVMPlacementGroup([]string{fake.ID()})
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Times(3).Return(placementGroup, nil)
 
@@ -2920,6 +2937,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should not wait for IP allocation", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineStaticIPFinalizer)
 			placementGroup := fake.NewVMPlacementGroup([]string{fake.ID()})
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 

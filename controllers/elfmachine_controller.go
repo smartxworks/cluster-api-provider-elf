@@ -378,6 +378,14 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 
 	// If the ElfMachine doesn't have our finalizer, add it.
 	ctrlutil.AddFinalizer(ctx.ElfMachine, infrav1.MachineFinalizer)
+	// If ElfMachine requires static IPs for devices, should wait for CAPE-IP to set MachineStaticIPFinalizer first
+	// to prevent CAPE from overwriting MachineStaticIPFinalizer when setting MachineFinalizer.
+	// If ElfMachine happens to be deleted at this time, CAPE-IP may not have time to release the IPs.
+	if ctx.ElfMachine.Spec.Network.RequiresStaticIPs() && !ctrlutil.ContainsFinalizer(ctx.ElfMachine, infrav1.MachineStaticIPFinalizer) {
+		r.Logger.V(2).Info("Waiting for CAPE-IP to set MachineStaticIPFinalizer on ElfMachine")
+
+		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+	}
 
 	if !ctx.Cluster.Status.InfrastructureReady {
 		ctx.Logger.Info("Cluster infrastructure is not ready yet",
