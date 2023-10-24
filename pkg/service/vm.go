@@ -69,7 +69,8 @@ type VMService interface {
 	CreateVMPlacementGroup(name, clusterID string, vmPolicy models.VMVMPolicy) (*models.WithTaskVMPlacementGroup, error)
 	GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error)
 	AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error)
-	DeleteVMPlacementGroupsByName(ctx goctx.Context, placementGroupName string) ([]string, error)
+	DeleteVMPlacementGroupsByName(ctx goctx.Context, id string) (bool, error)
+	DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context, placementGroupName string) (int, error)
 	FindGPUDevicesByHostIDs(hostIDs []string) ([]*models.GpuDevice, error)
 	FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDevice, error)
 }
@@ -848,12 +849,28 @@ func (svr *TowerVMService) AddVMsToPlacementGroup(placementGroup *models.VMPlace
 	return &models.Task{ID: updateVMPlacementGroupResp.Payload[0].TaskID}, nil
 }
 
-// DeleteVMPlacementGroupsByName deletes placement groups by name.
+// DeleteVMPlacementGroupsByName deletes placement group by id.
 //
 // The return value:
-// 1. A empty slice indicates that all specified placements have been deleted.
-// 2. A non-empty slice indicates that the names of the placement groups being deleted.
-func (svr *TowerVMService) DeleteVMPlacementGroupsByName(ctx goctx.Context, placementGroupName string) ([]string, error) {
+// 1. true indicates that the specified placement group have been deleted.
+// 2. false indicates that the specified placement group being deleted.
+func (svr *TowerVMService) DeleteVMPlacementGroupsByName(ctx goctx.Context, name string) (bool, error) {
+	count, err := svr.DeleteVMPlacementGroupsByNamePrefix(ctx, name)
+	if err != nil {
+		return false, err
+	} else if count > 0 {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// DeleteVMPlacementGroupsByNamePrefix deletes placement groups by name prefix.
+//
+// The return value:
+// 1. 0 indicates that all specified placements have been deleted.
+// 2. > 0 indicates that the names of the placement groups being deleted.
+func (svr *TowerVMService) DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context, namePrefix string) (int, error) {
 	// Deleting placement groups in batches, Tower will create a deletion task
 	// for each placement group.
 	// Some tasks may fail, and failed tasks need to be deleted again.
@@ -861,47 +878,30 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByName(ctx goctx.Context, plac
 	getVMPlacementGroupsParams := clientvmplacementgroup.NewGetVMPlacementGroupsParams()
 	getVMPlacementGroupsParams.RequestBody = &models.GetVMPlacementGroupsRequestBody{
 		Where: &models.VMPlacementGroupWhereInput{
-			NameStartsWith: TowerString(placementGroupName),
+			NameStartsWith: TowerString(namePrefix),
 		},
 	}
 
 	getVMPlacementGroupsResp, err := svr.Session.VMPlacementGroup.GetVMPlacementGroups(getVMPlacementGroupsParams)
 	if err != nil {
-		return nil, err
+		return 0, err
 	} else if len(getVMPlacementGroupsResp.Payload) == 0 {
-		return nil, nil
-	}
-
-	placementGroups := getVMPlacementGroupsResp.Payload
-	var deletedPGNames, performingOperationPGNames []string
-	for i := 0; i < len(placementGroups); i++ {
-		// EntityAsyncStatus != nil means placement group is performing an operation(deletion etc.).
-		// Cannot delete a placement group that is being deleted,
-		// otherwise multiple deletion tasks will occur at the same time,
-		// and the redundant tasks will eventually fail.
-		if placementGroups[i].EntityAsyncStatus != nil {
-			performingOperationPGNames = append(performingOperationPGNames, *placementGroups[i].Name)
-		} else {
-			deletedPGNames = append(deletedPGNames, *placementGroups[i].Name)
-		}
-	}
-
-	if len(deletedPGNames) == 0 {
-		return performingOperationPGNames, nil
+		return 0, nil
 	}
 
 	deleteVMPlacementGroupParams := clientvmplacementgroup.NewDeleteVMPlacementGroupParams()
 	deleteVMPlacementGroupParams.RequestBody = &models.VMPlacementGroupDeletionParams{
 		Where: &models.VMPlacementGroupWhereInput{
-			NameIn: deletedPGNames,
+			NameStartsWith:       TowerString(namePrefix),
+			EntityAsyncStatusNot: nil,
 		},
 	}
 
 	if _, err := svr.Session.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams); err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	return append(deletedPGNames, performingOperationPGNames...), nil
+	return len(getVMPlacementGroupsResp.Payload), nil
 }
 
 func (svr *TowerVMService) FindGPUDevicesByHostIDs(hostIDs []string) ([]*models.GpuDevice, error) {

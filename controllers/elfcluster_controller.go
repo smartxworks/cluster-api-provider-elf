@@ -231,14 +231,14 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx *context.ClusterContext) (rec
 
 func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx *context.ClusterContext) (bool, error) {
 	placementGroupPrefix := towerresources.GetVMPlacementGroupNamePrefix(ctx.Cluster)
-	if pgNames, err := ctx.VMService.DeleteVMPlacementGroupsByName(ctx, placementGroupPrefix); err != nil {
+	if pgCount, err := ctx.VMService.DeleteVMPlacementGroupsByNamePrefix(ctx, placementGroupPrefix); err != nil {
 		return false, err
-	} else if len(pgNames) > 0 {
-		ctx.Logger.Info("Waiting for placement groups to be deleted", "placementGroupCount", len(pgNames))
+	} else if pgCount > 0 {
+		ctx.Logger.Info(fmt.Sprintf("Waiting for the placement groups with name prefix %s to be deleted", placementGroupPrefix), "count", pgCount)
 
 		return false, nil
 	} else {
-		ctx.Logger.Info(fmt.Sprintf("Placement groups with name prefix %s deleted", placementGroupPrefix))
+		ctx.Logger.Info(fmt.Sprintf("The placement groups with name prefix %s are deleted successfully", placementGroupPrefix))
 	}
 
 	return true, nil

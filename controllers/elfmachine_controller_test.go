@@ -2572,7 +2572,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			placementGroup := fake.NewVMPlacementGroup([]string{})
 			placementGroup.Name = service.TowerString(placementGroupName)
 			mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), placementGroupName).Return(nil, nil)
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), placementGroupName).Return(true, nil)
 
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err = reconciler.deletePlacementGroup(machineContext)
@@ -2594,7 +2594,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).To(HaveOccurred())
 
 			mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), placementGroupName).Return(nil, errors.New("error"))
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), placementGroupName).Return(false, errors.New("error"))
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err = reconciler.deletePlacementGroup(machineContext)
 			Expect(ok).To(BeFalse())
@@ -2602,12 +2602,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			logBuffer.Reset()
 			mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), placementGroupName).Return([]string{*placementGroup.Name}, nil)
+			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), placementGroupName).Return(false, nil)
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err = reconciler.deletePlacementGroup(machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Waiting for placement group to be deleted"))
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Waiting for the placement group %s to be deleted", *placementGroup.Name)))
 		})
 
 		It("should delete k8s node before destroying VM.", func() {
