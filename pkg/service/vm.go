@@ -69,7 +69,7 @@ type VMService interface {
 	CreateVMPlacementGroup(name, clusterID string, vmPolicy models.VMVMPolicy) (*models.WithTaskVMPlacementGroup, error)
 	GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error)
 	AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error)
-	DeleteVMPlacementGroupsByName(ctx goctx.Context, id string) (bool, error)
+	DeleteVMPlacementGroupByID(ctx goctx.Context, id string) (bool, error)
 	DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context, placementGroupName string) (int, error)
 	FindGPUDevicesByHostIDs(hostIDs []string) ([]*models.GpuDevice, error)
 	FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDevice, error)
@@ -849,20 +849,42 @@ func (svr *TowerVMService) AddVMsToPlacementGroup(placementGroup *models.VMPlace
 	return &models.Task{ID: updateVMPlacementGroupResp.Payload[0].TaskID}, nil
 }
 
-// DeleteVMPlacementGroupsByName deletes placement group by id.
+// DeleteVMPlacementGroupByID deletes placement group by id.
 //
 // The return value:
 // 1. true indicates that the specified placement group have been deleted.
 // 2. false indicates that the specified placement group being deleted.
-func (svr *TowerVMService) DeleteVMPlacementGroupsByName(ctx goctx.Context, name string) (bool, error) {
-	count, err := svr.DeleteVMPlacementGroupsByNamePrefix(ctx, name)
+func (svr *TowerVMService) DeleteVMPlacementGroupByID(ctx goctx.Context, id string) (bool, error) {
+	getVMPlacementGroupsParams := clientvmplacementgroup.NewGetVMPlacementGroupsParams()
+	getVMPlacementGroupsParams.RequestBody = &models.GetVMPlacementGroupsRequestBody{
+		Where: &models.VMPlacementGroupWhereInput{
+			ID: TowerString(id),
+		},
+	}
+
+	getVMPlacementGroupsResp, err := svr.Session.VMPlacementGroup.GetVMPlacementGroups(getVMPlacementGroupsParams)
 	if err != nil {
 		return false, err
-	} else if count > 0 {
+	}
+
+	if len(getVMPlacementGroupsResp.Payload) == 0 {
+		return true, nil
+	} else if getVMPlacementGroupsResp.Payload[0].EntityAsyncStatus != nil {
 		return false, nil
 	}
 
-	return true, nil
+	deleteVMPlacementGroupParams := clientvmplacementgroup.NewDeleteVMPlacementGroupParams()
+	deleteVMPlacementGroupParams.RequestBody = &models.VMPlacementGroupDeletionParams{
+		Where: &models.VMPlacementGroupWhereInput{
+			ID: TowerString(id),
+		},
+	}
+
+	if _, err := svr.Session.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams); err != nil {
+		return false, err
+	}
+
+	return false, nil
 }
 
 // DeleteVMPlacementGroupsByNamePrefix deletes placement groups by name prefix.

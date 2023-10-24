@@ -2572,7 +2572,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			placementGroup := fake.NewVMPlacementGroup([]string{})
 			placementGroup.Name = service.TowerString(placementGroupName)
 			mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), placementGroupName).Return(true, nil)
+			mockVMService.EXPECT().DeleteVMPlacementGroupByID(gomock.Any(), *placementGroup.ID).Return(true, nil)
 
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err = reconciler.deletePlacementGroup(machineContext)
@@ -2594,7 +2594,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).To(HaveOccurred())
 
 			mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), placementGroupName).Return(false, errors.New("error"))
+			mockVMService.EXPECT().DeleteVMPlacementGroupByID(gomock.Any(), *placementGroup.ID).Return(false, errors.New("error"))
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err = reconciler.deletePlacementGroup(machineContext)
 			Expect(ok).To(BeFalse())
@@ -2602,7 +2602,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			logBuffer.Reset()
 			mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
-			mockVMService.EXPECT().DeleteVMPlacementGroupsByName(gomock.Any(), placementGroupName).Return(false, nil)
+			mockVMService.EXPECT().DeleteVMPlacementGroupByID(gomock.Any(), *placementGroup.ID).Return(false, nil)
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err = reconciler.deletePlacementGroup(machineContext)
 			Expect(ok).To(BeFalse())

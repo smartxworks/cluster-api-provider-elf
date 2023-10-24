@@ -630,7 +630,7 @@ func (r *ElfMachineReconciler) deletePlacementGroup(ctx *context.MachineContext)
 		return false, nil
 	}
 
-	if ok, err := ctx.VMService.DeleteVMPlacementGroupsByName(ctx, *placementGroup.Name); err != nil {
+	if ok, err := ctx.VMService.DeleteVMPlacementGroupByID(ctx, *placementGroup.ID); err != nil {
 		return false, err
 	} else if !ok {
 		ctx.Logger.Info(fmt.Sprintf("Waiting for the placement group %s to be deleted", *placementGroup.Name))
