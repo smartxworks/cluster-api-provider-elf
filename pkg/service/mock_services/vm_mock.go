@@ -143,18 +143,34 @@ func (mr *MockVMServiceMockRecorder) DeleteLabel(key, value, strict interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLabel", reflect.TypeOf((*MockVMService)(nil).DeleteLabel), key, value, strict)
 }
 
-// DeleteVMPlacementGroupsByName mocks base method.
-func (m *MockVMService) DeleteVMPlacementGroupsByName(ctx context.Context, placementGroupName string) error {
+// DeleteVMPlacementGroupByID mocks base method.
+func (m *MockVMService) DeleteVMPlacementGroupByID(ctx context.Context, id string) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteVMPlacementGroupsByName", ctx, placementGroupName)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "DeleteVMPlacementGroupByID", ctx, id)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// DeleteVMPlacementGroupsByName indicates an expected call of DeleteVMPlacementGroupsByName.
-func (mr *MockVMServiceMockRecorder) DeleteVMPlacementGroupsByName(ctx, placementGroupName interface{}) *gomock.Call {
+// DeleteVMPlacementGroupByID indicates an expected call of DeleteVMPlacementGroupByID.
+func (mr *MockVMServiceMockRecorder) DeleteVMPlacementGroupByID(ctx, id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVMPlacementGroupsByName", reflect.TypeOf((*MockVMService)(nil).DeleteVMPlacementGroupsByName), ctx, placementGroupName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVMPlacementGroupByID", reflect.TypeOf((*MockVMService)(nil).DeleteVMPlacementGroupByID), ctx, id)
+}
+
+// DeleteVMPlacementGroupsByNamePrefix mocks base method.
+func (m *MockVMService) DeleteVMPlacementGroupsByNamePrefix(ctx context.Context, placementGroupName string) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteVMPlacementGroupsByNamePrefix", ctx, placementGroupName)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteVMPlacementGroupsByNamePrefix indicates an expected call of DeleteVMPlacementGroupsByNamePrefix.
+func (mr *MockVMServiceMockRecorder) DeleteVMPlacementGroupsByNamePrefix(ctx, placementGroupName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVMPlacementGroupsByNamePrefix", reflect.TypeOf((*MockVMService)(nil).DeleteVMPlacementGroupsByNamePrefix), ctx, placementGroupName)
 }
 
 // FindByIDs mocks base method.
