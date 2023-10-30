@@ -18,6 +18,7 @@ package service
 
 import (
 	goctx "context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -243,7 +244,7 @@ func (svr *TowerVMService) Clone(
 		ClusterID:   cluster.ID,
 		HostID:      TowerString(hostID),
 		Name:        TowerString(elfMachine.Name),
-		Description: TowerString(config.VMDescription),
+		Description: TowerString(fmt.Sprintf(config.VMDescription, elfCluster.Spec.Tower.Server)),
 		Vcpu:        vCPU,
 		CPUCores:    cpuCores,
 		CPUSockets:  cpuSockets,
