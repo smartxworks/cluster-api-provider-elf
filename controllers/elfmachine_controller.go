@@ -56,6 +56,7 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
 	labelsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
+	patchutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/patch"
 )
 
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines,verbs=get;list;watch;create;update;patch;delete
@@ -377,7 +378,10 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 	}
 
 	// If the ElfMachine doesn't have our finalizer, add it.
-	ctrlutil.AddFinalizer(ctx.ElfMachine, infrav1.MachineFinalizer)
+	if !ctrlutil.ContainsFinalizer(ctx.ElfMachine, infrav1.MachineFinalizer) {
+		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, patchutil.AddFinalizerWithOptimisticLock(ctx, r.Client, ctx.ElfMachine, infrav1.MachineFinalizer)
+	}
+
 	// If ElfMachine requires static IPs for devices, should wait for CAPE-IP to set MachineStaticIPFinalizer first
 	// to prevent CAPE from overwriting MachineStaticIPFinalizer when setting MachineFinalizer.
 	// If ElfMachine happens to be deleted at this time, CAPE-IP may not have time to release the IPs.

@@ -54,6 +54,7 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service/mock_services"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
+	patchutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/patch"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 	"github.com/smartxworks/cluster-api-provider-elf/test/helpers"
 )
@@ -164,6 +165,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should exit immediately if cluster infra isn't ready", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			cluster.Status.InfrastructureReady = false
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
@@ -179,6 +181,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should exit immediately if bootstrap data secret reference isn't available", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			cluster.Status.InfrastructureReady = true
 			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -195,6 +198,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should wait cluster ControlPlaneInitialized true when create worker machine", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			cluster.Status.InfrastructureReady = true
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
@@ -210,6 +214,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should not wait cluster ControlPlaneInitialized true when create master machine", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			cluster.Status.InfrastructureReady = true
 			elfMachine.Labels[clusterv1.MachineControlPlaneLabel] = ""
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -238,6 +243,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should set CloningFailedReason condition when failed to retrieve bootstrap data", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			machine.Spec.Bootstrap.DataSecretName = pointer.String("notfound")
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
@@ -259,6 +265,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfCluster.Spec.Cluster = clusterKey
 			task := fake.NewTowerTask()
 			withTaskVM := fake.NewWithTaskVM(vm, task)
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -297,6 +304,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm := fake.NewTowerVM()
 			vm.Name = &elfMachine.Name
 			vm.LocalID = pointer.String("placeholder-%s" + *vm.LocalID)
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -317,6 +325,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle clone error", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -343,6 +352,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.SetVMDisconnectionTimestamp(&now)
 			nic := fake.NewTowerVMNic(0)
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -372,6 +382,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
 			elfMachine.Status.VMRef = *vm.LocalID
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -406,6 +417,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.EntityAsyncStatus = nil
 			vm.InRecycleBin = pointer.Bool(true)
 			elfMachine.Status.VMRef = *vm.LocalID
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -429,6 +441,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task.Status = &status
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task.ID
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -457,6 +470,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task.ErrorMessage = service.TowerString("Cannot unwrap Ok value of Result.Err.\r\ncode: CREATE_VM_FORM_TEMPLATE_FAILED\r\nmessage: {\"data\":{},\"ec\":\"VM_CLOUD_INIT_CONFIG_ERROR\",\"error\":{\"msg\":\"[VM_CLOUD_INIT_CONFIG_ERROR]The gateway [192.168.31.215] is unreachable. \"}}")
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task.ID
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -489,6 +503,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task1.ID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -520,6 +535,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task.Status = &taskStatus
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task.ID
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -550,6 +566,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task1.ID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -582,6 +599,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task1.ID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -616,6 +634,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task1.ID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -648,6 +667,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task1.ID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -926,6 +946,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			placementGroup1 := fake.NewVMPlacementGroup(nil)
 			placementGroup2 := fake.NewVMPlacementGroup(nil)
 			placementGroup2.EntityAsyncStatus = models.EntityAsyncStatusUPDATING.Pointer()
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -951,6 +972,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.Status = &status
 			elfMachine.Status.VMRef = *vm.LocalID
 			placementGroup := fake.NewVMPlacementGroup(nil)
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -1665,6 +1687,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should set providerID to ElfMachine when VM is created", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			cluster.Status.InfrastructureReady = true
 			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
@@ -1710,6 +1733,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should wait VM network ready", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineStaticIPFinalizer)
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.EntityAsyncStatus = nil
@@ -2138,6 +2162,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			nic := fake.NewTowerVMNic(0)
 			nic.IPAddress = service.TowerString("127.0.0.1")
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 
@@ -2895,7 +2920,26 @@ var _ = Describe("ElfMachineReconciler", func() {
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
 		})
 
+		It("should wait for MachineFinalizer", func() {
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			originalElfMachine := elfMachine.DeepCopy()
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(result.RequeueAfter).NotTo(BeZero())
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
+			Expect(elfMachine.Finalizers).To(Equal([]string{infrav1.MachineFinalizer}))
+
+			err = patchutil.AddFinalizerWithOptimisticLock(ctx, reconciler.Client, originalElfMachine, infrav1.MachineFinalizer)
+			Expect(err).To(HaveOccurred())
+			Expect(apierrors.IsConflict(err)).To(BeTrue())
+		})
+
 		It("should wait for MachineStaticIPFinalizer", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
 				{NetworkType: infrav1.NetworkTypeIPV4},
 			}
@@ -2911,6 +2955,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should wait for IP allocation", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineStaticIPFinalizer)
 			placementGroup := fake.NewVMPlacementGroup([]string{fake.ID()})
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Times(3).Return(placementGroup, nil)
@@ -2937,6 +2982,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should not wait for IP allocation", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineStaticIPFinalizer)
 			placementGroup := fake.NewVMPlacementGroup([]string{fake.ID()})
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
