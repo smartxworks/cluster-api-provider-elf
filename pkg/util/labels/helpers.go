@@ -78,6 +78,8 @@ func GetLabelValue(o metav1.Object, label string) string {
 	return val
 }
 
+// ConvertToLabelValue converts a string to a valid label value.
+// A valid label value must be an empty string or consist of alphanumeric characters, '-', '_' or '.'.
 func ConvertToLabelValue(str string) string {
 	result := noLabelCharReg.ReplaceAll([]byte(str), []byte("-"))
 
