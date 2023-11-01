@@ -996,14 +996,21 @@ func (r *ElfMachineReconciler) reconcileNode(ctx *context.MachineContext, vm *mo
 	}
 
 	nodeGroupName := machineutil.GetNodeGroupName(ctx.Machine)
+	labels := map[string]string{
+		infrav1.HostServerIDLabel:   ctx.ElfMachine.Status.HostServerRef,
+		infrav1.HostServerNameLabel: ctx.ElfMachine.Status.HostServerName,
+		infrav1.TowerVMIDLabel:      *vm.ID,
+		infrav1.NodeGroupLabel:      nodeGroupName,
+	}
+	if len(ctx.ElfMachine.Spec.GPUDevices) > 0 {
+		labels[labelsutil.ClusterAutoscalerCAPIGPULabel] = labelsutil.ConvertToLabelValue(ctx.ElfMachine.Spec.GPUDevices[0].Model)
+	} else if len(ctx.ElfMachine.Spec.VGPUDevices) > 0 {
+		labels[labelsutil.ClusterAutoscalerCAPIGPULabel] = labelsutil.ConvertToLabelValue(ctx.ElfMachine.Spec.VGPUDevices[0].Type)
+	}
+
 	payloads := map[string]interface{}{
 		"metadata": map[string]interface{}{
-			"labels": map[string]string{
-				infrav1.HostServerIDLabel:   ctx.ElfMachine.Status.HostServerRef,
-				infrav1.HostServerNameLabel: ctx.ElfMachine.Status.HostServerName,
-				infrav1.TowerVMIDLabel:      *vm.ID,
-				infrav1.NodeGroupLabel:      nodeGroupName,
-			},
+			"labels": labels,
 		},
 	}
 	// providerID cannot be modified after setting a valid value.
