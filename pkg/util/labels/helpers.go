@@ -27,6 +27,8 @@ import (
 )
 
 const (
+	// ClusterAutoscalerCAPIGPULabel is the label added to nodes with GPU resource, which will be used by clusterAutoscaler-CAPI.
+	// ref: https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/clusterapi/README.md#special-note-on-gpu-instances
 	ClusterAutoscalerCAPIGPULabel = "cluster-api/accelerator"
 )
 
