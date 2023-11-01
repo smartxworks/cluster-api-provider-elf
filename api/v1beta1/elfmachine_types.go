@@ -30,6 +30,11 @@ const (
 	// API Server.
 	MachineFinalizer = "elfmachine.infrastructure.cluster.x-k8s.io"
 
+	// MachineStaticIPFinalizer allows ReconcileElfMachine to clean up static ip
+	// resources associated with ElfMachine before removing it from the
+	// API Server.
+	MachineStaticIPFinalizer = "elfmachinestaticip.infrastructure.cluster.x-k8s.io"
+
 	// VMDisconnectionTimestampAnnotation is the annotation identifying the VM of ElfMachine disconnection time.
 	VMDisconnectionTimestampAnnotation = "cape.infrastructure.cluster.x-k8s.io/vm-disconnection-timestamp"
 )
