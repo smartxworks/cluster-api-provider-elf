@@ -17,10 +17,23 @@ limitations under the License.
 package labels
 
 import (
+	"regexp"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+)
+
+const (
+	// ClusterAutoscalerCAPIGPULabel is the label added to nodes with GPU resource, which will be used by clusterAutoscaler-CAPI.
+	// ref: https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/clusterapi/README.md#special-note-on-gpu-instances
+	ClusterAutoscalerCAPIGPULabel = "cluster-api/accelerator"
+)
+
+var (
+	noLabelCharReg = regexp.MustCompile(`[^-a-zA-Z0-9-.]`)
 )
 
 func GetHostServerIDLabel(o metav1.Object) string {
@@ -63,4 +76,23 @@ func GetLabelValue(o metav1.Object, label string) string {
 	}
 
 	return val
+}
+
+// ConvertToLabelValue converts a string to a valid label value.
+// A valid label value must be an empty string or consist of alphanumeric characters, '-', '_' or '.'.
+func ConvertToLabelValue(str string) string {
+	result := noLabelCharReg.ReplaceAll([]byte(str), []byte("-"))
+
+	if len(result) > validation.LabelValueMaxLength {
+		return string(result[:validation.LabelValueMaxLength])
+	}
+
+	for len(result) > 0 && (result[0] == '-' || result[0] == '_' || result[0] == '.') {
+		result = result[1:]
+	}
+	for len(result) > 0 && (result[len(result)-1] == '-' || result[len(result)-1] == '_' || result[len(result)-1] == '.') {
+		result = result[:len(result)-1]
+	}
+
+	return string(result)
 }

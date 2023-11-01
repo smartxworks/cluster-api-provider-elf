@@ -27,14 +27,21 @@ import (
 	"github.com/pkg/errors"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service/mock_services"
+	labelsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
+	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
+	"github.com/smartxworks/cluster-api-provider-elf/test/helpers"
 )
 
 var _ = Describe("ElfMachineReconciler-GPU", func() {
@@ -50,6 +57,8 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 		mockVMService    *mock_services.MockVMService
 		mockNewVMService service.NewVMServiceFunc
 	)
+
+	ctx := goctx.Background()
 
 	gpuModel := "A16"
 	unexpectedError := errors.New("unexpected error")
@@ -356,6 +365,70 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			Expect(err).NotTo(HaveOccurred())
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.UpdatingReason}})
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+		})
+	})
+
+	Context("Reconcile GPU Node", func() {
+		var node *corev1.Node
+
+		BeforeEach(func() {
+			elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{Model: gpuModel, Count: 1})
+		})
+
+		AfterEach(func() {
+			Expect(testEnv.Delete(ctx, node)).To(Succeed())
+		})
+
+		It("should set clusterAutoscaler GPU label for node", func() {
+			elfMachine.Status.HostServerRef = fake.UUID()
+			elfMachine.Status.HostServerName = fake.UUID()
+			vm := fake.NewTowerVM()
+			ctrlMgrContext := &context.ControllerManagerContext{
+				Context:                 goctx.Background(),
+				Client:                  testEnv.Client,
+				Logger:                  ctrllog.Log,
+				Name:                    fake.ControllerManagerName,
+				LeaderElectionNamespace: fake.LeaderElectionNamespace,
+				LeaderElectionID:        fake.LeaderElectionID,
+			}
+			ctrlContext := &context.ControllerContext{
+				ControllerManagerContext: ctrlMgrContext,
+				Logger:                   ctrllog.Log,
+			}
+			machineContext := &context.MachineContext{
+				ControllerContext: ctrlContext,
+				Cluster:           cluster,
+				Machine:           machine,
+				ElfCluster:        elfCluster,
+				ElfMachine:        elfMachine,
+				Logger:            ctrllog.Log,
+			}
+
+			node = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   elfMachine.Name,
+					Labels: map[string]string{},
+				},
+			}
+			Expect(testEnv.CreateAndWait(ctx, node)).To(Succeed())
+			Expect(helpers.CreateKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)).To(Succeed())
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileNode(machineContext, vm)
+			Expect(ok).Should(BeTrue())
+			Expect(err).ToNot(HaveOccurred())
+			Eventually(func() bool {
+				if err := testEnv.Get(ctx, client.ObjectKey{Namespace: node.Namespace, Name: node.Name}, node); err != nil {
+					return false
+				}
+
+				return node.Spec.ProviderID == machineutil.ConvertUUIDToProviderID(*vm.LocalID) &&
+					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
+					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName &&
+					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID &&
+					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine) &&
+					node.Labels[labelsutil.ClusterAutoscalerCAPIGPULabel] == labelsutil.ConvertToLabelValue(gpuModel)
+			}, timeout).Should(BeTrue())
 		})
 	})
 })
