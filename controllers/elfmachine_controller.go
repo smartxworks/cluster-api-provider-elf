@@ -932,10 +932,9 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 	case models.TaskStatusSUCCESSED:
 		ctx.Logger.Info("VM task succeeded", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", service.GetTowerString(task.Description))
 
-		if service.IsCloneVMTask(task) || service.IsUpdateVMTask(task) {
-			if ctx.ElfMachine.RequiresGPUOrVGPUDevices() {
-				unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
-			}
+		if ctx.ElfMachine.RequiresGPUOrVGPUDevices() &&
+			(service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task)) {
+			unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 		}
 
 		if service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) {

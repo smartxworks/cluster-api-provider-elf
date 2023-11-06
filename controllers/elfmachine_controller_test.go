@@ -3051,6 +3051,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle failed/succeeded task", func() {
+			elfMachine.Spec.GPUDevices = []infrav1.GPUPassthroughDeviceSpec{{Model: "A16", Count: 1}}
+
 			resetVMTaskErrorCache()
 			task := fake.NewTowerTask()
 			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
@@ -3083,6 +3085,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(msg).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
 			Expect(err).ShouldNot(HaveOccurred())
 
+			// Start VM
 			task.Status = models.NewTaskStatus(models.TaskStatusSUCCESSED)
 			task.Description = service.TowerString("Start VM")
 			elfMachine.Status.TaskRef = *task.ID
@@ -3106,6 +3109,35 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			ok, _ = acquireTicketForCreateVM(elfMachine.Name, true)
 			Expect(ok).To(BeFalse())
+
+			// GPU
+			gpuDeviceInfo := &service.GPUDeviceInfo{ID: "gpu", AllocatedCount: 0, AvailableCount: 1}
+			gpuDeviceInfos := []*service.GPUDeviceInfo{gpuDeviceInfo}
+
+			tests := []struct {
+				description string
+				status      models.TaskStatus
+			}{
+				{"Create a VM", models.TaskStatusFAILED},
+				{"Start VM", models.TaskStatusFAILED},
+				{"Edit VM", models.TaskStatusFAILED},
+				{"Create a VM", models.TaskStatusSUCCESSED},
+				{"Start VM", models.TaskStatusSUCCESSED},
+				{"Edit VM", models.TaskStatusSUCCESSED},
+			}
+
+			for _, tc := range tests {
+				lockGPUDevicesForVM(elfCluster.Spec.Cluster, elfMachine.Name, "", gpuDeviceInfos)
+				Expect(getGPUDevicesLockedByVM(elfCluster.Spec.Cluster, elfMachine.Name)).NotTo(BeNil())
+				task.Status = models.NewTaskStatus(tc.status)
+				task.Description = service.TowerString(tc.description)
+				task.ErrorMessage = service.TowerString("error")
+				elfMachine.Status.TaskRef = *task.ID
+				ok, err = reconciler.reconcileVMTask(machineContext, nil)
+				Expect(ok).Should(BeTrue())
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(getGPUDevicesLockedByVM(elfCluster.Spec.Cluster, elfMachine.Name)).To(BeNil())
+			}
 		})
 	})
 
