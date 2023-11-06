@@ -43,7 +43,7 @@ import (
 
 type VMService interface {
 	Clone(elfCluster *infrav1.ElfCluster, elfMachine *infrav1.ElfMachine, bootstrapData,
-		host string, machineGPUDevices []*models.GpuDevice) (*models.WithTaskVM, error)
+		host string, machineGPUDevices []*GPUDeviceInfo) (*models.WithTaskVM, error)
 	UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachine) (*models.WithTaskVM, error)
 	Migrate(vmID, hostID string) (*models.WithTaskVM, error)
 	Delete(uuid string) (*models.Task, error)
@@ -51,7 +51,7 @@ type VMService interface {
 	PowerOn(uuid string) (*models.Task, error)
 	ShutDown(uuid string) (*models.Task, error)
 	RemoveGPUDevices(id string, gpus []*models.VMGpuOperationParams) (*models.Task, error)
-	AddGPUDevices(id string, gpus []*models.VMGpuOperationParams) (*models.Task, error)
+	AddGPUDevices(id string, gpuDeviceInfo []*GPUDeviceInfo) (*models.Task, error)
 	Get(id string) (*models.VM, error)
 	GetByName(name string) (*models.VM, error)
 	FindByIDs(ids []string) ([]*models.VM, error)
@@ -72,8 +72,9 @@ type VMService interface {
 	AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error)
 	DeleteVMPlacementGroupByID(ctx goctx.Context, id string) (bool, error)
 	DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context, placementGroupName string) (int, error)
-	FindGPUDevicesByHostIDs(hostIDs []string) ([]*models.GpuDevice, error)
+	FindGPUDevicesByHostIDs(hostIDs []string, gpuDeviceUsage models.GpuDeviceUsage) ([]*models.GpuDevice, error)
 	FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDevice, error)
+	FindGPUDeviceInfos(gpuIDs []string) (GPUDeviceInfos, error)
 }
 
 type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
@@ -118,7 +119,7 @@ func (svr *TowerVMService) UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachin
 // Clone kicks off a clone operation on Elf to create a new virtual machine using VM template.
 func (svr *TowerVMService) Clone(
 	elfCluster *infrav1.ElfCluster, elfMachine *infrav1.ElfMachine, bootstrapData,
-	host string, machineGPUDevices []*models.GpuDevice) (*models.WithTaskVM, error) {
+	host string, gpuDeviceInfos []*GPUDeviceInfo) (*models.WithTaskVM, error) {
 	cluster, err := svr.GetCluster(elfCluster.Spec.Cluster)
 	if err != nil {
 		return nil, err
@@ -133,11 +134,11 @@ func (svr *TowerVMService) Clone(
 	cpuCores := TowerCPUCores(*vCPU, elfMachine.Spec.NumCoresPerSocket)
 	cpuSockets := TowerCPUSockets(*vCPU, *cpuCores)
 
-	gpuDevices := make([]*models.VMGpuOperationParams, len(machineGPUDevices))
-	for i := 0; i < len(machineGPUDevices); i++ {
+	gpuDevices := make([]*models.VMGpuOperationParams, len(gpuDeviceInfos))
+	for i := 0; i < len(gpuDeviceInfos); i++ {
 		gpuDevices[i] = &models.VMGpuOperationParams{
-			GpuID:  machineGPUDevices[i].ID,
-			Amount: TowerInt32(1),
+			GpuID:  TowerString(gpuDeviceInfos[i].ID),
+			Amount: TowerInt32(int(gpuDeviceInfos[i].AllocatedCount)),
 		}
 	}
 
@@ -403,7 +404,15 @@ func (svr *TowerVMService) RemoveGPUDevices(id string, gpus []*models.VMGpuOpera
 	return &models.Task{ID: temoveVMGPUDeviceResp.Payload[0].TaskID}, nil
 }
 
-func (svr *TowerVMService) AddGPUDevices(id string, gpus []*models.VMGpuOperationParams) (*models.Task, error) {
+func (svr *TowerVMService) AddGPUDevices(id string, gpuDeviceInfos []*GPUDeviceInfo) (*models.Task, error) {
+	gpus := make([]*models.VMGpuOperationParams, len(gpuDeviceInfos))
+	for i := 0; i < len(gpuDeviceInfos); i++ {
+		gpus[i] = &models.VMGpuOperationParams{
+			GpuID:  TowerString(gpuDeviceInfos[i].ID),
+			Amount: TowerInt32(int(gpuDeviceInfos[i].AllocatedCount)),
+		}
+	}
+
 	addVMGpuDeviceParams := clientvm.NewAddVMGpuDeviceParams()
 	addVMGpuDeviceParams.RequestBody = &models.VMAddGpuDeviceParams{
 		Data: gpus,
@@ -927,20 +936,25 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context
 	return len(getVMPlacementGroupsResp.Payload), nil
 }
 
-func (svr *TowerVMService) FindGPUDevicesByHostIDs(hostIDs []string) ([]*models.GpuDevice, error) {
+func (svr *TowerVMService) FindGPUDevicesByHostIDs(hostIDs []string, gpuDeviceUsage models.GpuDeviceUsage) ([]*models.GpuDevice, error) {
 	if len(hostIDs) == 0 {
 		return nil, nil
 	}
 
-	getGpuDevicesParams := clientgpu.NewGetGpuDevicesParams()
-	getGpuDevicesParams.RequestBody = &models.GetGpuDevicesRequestBody{
-		Where: &models.GpuDeviceWhereInput{
-			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH),
-			Host: &models.HostWhereInput{
-				IDIn: hostIDs,
-			},
+	where := &models.GpuDeviceWhereInput{
+		UserUsage: models.NewGpuDeviceUsage(gpuDeviceUsage),
+		Host: &models.HostWhereInput{
+			IDIn: hostIDs,
 		},
 	}
+
+	// Filter GPU devices whose vGPU has been fully used
+	if gpuDeviceUsage == models.GpuDeviceUsageVGPU {
+		where.AvailableVgpusNumGt = TowerInt32(0)
+	}
+
+	getGpuDevicesParams := clientgpu.NewGetGpuDevicesParams()
+	getGpuDevicesParams.RequestBody = &models.GetGpuDevicesRequestBody{Where: where}
 
 	getGpuDevicesResp, err := svr.Session.GpuDevice.GetGpuDevices(getGpuDevicesParams)
 	if err != nil {
@@ -958,8 +972,7 @@ func (svr *TowerVMService) FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDe
 	getGpuDevicesParams := clientgpu.NewGetGpuDevicesParams()
 	getGpuDevicesParams.RequestBody = &models.GetGpuDevicesRequestBody{
 		Where: &models.GpuDeviceWhereInput{
-			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH),
-			IDIn:      gpuIDs,
+			IDIn: gpuIDs,
 		},
 	}
 
@@ -969,4 +982,22 @@ func (svr *TowerVMService) FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDe
 	}
 
 	return getGpuDevicesResp.Payload, nil
+}
+
+func (svr *TowerVMService) FindGPUDeviceInfos(gpuIDs []string) (GPUDeviceInfos, error) {
+	getVMGpuDeviceInfoParams := clientvm.NewGetVMGpuDeviceInfoParams()
+	getVMGpuDeviceInfoParams.RequestBody = &models.GetVmsRequestBody{
+		Where: &models.VMWhereInput{
+			GpuDevicesSome: &models.GpuDeviceWhereInput{
+				IDIn: gpuIDs,
+			},
+		},
+	}
+
+	getVMGpuDeviceInfoResp, err := svr.Session.VM.GetVMGpuDeviceInfo(getVMGpuDeviceInfoParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return ConvertVMGpuInfosToGPUDeviceInfos(getVMGpuDeviceInfoResp.Payload), nil
 }

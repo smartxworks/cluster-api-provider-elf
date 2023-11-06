@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
 const (
@@ -142,10 +142,33 @@ func getKeyForVMDuplicate(name string) string {
 
 /* GPU */
 
+type lockedGPUDevice struct {
+	ID    string `json:"id"`
+	Count int32  `json:"count"`
+}
+
 type lockedVMGPUs struct {
-	HostID       string    `json:"hostId"`
-	GPUDeviceIDs []string  `json:"gpuDeviceIds"`
-	LockedAt     time.Time `json:"lockedAt"`
+	HostID     string            `json:"hostId"`
+	GPUDevices []lockedGPUDevice `json:"gpuDevices"`
+	LockedAt   time.Time         `json:"lockedAt"`
+}
+
+func (g *lockedVMGPUs) GetGPUIDs() []string {
+	ids := make([]string, len(g.GPUDevices))
+	for i := 0; i < len(g.GPUDevices); i++ {
+		ids[i] = g.GPUDevices[i].ID
+	}
+
+	return ids
+}
+
+func (g *lockedVMGPUs) GetGPUDeviceInfos() []*service.GPUDeviceInfo {
+	gpuDeviceInfos := make([]*service.GPUDeviceInfo, len(g.GPUDevices))
+	for i := 0; i < len(g.GPUDevices); i++ {
+		gpuDeviceInfos[i] = &service.GPUDeviceInfo{ID: g.GPUDevices[i].ID, AllocatedCount: g.GPUDevices[i].Count}
+	}
+
+	return gpuDeviceInfos
 }
 
 type lockedClusterGPUMap map[string]lockedVMGPUs
@@ -158,42 +181,53 @@ var lockedGPUMap = make(map[string]lockedClusterGPUMap)
 // lockGPUDevicesForVM locks the GPU devices required to create or start a virtual machine.
 // The GPU devices will be unlocked when the task is completed or times out.
 // This prevents multiple virtual machines from being allocated the same GPU.
-func lockGPUDevicesForVM(clusterID, vmName, hostID string, gpuDeviceIDs []string) bool {
+func lockGPUDevicesForVM(clusterID, vmName, hostID string, gpuDeviceInfos []*service.GPUDeviceInfo) bool {
 	gpuLock.Lock()
 	defer gpuLock.Unlock()
 
-	lockedClusterGPUIDs := getLockedClusterGPUIDsWithoutLock(clusterID)
-	for i := 0; i < len(gpuDeviceIDs); i++ {
-		if lockedClusterGPUIDs.Has(gpuDeviceIDs[i]) {
+	availableCountMap := make(map[string]int32)
+	lockedGPUs := lockedVMGPUs{HostID: hostID, LockedAt: time.Now(), GPUDevices: make([]lockedGPUDevice, len(gpuDeviceInfos))}
+	for i := 0; i < len(gpuDeviceInfos); i++ {
+		availableCountMap[gpuDeviceInfos[i].ID] = gpuDeviceInfos[i].AvailableCount - gpuDeviceInfos[i].AllocatedCount
+		lockedGPUs.GPUDevices[i] = lockedGPUDevice{ID: gpuDeviceInfos[i].ID, Count: gpuDeviceInfos[i].AllocatedCount}
+	}
+
+	lockedClusterGPUs := getLockedClusterGPUsWithoutLock(clusterID)
+	lockedCountMap := getLockedCountMapWithoutLock(lockedClusterGPUs)
+
+	for gpuID, availableCount := range availableCountMap {
+		if lockedCount, ok := lockedCountMap[gpuID]; ok && lockedCount > availableCount {
 			return false
 		}
 	}
 
-	lockedClusterGPUs := getLockedClusterGPUs(clusterID)
-	lockedClusterGPUs[vmName] = lockedVMGPUs{
-		HostID:       hostID,
-		GPUDeviceIDs: gpuDeviceIDs,
-		LockedAt:     time.Now(),
-	}
-
+	lockedClusterGPUs[vmName] = lockedGPUs
 	lockedGPUMap[clusterID] = lockedClusterGPUs
 
 	return true
 }
 
-// getLockedClusterGPUIDs returns the locked GPU devices of the specified cluster.
-func getLockedClusterGPUIDs(clusterID string) sets.Set[string] {
+func filterGPUDeviceInfosByLockGPUDevices(clusterID string, gpuDeviceInfos service.GPUDeviceInfos) service.GPUDeviceInfos {
 	gpuLock.Lock()
 	defer gpuLock.Unlock()
 
-	return getLockedClusterGPUIDsWithoutLock(clusterID)
+	lockedClusterGPUs := getLockedClusterGPUsWithoutLock(clusterID)
+	lockedCountMap := getLockedCountMapWithoutLock(lockedClusterGPUs)
+
+	return gpuDeviceInfos.Filter(func(g *service.GPUDeviceInfo) bool {
+		if lockedCount, ok := lockedCountMap[g.ID]; ok && lockedCount >= g.AvailableCount {
+			return false
+		}
+
+		return true
+	})
 }
 
 func getGPUDevicesLockedByVM(clusterID, vmName string) *lockedVMGPUs {
 	gpuLock.Lock()
 	defer gpuLock.Unlock()
 
-	lockedClusterGPUs := getLockedClusterGPUs(clusterID)
+	lockedClusterGPUs := getLockedClusterGPUsWithoutLock(clusterID)
 	if vmGPUs, ok := lockedClusterGPUs[vmName]; ok {
 		if time.Now().Before(vmGPUs.LockedAt.Add(gpuLockTimeout)) {
 			return &vmGPUs
@@ -210,7 +244,7 @@ func unlockGPUDevicesLockedByVM(clusterID, vmName string) {
 	gpuLock.Lock()
 	defer gpuLock.Unlock()
 
-	lockedClusterGPUs := getLockedClusterGPUs(clusterID)
+	lockedClusterGPUs := getLockedClusterGPUsWithoutLock(clusterID)
 	delete(lockedClusterGPUs, vmName)
 
 	if len(lockedClusterGPUs) == 0 {
@@ -220,25 +254,34 @@ func unlockGPUDevicesLockedByVM(clusterID, vmName string) {
 	}
 }
 
-func getLockedClusterGPUs(clusterID string) lockedClusterGPUMap {
-	if _, ok := lockedGPUMap[clusterID]; ok {
-		return lockedGPUMap[clusterID]
+func getLockedClusterGPUsWithoutLock(clusterID string) lockedClusterGPUMap {
+	if _, ok := lockedGPUMap[clusterID]; !ok {
+		return make(map[string]lockedVMGPUs)
 	}
 
-	return make(map[string]lockedVMGPUs)
-}
-
-func getLockedClusterGPUIDsWithoutLock(clusterID string) sets.Set[string] {
-	gpuIDs := sets.Set[string]{}
-
-	lockedClusterGPUs := getLockedClusterGPUs(clusterID)
+	lockedClusterGPUs := lockedGPUMap[clusterID]
 	for vmName, lockedGPUs := range lockedClusterGPUs {
-		if time.Now().Before(lockedGPUs.LockedAt.Add(gpuLockTimeout)) {
-			gpuIDs.Insert(lockedGPUs.GPUDeviceIDs...)
-		} else {
+		if !time.Now().Before(lockedGPUs.LockedAt.Add(gpuLockTimeout)) {
+			// Delete expired data
 			delete(lockedClusterGPUs, vmName)
 		}
 	}
 
-	return gpuIDs
+	return lockedClusterGPUs
+}
+
+// getLockedCountMapWithoutLock counts and returns the number of locks for each GPU.
+func getLockedCountMapWithoutLock(lockedClusterGPUs lockedClusterGPUMap) map[string]int32 {
+	lockedCountMap := make(map[string]int32)
+	for _, lockedGPUs := range lockedClusterGPUs {
+		for i := 0; i < len(lockedGPUs.GPUDevices); i++ {
+			if count, ok := lockedCountMap[lockedGPUs.GPUDevices[i].ID]; ok {
+				lockedCountMap[lockedGPUs.GPUDevices[i].ID] = count + lockedGPUs.GPUDevices[i].Count
+			} else {
+				lockedCountMap[lockedGPUs.GPUDevices[i].ID] = lockedGPUs.GPUDevices[i].Count
+			}
+		}
+	}
+
+	return lockedCountMap
 }

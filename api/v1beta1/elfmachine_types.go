@@ -318,8 +318,16 @@ func (m *ElfMachine) GetVMDisconnectionTimestamp() *metav1.Time {
 	return nil
 }
 
+func (m *ElfMachine) RequiresGPUOrVGPUDevices() bool {
+	return m.RequiresGPUDevices() || m.RequiresVGPUDevices()
+}
+
 func (m *ElfMachine) RequiresGPUDevices() bool {
-	return len(m.Spec.GPUDevices) > 0 || len(m.Spec.VGPUDevices) > 0
+	return len(m.Spec.GPUDevices) > 0
+}
+
+func (m *ElfMachine) RequiresVGPUDevices() bool {
+	return len(m.Spec.VGPUDevices) > 0
 }
 
 //+kubebuilder:object:root=true

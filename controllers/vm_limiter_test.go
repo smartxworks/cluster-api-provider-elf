@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
 
@@ -137,47 +138,55 @@ var _ = Describe("Lock GPU devices for VM", func() {
 	})
 
 	It("lockGPUDevicesForVM", func() {
-		gpuIDs := []string{gpuID}
+		lockedGPUID := fake.UUID()
+		gpuID = fake.UUID()
+		lockedGPUDeviceInfo := &service.GPUDeviceInfo{ID: lockedGPUID, AllocatedCount: 1, AvailableCount: 1}
+		gpuDeviceInfo := &service.GPUDeviceInfo{ID: gpuID, AllocatedCount: 0, AvailableCount: 1}
+		lockedGPUDeviceInfos := []*service.GPUDeviceInfo{lockedGPUDeviceInfo}
+		filteredGPUDeviceInfos := []*service.GPUDeviceInfo{gpuDeviceInfo, lockedGPUDeviceInfo}
 
 		lockedVMGPUs := getGPUDevicesLockedByVM(clusterID, vmName)
 		Expect(lockedVMGPUs).To(BeNil())
-		lockedClusterGPUIDs := getLockedClusterGPUIDs(clusterID)
-		Expect(lockedClusterGPUIDs.Len()).To(Equal(0))
+		filteredGPUs := filterGPUDeviceInfosByLockGPUDevices(clusterID, service.NewGPUDeviceInfos(filteredGPUDeviceInfos...))
+		Expect(filteredGPUs).To(HaveLen(2))
 
-		Expect(lockGPUDevicesForVM(clusterID, vmName, hostID, gpuIDs)).To(BeTrue())
+		Expect(lockGPUDevicesForVM(clusterID, vmName, hostID, lockedGPUDeviceInfos)).To(BeTrue())
 		lockedVMGPUs = getGPUDevicesLockedByVM(clusterID, vmName)
 		Expect(lockedVMGPUs.HostID).To(Equal(hostID))
-		Expect(lockedVMGPUs.GPUDeviceIDs).To(Equal(gpuIDs))
+		Expect(lockedVMGPUs.GPUDevices).To(HaveLen(1))
+		Expect(lockedVMGPUs.GPUDevices[0].ID).To(Equal(lockedGPUID))
+		Expect(lockedVMGPUs.GPUDevices[0].Count).To(Equal(int32(1)))
 		Expect(lockedVMGPUs.LockedAt.Unix()).To(Equal(time.Now().Unix()))
-		lockedClusterGPUIDs = getLockedClusterGPUIDs(clusterID)
-		Expect(lockedClusterGPUIDs.Len()).To(Equal(1))
-		Expect(lockedClusterGPUIDs.Has(gpuID)).To(BeTrue())
+		filteredGPUs = filterGPUDeviceInfosByLockGPUDevices(clusterID, service.NewGPUDeviceInfos(filteredGPUDeviceInfos...))
+		Expect(filteredGPUs).To(HaveLen(1))
+		Expect(filteredGPUs.Contains(gpuDeviceInfo.ID)).To(BeTrue())
 
-		Expect(lockGPUDevicesForVM(clusterID, vmName, hostID, gpuIDs)).To(BeFalse())
+		Expect(lockGPUDevicesForVM(clusterID, vmName, hostID, lockedGPUDeviceInfos)).To(BeFalse())
+		lockedVMGPUs = getGPUDevicesLockedByVM(clusterID, vmName)
+		Expect(lockedVMGPUs.GPUDevices).To(HaveLen(1))
 
 		unlockGPUDevicesLockedByVM(clusterID, vmName)
 		lockedVMGPUs = getGPUDevicesLockedByVM(clusterID, vmName)
 		Expect(lockedVMGPUs).To(BeNil())
-		lockedClusterGPUIDs = getLockedClusterGPUIDs(clusterID)
-		Expect(lockedClusterGPUIDs.Len()).To(Equal(0))
+		filteredGPUs = filterGPUDeviceInfosByLockGPUDevices(clusterID, service.NewGPUDeviceInfos(filteredGPUDeviceInfos...))
+		Expect(filteredGPUs).To(HaveLen(2))
 
-		Expect(lockGPUDevicesForVM(clusterID, vmName, hostID, gpuIDs)).To(BeTrue())
+		Expect(lockGPUDevicesForVM(clusterID, vmName, hostID, lockedGPUDeviceInfos)).To(BeTrue())
 		vmGPUs := lockedGPUMap[clusterID][vmName]
 		vmGPUs.LockedAt = vmGPUs.LockedAt.Add(-gpuLockTimeout)
 		lockedGPUMap[clusterID][vmName] = vmGPUs
 		lockedVMGPUs = getGPUDevicesLockedByVM(clusterID, vmName)
 		Expect(lockedVMGPUs).To(BeNil())
-		lockedClusterGPUIDs = getLockedClusterGPUIDs(clusterID)
-		Expect(lockedClusterGPUIDs.Len()).To(Equal(0))
+		filteredGPUs = filterGPUDeviceInfosByLockGPUDevices(clusterID, service.NewGPUDeviceInfos(filteredGPUDeviceInfos...))
+		Expect(filteredGPUs).To(HaveLen(2))
 
-		Expect(lockGPUDevicesForVM(clusterID, vmName, hostID, gpuIDs)).To(BeTrue())
-		vmGPUs = lockedGPUMap[clusterID][vmName]
-		vmGPUs.LockedAt = vmGPUs.LockedAt.Add(-gpuLockTimeout)
-		lockedGPUMap[clusterID][vmName] = vmGPUs
-		lockedClusterGPUIDs = getLockedClusterGPUIDs(clusterID)
-		Expect(lockedClusterGPUIDs.Len()).To(Equal(0))
-		lockedVMGPUs = getGPUDevicesLockedByVM(clusterID, vmName)
-		Expect(lockedVMGPUs).To(BeNil())
+		lockedGPUDeviceInfo.AvailableCount = 2
+		Expect(lockGPUDevicesForVM(clusterID, vmName, hostID, lockedGPUDeviceInfos)).To(BeTrue())
+		Expect(lockGPUDevicesForVM(clusterID, fake.UUID(), hostID, lockedGPUDeviceInfos)).To(BeTrue())
+		Expect(lockGPUDevicesForVM(clusterID, fake.UUID(), hostID, lockedGPUDeviceInfos)).To(BeFalse())
+		Expect(lockedGPUMap[clusterID]).To(HaveLen(2))
+		filteredGPUs = filterGPUDeviceInfosByLockGPUDevices(clusterID, service.NewGPUDeviceInfos(filteredGPUDeviceInfos...))
+		Expect(filteredGPUs).To(HaveLen(1))
 	})
 })
 

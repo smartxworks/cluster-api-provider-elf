@@ -81,3 +81,36 @@ func TestHostCollection(t *testing.T) {
 		g.Expect(NewHosts(host1, host2).Difference(NewHosts(host2)).Contains(*host1.ID)).To(gomega.BeTrue())
 	})
 }
+
+func TestGPUDeviceInfoCollection(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	t.Run("Find", func(t *testing.T) {
+		gpuDeviceInfo1 := &GPUDeviceInfo{ID: "gpu1"}
+		gpuDeviceInfo2 := &GPUDeviceInfo{ID: "gpu2"}
+
+		gpuDeviceInfos := NewGPUDeviceInfos()
+		g.Expect(gpuDeviceInfos.Get("404")).To(gomega.BeNil())
+		g.Expect(gpuDeviceInfos.Len()).To(gomega.Equal(0))
+
+		gpuDeviceInfos.Insert(gpuDeviceInfo1)
+		g.Expect(gpuDeviceInfos.Contains("gpu1")).To(gomega.BeTrue())
+		g.Expect(gpuDeviceInfos.Get("gpu1")).To(gomega.Equal(gpuDeviceInfo1))
+		g.Expect(gpuDeviceInfos.UnsortedList()).To(gomega.Equal([]*GPUDeviceInfo{gpuDeviceInfo1}))
+		count := 0
+		gpuID := gpuDeviceInfo1.ID
+		gpuDeviceInfos.Iterate(func(g *GPUDeviceInfo) {
+			count += 1
+			gpuID = g.ID
+		})
+		g.Expect(count).To(gomega.Equal(1))
+		g.Expect(gpuID).To(gomega.Equal(gpuDeviceInfo1.ID))
+
+		gpuDeviceInfos = NewGPUDeviceInfos(gpuDeviceInfo1, gpuDeviceInfo2)
+		filteredGPUDeviceInfos := gpuDeviceInfos.Filter(func(g *GPUDeviceInfo) bool {
+			return g.ID != gpuDeviceInfo1.ID
+		})
+		g.Expect(filteredGPUDeviceInfos.Len()).To(gomega.Equal(1))
+		g.Expect(filteredGPUDeviceInfos.Contains(gpuDeviceInfo2.ID)).To(gomega.BeTrue())
+	})
+}
