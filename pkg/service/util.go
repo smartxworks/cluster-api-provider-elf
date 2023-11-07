@@ -193,6 +193,10 @@ func IsUpdateVMTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "Edit VM")
 }
 
+func IsVMColdMigrationTask(task *models.Task) bool {
+	return strings.Contains(GetTowerString(task.Description), "performing a cold migration")
+}
+
 func IsVMMigrationTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "performing a live migration")
 }
@@ -204,14 +208,18 @@ func IsPlacementGroupTask(task *models.Task) bool {
 // HasGPUsCanNotBeUsedForVM returns whether the specified GPUs contains GPU
 // that cannot be used by the specified VM.
 func HasGPUsCanNotBeUsedForVM(gpuDeviceInfos GPUDeviceInfos, elfMachine *infrav1.ElfMachine) bool {
-	if elfMachine.RequiresGPUDevices() {
+	if elfMachine.RequiresPassThroughGPUDevices() {
 		for gpuID := range gpuDeviceInfos {
 			gpuInfo := gpuDeviceInfos[gpuID]
-			if gpuInfo.GetVMCount() > 1 || (gpuInfo.GetVMCount() == 1 && !gpuInfo.ContainsVM(elfMachine.Name)) {
+			if gpuInfo.GetVMCount() >= 1 && !gpuInfo.FirstVMIs(elfMachine.Name) {
 				return true
 			}
 		}
 
+		return false
+	}
+
+	if gpuDeviceInfos.Len() == 0 {
 		return false
 	}
 
@@ -224,7 +232,7 @@ func HasGPUsCanNotBeUsedForVM(gpuDeviceInfos GPUDeviceInfos, elfMachine *infrav1
 			gpuCountUsedByVM += 1
 		}
 
-		if count, ok := availableCountMap[gpuInfo.ID]; ok {
+		if count, ok := availableCountMap[gpuInfo.VGPUType]; ok {
 			availableCountMap[gpuInfo.VGPUType] = count + gpuInfo.AvailableCount
 		} else {
 			availableCountMap[gpuInfo.VGPUType] = gpuInfo.AvailableCount
@@ -247,9 +255,9 @@ func HasGPUsCanNotBeUsedForVM(gpuDeviceInfos GPUDeviceInfos, elfMachine *infrav1
 
 // AggregateUnusedGPUDevicesToGPUDeviceInfos selects the GPU device
 // that gpuDeviceInfos does not have from the specified GPU devices and add to it.
-// It should be used in conjunction with FindGPUDeviceInfos.
+// It should be used in conjunction with GetGPUDevicesAllocationInfo.
 //
-// FindGPUDeviceInfos only returns the GPUs that has been used by the virtual machine,
+// GetGPUDevicesAllocationInfo only returns the GPUs that has been used by the virtual machine,
 // so need to aggregate the unused GPUs.
 func AggregateUnusedGPUDevicesToGPUDeviceInfos(gpuDeviceInfos GPUDeviceInfos, gpuDevices []*models.GpuDevice) {
 	for i := 0; i < len(gpuDevices); i++ {
@@ -275,7 +283,7 @@ func AggregateUnusedGPUDevicesToGPUDeviceInfos(gpuDeviceInfos GPUDeviceInfos, gp
 }
 
 // ConvertVMGpuInfosToGPUDeviceInfos Converts Tower's VMGpuInfo type to GPUDeviceInfos.
-// It should be used in conjunction with FindGPUDeviceInfos.
+// It should be used in conjunction with GetGPUDevicesAllocationInfo.
 //
 // Tower does not provide API to obtain the detailes of the VM allocated by the GPU Device.
 // So we need to get GPUDeviceInfos reversely through VMGpuInfo.

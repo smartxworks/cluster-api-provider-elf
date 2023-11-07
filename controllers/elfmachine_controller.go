@@ -308,7 +308,7 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx *context.MachineContext) (rec
 		// locked by the virtual machine may not be unlocked.
 		// For example, the Cluster or ElfMachine was deleted during a pause.
 		if !ctrlutil.ContainsFinalizer(ctx.ElfMachine, infrav1.MachineFinalizer) &&
-			ctx.ElfMachine.RequiresGPUOrVGPUDevices() {
+			ctx.ElfMachine.RequiresGPUDevices() {
 			unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 		}
 	}()
@@ -561,7 +561,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 				ctx.ElfMachine.SetVM(util.GetVMRef(vm))
 			} else {
 				// Duplicate VM error does not require unlocking GPU devices.
-				if ctx.ElfMachine.RequiresGPUOrVGPUDevices() {
+				if ctx.ElfMachine.RequiresGPUDevices() {
 					unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 				}
 
@@ -907,13 +907,12 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 				setVMDuplicate(ctx.ElfMachine.Name)
 			}
 
-			if ctx.ElfMachine.RequiresGPUOrVGPUDevices() {
+			if ctx.ElfMachine.RequiresGPUDevices() {
 				unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 			}
-		case service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task):
-			if ctx.ElfMachine.RequiresGPUOrVGPUDevices() {
-				unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
-			}
+		case ctx.ElfMachine.RequiresGPUDevices() &&
+			(service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task) || service.IsVMColdMigrationTask(task)):
+			unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 		case service.IsMemoryInsufficientError(errorMessage):
 			recordElfClusterMemoryInsufficient(ctx, true)
 			message := fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
@@ -932,7 +931,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 	case models.TaskStatusSUCCESSED:
 		ctx.Logger.Info("VM task succeeded", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", service.GetTowerString(task.Description))
 
-		if ctx.ElfMachine.RequiresGPUOrVGPUDevices() &&
+		if ctx.ElfMachine.RequiresGPUDevices() &&
 			(service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task)) {
 			unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 		}

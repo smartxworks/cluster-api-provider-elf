@@ -188,21 +188,6 @@ func (mr *MockVMServiceMockRecorder) FindByIDs(ids interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByIDs", reflect.TypeOf((*MockVMService)(nil).FindByIDs), ids)
 }
 
-// FindGPUDeviceInfos mocks base method.
-func (m *MockVMService) FindGPUDeviceInfos(gpuIDs []string) (service.GPUDeviceInfos, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindGPUDeviceInfos", gpuIDs)
-	ret0, _ := ret[0].(service.GPUDeviceInfos)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// FindGPUDeviceInfos indicates an expected call of FindGPUDeviceInfos.
-func (mr *MockVMServiceMockRecorder) FindGPUDeviceInfos(gpuIDs interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindGPUDeviceInfos", reflect.TypeOf((*MockVMService)(nil).FindGPUDeviceInfos), gpuIDs)
-}
-
 // FindGPUDevicesByHostIDs mocks base method.
 func (m *MockVMService) FindGPUDevicesByHostIDs(hostIDs []string, gpuDeviceUsage models.GpuDeviceUsage) ([]*models.GpuDevice, error) {
 	m.ctrl.T.Helper()
@@ -291,6 +276,21 @@ func (m *MockVMService) GetCluster(id string) (*models.Cluster, error) {
 func (mr *MockVMServiceMockRecorder) GetCluster(id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCluster", reflect.TypeOf((*MockVMService)(nil).GetCluster), id)
+}
+
+// GetGPUDevicesAllocationInfo mocks base method.
+func (m *MockVMService) GetGPUDevicesAllocationInfo(gpuIDs []string) (service.GPUDeviceInfos, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGPUDevicesAllocationInfo", gpuIDs)
+	ret0, _ := ret[0].(service.GPUDeviceInfos)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetGPUDevicesAllocationInfo indicates an expected call of GetGPUDevicesAllocationInfo.
+func (mr *MockVMServiceMockRecorder) GetGPUDevicesAllocationInfo(gpuIDs interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGPUDevicesAllocationInfo", reflect.TypeOf((*MockVMService)(nil).GetGPUDevicesAllocationInfo), gpuIDs)
 }
 
 // GetHost mocks base method.

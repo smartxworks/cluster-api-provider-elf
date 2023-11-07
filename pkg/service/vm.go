@@ -74,7 +74,7 @@ type VMService interface {
 	DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context, placementGroupName string) (int, error)
 	FindGPUDevicesByHostIDs(hostIDs []string, gpuDeviceUsage models.GpuDeviceUsage) ([]*models.GpuDevice, error)
 	FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDevice, error)
-	FindGPUDeviceInfos(gpuIDs []string) (GPUDeviceInfos, error)
+	GetGPUDevicesAllocationInfo(gpuIDs []string) (GPUDeviceInfos, error)
 }
 
 type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
@@ -984,7 +984,8 @@ func (svr *TowerVMService) FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDe
 	return getGpuDevicesResp.Payload, nil
 }
 
-func (svr *TowerVMService) FindGPUDeviceInfos(gpuIDs []string) (GPUDeviceInfos, error) {
+// GetGPUDevicesAllocationInfo returns the specified GPU devices with VMs and allocation details.
+func (svr *TowerVMService) GetGPUDevicesAllocationInfo(gpuIDs []string) (GPUDeviceInfos, error) {
 	getVMGpuDeviceInfoParams := clientvm.NewGetVMGpuDeviceInfoParams()
 	getVMGpuDeviceInfoParams.RequestBody = &models.GetVmsRequestBody{
 		Where: &models.VMWhereInput{
