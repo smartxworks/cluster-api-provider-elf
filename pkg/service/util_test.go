@@ -103,50 +103,83 @@ func TestIsAvailableHost(t *testing.T) {
 	})
 }
 
-// func TestGPUCanBeUsedForVM(t *testing.T) {
-// 	g := gomega.NewGomegaWithT(t)
-
-// 	t.Run("should return false when GPU can not be used for VM", func(t *testing.T) {
-// 		g.Expect(GPUCanBeUsedForVM(&models.GpuDevice{Vms: []*models.NestedVM{{ID: TowerString("id2"), Name: TowerString("vm2")}, {ID: TowerString("id"), Name: TowerString("vm")}}}, "vm")).To(gomega.BeFalse())
-// 	})
-
-// 	t.Run("should return false when GPU can not be used for VM", func(t *testing.T) {
-// 		g.Expect(GPUCanBeUsedForVM(&models.GpuDevice{}, "vm")).To(gomega.BeTrue())
-// 		g.Expect(GPUCanBeUsedForVM(&models.GpuDevice{Vms: []*models.NestedVM{{ID: TowerString("vm")}}}, "vm")).To(gomega.BeTrue())
-// 		g.Expect(GPUCanBeUsedForVM(&models.GpuDevice{Vms: []*models.NestedVM{{ID: TowerString("id"), Name: TowerString("vm")}}}, "vm")).To(gomega.BeTrue())
-// 	})
-// }
-
-// func TestFilterOutGPUsCanNotBeUsedForVM(t *testing.T) {
-// 	g := gomega.NewGomegaWithT(t)
-
-// 	t.Run("should filter GPUs", func(t *testing.T) {
-// 		g.Expect(FilterOutGPUsCanNotBeUsedForVM([]*models.GpuDevice{}, "vm")).To(gomega.BeEmpty())
-// 		g.Expect(FilterOutGPUsCanNotBeUsedForVM([]*models.GpuDevice{{Vms: []*models.NestedVM{{ID: TowerString("id2"), Name: TowerString("vm2")}}}}, "vm")).To(gomega.BeEmpty())
-// 		g.Expect(FilterOutGPUsCanNotBeUsedForVM([]*models.GpuDevice{{Vms: []*models.NestedVM{{ID: TowerString("id"), Name: TowerString("vm")}}}}, "vm")).To(gomega.HaveLen(1))
-// 	})
-// }
-
 func TestHasGPUsCanNotBeUsedForVM(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 	elfMachine := &infrav1.ElfMachine{}
 	elfMachine.Name = "test"
-	elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{Model: "A16", Count: 1})
 
 	t.Run("GPU", func(t *testing.T) {
+		elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{Model: "A16", Count: 1})
+
 		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(), elfMachine)).To(gomega.BeFalse())
 		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
+			ID:  "gpu1",
 			VMs: []GPUDeviceVM{{ID: "vm1", Name: elfMachine.Name}},
 		}), elfMachine)).To(gomega.BeFalse())
 		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
+			ID:  "gpu1",
 			VMs: []GPUDeviceVM{{ID: "vm1", Name: "vm1"}},
 		}), elfMachine)).To(gomega.BeTrue())
 		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
+			ID: "gpu1",
 			VMs: []GPUDeviceVM{
 				{ID: "vm1", Name: "vm1"},
 				{ID: "vm2", Name: elfMachine.Name},
 			},
 		}), elfMachine)).To(gomega.BeTrue())
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
+			ID: "gpu1",
+			VMs: []GPUDeviceVM{
+				{ID: "vm2", Name: elfMachine.Name},
+				{ID: "vm1", Name: "vm1"},
+			},
+		}), elfMachine)).To(gomega.BeFalse())
+	})
+
+	t.Run("vGPU", func(t *testing.T) {
+		vGPUType := "V100"
+		elfMachine.Spec.GPUDevices = nil
+		elfMachine.Spec.VGPUDevices = []infrav1.VGPUDeviceSpec{{Type: vGPUType, Count: 2}}
+
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(), elfMachine)).To(gomega.BeFalse())
+
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
+			ID:             "gpu1",
+			AvailableCount: 0, VGPUType: vGPUType,
+			VMs: []GPUDeviceVM{{ID: elfMachine.Name, Name: elfMachine.Name}},
+		}), elfMachine)).To(gomega.BeFalse())
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
+			ID:             "gpu1",
+			AvailableCount: 0, VGPUType: vGPUType,
+			VMs: []GPUDeviceVM{{ID: elfMachine.Name, Name: elfMachine.Name}},
+		}, &GPUDeviceInfo{
+			ID: "gpu1", AvailableCount: 0, VGPUType: vGPUType,
+			VMs: []GPUDeviceVM{},
+		}), elfMachine)).To(gomega.BeTrue())
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
+			ID: "gpu1", AvailableCount: 0, VGPUType: vGPUType,
+			VMs: []GPUDeviceVM{{ID: elfMachine.Name, Name: elfMachine.Name}},
+		}, &GPUDeviceInfo{
+			ID: "gpu2", AvailableCount: 1, VGPUType: vGPUType,
+			VMs: []GPUDeviceVM{{ID: elfMachine.Name, Name: elfMachine.Name}},
+		}), elfMachine)).To(gomega.BeFalse())
+
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
+			ID: "gpu1", AvailableCount: 1, VGPUType: vGPUType,
+			VMs: []GPUDeviceVM{},
+		}), elfMachine)).To(gomega.BeTrue())
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
+			ID: "gpu1", AvailableCount: 2, VGPUType: vGPUType,
+			VMs: []GPUDeviceVM{},
+		}), elfMachine)).To(gomega.BeFalse())
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
+			ID: "gpu1", AvailableCount: 1, VGPUType: vGPUType,
+			VMs: []GPUDeviceVM{{ID: "vm1", Name: "vm1"}},
+		}), elfMachine)).To(gomega.BeTrue())
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
+			ID: "gpu1", AvailableCount: 2, VGPUType: vGPUType,
+			VMs: []GPUDeviceVM{{ID: "vm1", Name: "vm1"}},
+		}), elfMachine)).To(gomega.BeFalse())
 	})
 }
 

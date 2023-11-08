@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,6 +28,7 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
 
@@ -166,7 +168,25 @@ var _ = Describe("TowerCache", func() {
 		Expect(err).ShouldNot(HaveOccurred())
 		expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForPlacementGroupPolicySatisfiedReason}})
 	})
+
+	It("GPU Cache", func() {
+		gpuID := "gpu"
+		gpuDeviceInfo := service.GPUDeviceInfo{ID: gpuID}
+		gpuDeviceInfos := service.NewGPUDeviceInfos(&gpuDeviceInfo)
+		setGPUDeviceInfosCache(gpuDeviceInfos)
+		cachedGPUDeviceInfos := getGPUDeviceInfosFromCache([]string{gpuID})
+		Expect(cachedGPUDeviceInfos.Len()).To(Equal(1))
+		Expect(*cachedGPUDeviceInfos.Get(gpuDeviceInfo.ID)).To(Equal(gpuDeviceInfo))
+		time.Sleep(gpuCacheDuration)
+		Expect(getGPUDeviceInfosFromCache([]string{gpuID})).To(BeEmpty())
+	})
 })
+
+func removeGPUDeviceInfosCache(gpuIDs []string) {
+	for i := 0; i < len(gpuIDs); i++ {
+		vmTaskErrorCache.Delete(getKeyForGPUDeviceInfo(gpuIDs[i]))
+	}
+}
 
 func getKey(ctx *context.MachineContext, name string) string {
 	if name == clusterKey {

@@ -27,6 +27,7 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
 const (
@@ -162,4 +163,38 @@ func getKeyForInsufficientMemoryError(clusterID string) string {
 
 func getKeyForDuplicatePlacementGroupError(placementGroup string) string {
 	return fmt.Sprintf("pg:duplicate:%s", placementGroup)
+}
+
+/* GPU */
+
+// gpuCacheDuration is the lifespan of gpu cache.
+const gpuCacheDuration = 3 * time.Second
+
+func getKeyForGPUDeviceInfo(gpuID string) string {
+	return fmt.Sprintf("gpu:device:info:%s", gpuID)
+}
+
+// setGPUDeviceInfosCache saves the specified GPU device infos to the memory,
+// which can reduce access to the Tower service.
+func setGPUDeviceInfosCache(gpuDeviceInfos service.GPUDeviceInfos) {
+	gpuDeviceInfos.Iterate(func(g *service.GPUDeviceInfo) {
+		vmTaskErrorCache.Set(getKeyForGPUDeviceInfo(g.ID), *g, gpuCacheDuration)
+	})
+}
+
+// setGPUDeviceInfosCache gets the specified GPU device infos from the memory.
+func getGPUDeviceInfosFromCache(gpuIDs []string) service.GPUDeviceInfos {
+	gpuDeviceInfos := service.NewGPUDeviceInfos()
+	for i := 0; i < len(gpuIDs); i++ {
+		key := getKeyForGPUDeviceInfo(gpuIDs[i])
+		if val, found := vmTaskErrorCache.Get(key); found {
+			if gpuDeviceInfo, ok := val.(service.GPUDeviceInfo); ok {
+				gpuDeviceInfos.Insert(&gpuDeviceInfo)
+			}
+			// Delete unexpected data.
+			vmTaskErrorCache.Delete(key)
+		}
+	}
+
+	return gpuDeviceInfos
 }

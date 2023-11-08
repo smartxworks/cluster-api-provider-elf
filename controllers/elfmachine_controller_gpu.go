@@ -44,7 +44,7 @@ import (
 //
 // The return gpudevices: the GPU devices for virtual machine.
 func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx *context.MachineContext, preferredHostID string) (rethost *string, gpudevices []*service.GPUDeviceInfo, reterr error) {
-	if !ctx.ElfMachine.RequiresGPUOrVGPUDevices() {
+	if !ctx.ElfMachine.RequiresGPUDevices() {
 		return pointer.String(""), nil, nil
 	}
 
@@ -98,7 +98,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx *context.MachineContex
 		gpuDeviceIDs[i] = *gpuDevices[i].ID
 	}
 	// Get GPU devices with VMs and allocation details.
-	gpuDeviceInfos, err := ctx.VMService.FindGPUDeviceInfos(gpuDeviceIDs)
+	gpuDeviceInfos, err := ctx.VMService.GetGPUDevicesAllocationInfo(gpuDeviceIDs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -144,7 +144,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx *context.MachineContex
 		}
 
 		var selectedGPUDeviceInfos []*service.GPUDeviceInfo
-		if ctx.ElfMachine.RequiresGPUDevices() {
+		if ctx.ElfMachine.RequiresPassThroughGPUDevices() {
 			selectedGPUDeviceInfos = selectGPUDevicesForVM(hostGPUDeviceInfos, ctx.ElfMachine.Spec.GPUDevices)
 		} else {
 			selectedGPUDeviceInfos = selectVGPUDevicesForVM(hostGPUDeviceInfos, ctx.ElfMachine.Spec.VGPUDevices)
@@ -248,7 +248,7 @@ func selectVGPUDevicesForVM(hostGPUDeviceInfos service.GPUDeviceInfos, requiredV
 
 // reconcileGPUDevices ensures that the virtual machine has the expected GPU devices.
 func (r *ElfMachineReconciler) reconcileGPUDevices(ctx *context.MachineContext, vm *models.VM) (bool, error) {
-	if !ctx.ElfMachine.RequiresGPUOrVGPUDevices() {
+	if !ctx.ElfMachine.RequiresGPUDevices() {
 		return true, nil
 	}
 
@@ -359,17 +359,26 @@ func (r *ElfMachineReconciler) removeVMGPUDevices(ctx *context.MachineContext, v
 // checkGPUsCanBeUsedForVM checks whether GPU devices can be used by the specified virtual machine.
 // The return true means the GPU devices can be used for the virtual machine.
 func (r *ElfMachineReconciler) checkGPUsCanBeUsedForVM(ctx *context.MachineContext, gpuDeviceIDs []string) (bool, error) {
-	gpuDevices, err := ctx.VMService.FindGPUDevicesByIDs(gpuDeviceIDs)
-	if err != nil || len(gpuDevices) != len(gpuDeviceIDs) {
-		return false, err
-	}
+	gpuDeviceInfos := getGPUDeviceInfosFromCache(gpuDeviceIDs)
+	if gpuDeviceInfos.Len() != len(gpuDeviceIDs) {
+		gpuDevices, err := ctx.VMService.FindGPUDevicesByIDs(gpuDeviceIDs)
+		if err != nil || len(gpuDevices) != len(gpuDeviceIDs) {
+			return false, err
+		}
 
-	gpuDeviceInfos, err := ctx.VMService.FindGPUDeviceInfos(gpuDeviceIDs)
-	if err != nil {
-		return false, err
-	}
+		gpuDeviceInfos, err = ctx.VMService.GetGPUDevicesAllocationInfo(gpuDeviceIDs)
+		if err != nil {
+			return false, err
+		}
 
-	service.AggregateUnusedGPUDevicesToGPUDeviceInfos(gpuDeviceInfos, gpuDevices)
+		service.AggregateUnusedGPUDevicesToGPUDeviceInfos(gpuDeviceInfos, gpuDevices)
+
+		setGPUDeviceInfosCache(gpuDeviceInfos)
+
+		if gpuDeviceInfos.Len() != len(gpuDeviceIDs) {
+			return false, nil
+		}
+	}
 
 	if service.HasGPUsCanNotBeUsedForVM(gpuDeviceInfos, ctx.ElfMachine) {
 		return false, nil

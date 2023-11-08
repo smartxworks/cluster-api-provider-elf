@@ -3121,6 +3121,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				{"Create a VM", models.TaskStatusFAILED},
 				{"Start VM", models.TaskStatusFAILED},
 				{"Edit VM", models.TaskStatusFAILED},
+				{"performing a cold migration", models.TaskStatusFAILED},
 				{"Create a VM", models.TaskStatusSUCCESSED},
 				{"Start VM", models.TaskStatusSUCCESSED},
 				{"Edit VM", models.TaskStatusSUCCESSED},
