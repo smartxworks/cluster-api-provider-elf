@@ -61,6 +61,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 	ctx := goctx.Background()
 
 	gpuModel := "A16"
+	vGPUType := "V100"
 	unexpectedError := errors.New("unexpected error")
 
 	BeforeEach(func() {
@@ -202,7 +203,6 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 		})
 
 		It("select vGPUs", func() {
-			vGPUType := "V100"
 			host := fake.NewTowerHost()
 			gpu1 := fake.NewTowerVGPU(1)
 			gpu1.Host = &models.NestedHost{ID: host.ID}
@@ -506,6 +506,20 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			Expect(err).NotTo(HaveOccurred())
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.UpdatingReason}})
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+
+			gpuID := fake.ID()
+			vmGPUInfo := &models.VMGpuInfo{GpuDevices: []*models.VMGpuDetail{{ID: service.TowerString(gpuID), VgpuInstanceOnVMNum: service.TowerInt32(2)}}}
+			elfMachine.Spec.GPUDevices = nil
+			elfMachine.Spec.VGPUDevices = []infrav1.VGPUDeviceSpec{{Type: vGPUType, Count: 2}}
+			conditions.MarkFalse(elfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, service.VGPUInsufficientError)
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			mockVMService.EXPECT().GetVMGPUAllocationInfo(*vm.ID).Return(vmGPUInfo, nil)
+			mockVMService.EXPECT().RemoveGPUDevices(elfMachine.Status.VMRef, []*models.VMGpuOperationParams{{GpuID: service.TowerString(gpuID), Amount: service.TowerInt32(2)}}).Return(nil, unexpectedError)
+			err = reconciler.removeVMGPUDevices(machineContext, vm)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(unexpectedError.Error()))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
 		})
 	})
 
@@ -656,7 +670,6 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 	})
 
 	It("selectVGPUDevicesForVM", func() {
-		vGPUType := "V100"
 		host := &models.NestedHost{ID: service.TowerString("host")}
 		vGPU1 := fake.NewTowerVGPU(1)
 		vGPU1.Host = host

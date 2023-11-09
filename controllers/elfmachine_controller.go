@@ -887,6 +887,13 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		if taskDone {
 			ctx.ElfMachine.SetTask("")
 		}
+
+		// The task is completed but entityAsyncStatus may not be equal to nil.
+		// So need to wait for the current operation of the virtual machine to complete.
+		// Avoid resource lock conflicts caused by concurrent operations of ELF.
+		if vm != nil && vm.EntityAsyncStatus != nil {
+			taskDone = false
+		}
 	}()
 
 	switch *task.Status {

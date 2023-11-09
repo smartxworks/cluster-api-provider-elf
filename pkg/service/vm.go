@@ -75,6 +75,7 @@ type VMService interface {
 	FindGPUDevicesByHostIDs(hostIDs []string, gpuDeviceUsage models.GpuDeviceUsage) ([]*models.GpuDevice, error)
 	FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDevice, error)
 	GetGPUDevicesAllocationInfo(gpuIDs []string) (GPUDeviceInfos, error)
+	GetVMGPUAllocationInfo(id string) (*models.VMGpuInfo, error)
 }
 
 type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
@@ -1001,4 +1002,25 @@ func (svr *TowerVMService) GetGPUDevicesAllocationInfo(gpuIDs []string) (GPUDevi
 	}
 
 	return ConvertVMGpuInfosToGPUDeviceInfos(getVMGpuDeviceInfoResp.Payload), nil
+}
+
+// GetVMGPUAllocationInfo returns the GPU details allocated to the virtual machine.
+func (svr *TowerVMService) GetVMGPUAllocationInfo(id string) (*models.VMGpuInfo, error) {
+	getVMGpuDeviceInfoParams := clientvm.NewGetVMGpuDeviceInfoParams()
+	getVMGpuDeviceInfoParams.RequestBody = &models.GetVmsRequestBody{
+		Where: &models.VMWhereInput{
+			OR: []*models.VMWhereInput{{LocalID: TowerString(id)}, {ID: TowerString(id)}},
+		},
+	}
+
+	getVMGpuDeviceInfoResp, err := svr.Session.VM.GetVMGpuDeviceInfo(getVMGpuDeviceInfoParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(getVMGpuDeviceInfoResp.Payload) == 0 {
+		return nil, errors.New(VMGPUInfoNotFound)
+	}
+
+	return getVMGpuDeviceInfoResp.Payload[0], nil
 }

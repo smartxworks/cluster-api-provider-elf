@@ -270,7 +270,7 @@ func (r *ElfMachineReconciler) reconcileGPUDevices(ctx *context.MachineContext, 
 
 	// If the GPU devices are already in use, remove the GPU devices first and then reselect the new GPU devices.
 	message := conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)
-	if service.IsGPUAssignFailed(message) {
+	if service.IsGPUAssignFailed(message) || service.IsVGPUInsufficientError(message) {
 		ctx.Logger.Info("GPU devices of the host are not sufficient and the virtual machine cannot be started, so remove the GPU devices and reallocate.")
 
 		return false, r.removeVMGPUDevices(ctx, vm)
@@ -332,17 +332,36 @@ func (r *ElfMachineReconciler) addGPUDevicesForVM(ctx *context.MachineContext, v
 
 // removeVMGPUDevices removes all GPU devices from the virtual machine.
 func (r *ElfMachineReconciler) removeVMGPUDevices(ctx *context.MachineContext, vm *models.VM) error {
-	staleGPUs := make([]*models.VMGpuOperationParams, len(vm.GpuDevices))
-	for i := 0; i < len(vm.GpuDevices); i++ {
-		staleGPUs[i] = &models.VMGpuOperationParams{
-			GpuID:  vm.GpuDevices[i].ID,
-			Amount: service.TowerInt32(1),
+	var staleGPUs []*models.VMGpuOperationParams
+	if ctx.ElfMachine.RequiresVGPUDevices() {
+		vmGPUInfo, err := ctx.VMService.GetVMGPUAllocationInfo(*vm.ID)
+		if err != nil {
+			return err
+		}
+
+		for i := 0; i < len(vmGPUInfo.GpuDevices); i++ {
+			staleGPUs = append(staleGPUs, &models.VMGpuOperationParams{
+				GpuID:  vmGPUInfo.GpuDevices[i].ID,
+				Amount: vmGPUInfo.GpuDevices[i].VgpuInstanceOnVMNum,
+			})
+		}
+	} else {
+		for i := 0; i < len(vm.GpuDevices); i++ {
+			staleGPUs = append(staleGPUs, &models.VMGpuOperationParams{
+				GpuID:  vm.GpuDevices[i].ID,
+				Amount: service.TowerInt32(1),
+			})
 		}
 	}
 
 	task, err := ctx.VMService.RemoveGPUDevices(ctx.ElfMachine.Status.VMRef, staleGPUs)
 	if err != nil {
-		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.DetachingGPUFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		// If the GPU/vGPU is removed due to insufficient GPU/vGPU,
+		// the original error message will not be overwritten if the remove fails.
+		message := conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)
+		if !(service.IsGPUAssignFailed(message) || service.IsVGPUInsufficientError(message)) {
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.DetachingGPUFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		}
 
 		return errors.Wrapf(err, "failed to trigger detaching stale GPU devices for VM %s", ctx)
 	}

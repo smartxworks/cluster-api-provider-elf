@@ -3056,7 +3056,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 			resetVMTaskErrorCache()
 			task := fake.NewTowerTask()
 			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
-			task.ErrorMessage = service.TowerString(service.MemoryInsufficientError)
 			elfMachine.Status.TaskRef = *task.ID
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
@@ -3064,15 +3063,22 @@ var _ = Describe("ElfMachineReconciler", func() {
 			machineContext.VMService = mockVMService
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).AnyTimes().Return(task, nil)
 
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm.EntityAsyncStatus = models.NewEntityAsyncStatus(models.EntityAsyncStatusUPDATING)
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-			ok, err := reconciler.reconcileVMTask(machineContext, nil)
+			ok, err := reconciler.reconcileVMTask(machineContext, vm)
+			Expect(ok).Should(BeFalse())
+			Expect(err).ShouldNot(HaveOccurred())
+
+			elfMachine.Status.TaskRef = *task.ID
+			task.ErrorMessage = service.TowerString(service.MemoryInsufficientError)
+			ok, err = reconciler.reconcileVMTask(machineContext, nil)
 			Expect(ok).Should(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
 			Expect(logBuffer.String()).To(ContainSubstring("VM task failed"))
 
-			logBuffer = new(bytes.Buffer)
-			klog.SetOutput(logBuffer)
+			logBuffer.Reset()
 			task.ErrorMessage = service.TowerString(service.PlacementGroupMustError)
 			elfMachine.Status.TaskRef = *task.ID
 			ok, err = reconciler.reconcileVMTask(machineContext, nil)
