@@ -48,7 +48,7 @@ type VMService interface {
 	Migrate(vmID, hostID string) (*models.WithTaskVM, error)
 	Delete(uuid string) (*models.Task, error)
 	PowerOff(uuid string) (*models.Task, error)
-	PowerOn(uuid string) (*models.Task, error)
+	PowerOn(id string, hostID string) (*models.Task, error)
 	ShutDown(uuid string) (*models.Task, error)
 	RemoveGPUDevices(id string, gpus []*models.VMGpuOperationParams) (*models.Task, error)
 	AddGPUDevices(id string, gpuDeviceInfo []*GPUDeviceInfo) (*models.Task, error)
@@ -343,12 +343,19 @@ func (svr *TowerVMService) PowerOff(id string) (*models.Task, error) {
 }
 
 // PowerOn powers on a virtual machine.
-func (svr *TowerVMService) PowerOn(id string) (*models.Task, error) {
+//
+// The hostID param:
+// Empty string means automatic scheduling.
+// Non-empty string means scheduling to the specified host.
+func (svr *TowerVMService) PowerOn(id string, hostID string) (*models.Task, error) {
 	startVMParams := clientvm.NewStartVMParams()
 	startVMParams.RequestBody = &models.VMStartParams{
 		Where: &models.VMWhereInput{
 			OR: []*models.VMWhereInput{{LocalID: TowerString(id)}, {ID: TowerString(id)}},
 		},
+	}
+	if hostID != "" {
+		startVMParams.RequestBody.Data = &models.VMStartParamsData{HostID: TowerString(hostID)}
 	}
 
 	startVMResp, err := svr.Session.VM.StartVM(startVMParams)

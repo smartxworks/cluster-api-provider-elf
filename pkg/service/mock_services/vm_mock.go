@@ -444,18 +444,18 @@ func (mr *MockVMServiceMockRecorder) PowerOff(uuid interface{}) *gomock.Call {
 }
 
 // PowerOn mocks base method.
-func (m *MockVMService) PowerOn(uuid string) (*models.Task, error) {
+func (m *MockVMService) PowerOn(id, hostID string) (*models.Task, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PowerOn", uuid)
+	ret := m.ctrl.Call(m, "PowerOn", id, hostID)
 	ret0, _ := ret[0].(*models.Task)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // PowerOn indicates an expected call of PowerOn.
-func (mr *MockVMServiceMockRecorder) PowerOn(uuid interface{}) *gomock.Call {
+func (mr *MockVMServiceMockRecorder) PowerOn(id, hostID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PowerOn", reflect.TypeOf((*MockVMService)(nil).PowerOn), uuid)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PowerOn", reflect.TypeOf((*MockVMService)(nil).PowerOn), id, hostID)
 }
 
 // RemoveGPUDevices mocks base method.

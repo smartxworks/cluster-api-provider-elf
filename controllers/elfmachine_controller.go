@@ -537,11 +537,13 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		if machineutil.IsControlPlaneMachine(ctx.Machine) {
 			hostID, err = r.preCheckPlacementGroup(ctx)
 			if err != nil || hostID == nil {
+				releaseTicketForCreateVM(ctx.ElfMachine.Name)
 				return nil, false, err
 			}
 		} else {
 			hostID, gpuDeviceInfos, err = r.selectHostAndGPUsForVM(ctx, "")
 			if err != nil || hostID == nil {
+				releaseTicketForCreateVM(ctx.ElfMachine.Name)
 				return nil, false, err
 			}
 		}
@@ -729,7 +731,7 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 			return false, r.updateVM(ctx, vm)
 		}
 
-		return false, r.powerOnVM(ctx)
+		return false, r.powerOnVM(ctx, vm)
 	case models.VMStatusSUSPENDED:
 		// In some abnormal conditions, the VM will be in a suspended state,
 		// e.g. wrong settings in VM or an exception occurred in the Guest OS.
@@ -789,7 +791,7 @@ func (r *ElfMachineReconciler) powerOffVM(ctx *context.MachineContext) error {
 	return nil
 }
 
-func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext) error {
+func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext, vm *models.VM) error {
 	if ok, message, err := isELFScheduleVMErrorRecorded(ctx); err != nil {
 		return err
 	} else if ok {
@@ -810,7 +812,14 @@ func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext) error {
 		return nil
 	}
 
-	task, err := ctx.VMService.PowerOn(ctx.ElfMachine.Status.VMRef)
+	hostID := ""
+	// Starting a virtual machine with GPU/vGPU does not support automatic scheduling,
+	// and need to specify the host where the GPU/vGPU is allocated.
+	if ctx.ElfMachine.RequiresGPUDevices() {
+		hostID = *vm.Host.ID
+	}
+
+	task, err := ctx.VMService.PowerOn(ctx.ElfMachine.Status.VMRef, hostID)
 	if err != nil {
 		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOnFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 
