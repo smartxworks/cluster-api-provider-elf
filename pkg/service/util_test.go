@@ -103,6 +103,72 @@ func TestIsAvailableHost(t *testing.T) {
 	})
 }
 
+func TestGetAvailableCountFromGPUVMInfo(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	t.Run("GPU", func(t *testing.T) {
+		gpuVMInfo := &models.GpuVMInfo{
+			ID:        TowerString("gpu1"),
+			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH),
+		}
+		g.Expect(GetAvailableCountFromGPUVMInfo(gpuVMInfo)).To(gomega.Equal(int32(1)))
+
+		gpuVMInfo.Vms = []*models.GpuVMDetail{{}}
+		g.Expect(GetAvailableCountFromGPUVMInfo(gpuVMInfo)).To(gomega.Equal(int32(0)))
+	})
+
+	t.Run("vGPU", func(t *testing.T) {
+		gpuVMInfo := &models.GpuVMInfo{
+			ID:                TowerString("gpu1"),
+			AvailableVgpusNum: TowerInt32(3),
+			UserUsage:         models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
+		}
+		g.Expect(GetAvailableCountFromGPUVMInfo(gpuVMInfo)).To(gomega.Equal(int32(3)))
+	})
+}
+
+func TestCalculateAssignedAndAvailableNumForGPUVMInfos(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	t.Run("GPU", func(t *testing.T) {
+		gpuVMInfo := &models.GpuVMInfo{
+			ID:                TowerString("gpu1"),
+			UserUsage:         models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH),
+			AssignedVgpusNum:  TowerInt32(0),
+			AvailableVgpusNum: TowerInt32(0),
+		}
+		CalculateAssignedAndAvailableNumForGPUVMInfos(NewGPUVMInfos(gpuVMInfo))
+		g.Expect(*gpuVMInfo.AssignedVgpusNum).To(gomega.Equal(int32(0)))
+		g.Expect(*gpuVMInfo.AvailableVgpusNum).To(gomega.Equal(int32(0)))
+	})
+
+	t.Run("vGPU", func(t *testing.T) {
+		gpuVMInfo := &models.GpuVMInfo{
+			ID:                TowerString("gpu1"),
+			UserUsage:         models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
+			AssignedVgpusNum:  TowerInt32(1),
+			AvailableVgpusNum: TowerInt32(1),
+			VgpuInstanceNum:   TowerInt32(3),
+		}
+		CalculateAssignedAndAvailableNumForGPUVMInfos(NewGPUVMInfos(gpuVMInfo))
+		g.Expect(*gpuVMInfo.AssignedVgpusNum).To(gomega.Equal(int32(0)))
+		g.Expect(*gpuVMInfo.AvailableVgpusNum).To(gomega.Equal(int32(3)))
+		g.Expect(*gpuVMInfo.VgpuInstanceNum).To(gomega.Equal(int32(3)))
+
+		gpuVMInfo.Vms = []*models.GpuVMDetail{{VgpuInstanceOnVMNum: TowerInt32(1)}}
+		CalculateAssignedAndAvailableNumForGPUVMInfos(NewGPUVMInfos(gpuVMInfo))
+		g.Expect(*gpuVMInfo.AssignedVgpusNum).To(gomega.Equal(int32(1)))
+		g.Expect(*gpuVMInfo.AvailableVgpusNum).To(gomega.Equal(int32(2)))
+		g.Expect(*gpuVMInfo.VgpuInstanceNum).To(gomega.Equal(int32(3)))
+
+		gpuVMInfo.Vms = []*models.GpuVMDetail{{VgpuInstanceOnVMNum: TowerInt32(1)}, {VgpuInstanceOnVMNum: TowerInt32(5)}}
+		CalculateAssignedAndAvailableNumForGPUVMInfos(NewGPUVMInfos(gpuVMInfo))
+		g.Expect(*gpuVMInfo.AssignedVgpusNum).To(gomega.Equal(int32(6)))
+		g.Expect(*gpuVMInfo.AvailableVgpusNum).To(gomega.Equal(int32(0)))
+		g.Expect(*gpuVMInfo.VgpuInstanceNum).To(gomega.Equal(int32(3)))
+	})
+}
+
 func TestHasGPUsCanNotBeUsedForVM(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 	elfMachine := &infrav1.ElfMachine{}
@@ -111,27 +177,31 @@ func TestHasGPUsCanNotBeUsedForVM(t *testing.T) {
 	t.Run("GPU", func(t *testing.T) {
 		elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{Model: "A16", Count: 1})
 
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(), elfMachine)).To(gomega.BeFalse())
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID:  "gpu1",
-			VMs: []GPUDeviceVM{{ID: "vm1", Name: elfMachine.Name}},
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(), elfMachine)).To(gomega.BeFalse())
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(&models.GpuVMInfo{
+			ID:        TowerString("gpu1"),
+			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH),
+			Vms:       []*models.GpuVMDetail{{ID: TowerString("vm1"), Name: TowerString(elfMachine.Name)}},
 		}), elfMachine)).To(gomega.BeFalse())
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID:  "gpu1",
-			VMs: []GPUDeviceVM{{ID: "vm1", Name: "vm1"}},
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(&models.GpuVMInfo{
+			ID:        TowerString("gpu1"),
+			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH),
+			Vms:       []*models.GpuVMDetail{{ID: TowerString("vm1"), Name: TowerString("vm1")}},
 		}), elfMachine)).To(gomega.BeTrue())
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID: "gpu1",
-			VMs: []GPUDeviceVM{
-				{ID: "vm1", Name: "vm1"},
-				{ID: "vm2", Name: elfMachine.Name},
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(&models.GpuVMInfo{
+			ID:        TowerString("gpu1"),
+			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH),
+			Vms: []*models.GpuVMDetail{
+				{ID: TowerString("vm1"), Name: TowerString("vm1")},
+				{ID: TowerString("vm2"), Name: TowerString(elfMachine.Name)},
 			},
 		}), elfMachine)).To(gomega.BeTrue())
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID: "gpu1",
-			VMs: []GPUDeviceVM{
-				{ID: "vm2", Name: elfMachine.Name},
-				{ID: "vm1", Name: "vm1"},
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(&models.GpuVMInfo{
+			ID:        TowerString("gpu1"),
+			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH),
+			Vms: []*models.GpuVMDetail{
+				{ID: TowerString("vm2"), Name: TowerString(elfMachine.Name)},
+				{ID: TowerString("vm1"), Name: TowerString("vm1")},
 			},
 		}), elfMachine)).To(gomega.BeFalse())
 	})
@@ -141,185 +211,53 @@ func TestHasGPUsCanNotBeUsedForVM(t *testing.T) {
 		elfMachine.Spec.GPUDevices = nil
 		elfMachine.Spec.VGPUDevices = []infrav1.VGPUDeviceSpec{{Type: vGPUType, Count: 2}}
 
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(), elfMachine)).To(gomega.BeFalse())
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(), elfMachine)).To(gomega.BeFalse())
 
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID:             "gpu1",
-			AvailableCount: 0, VGPUType: vGPUType,
-			VMs: []GPUDeviceVM{{ID: elfMachine.Name, Name: elfMachine.Name}},
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(&models.GpuVMInfo{
+			ID:                TowerString("gpu1"),
+			UserUsage:         models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
+			AvailableVgpusNum: TowerInt32(0), UserVgpuTypeName: TowerString(vGPUType),
+			Vms: []*models.GpuVMDetail{{ID: TowerString(elfMachine.Name), Name: TowerString(elfMachine.Name)}},
 		}), elfMachine)).To(gomega.BeFalse())
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID:             "gpu1",
-			AvailableCount: 0, VGPUType: vGPUType,
-			VMs: []GPUDeviceVM{{ID: elfMachine.Name, Name: elfMachine.Name}},
-		}, &GPUDeviceInfo{
-			ID: "gpu1", AvailableCount: 0, VGPUType: vGPUType,
-			VMs: []GPUDeviceVM{},
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(&models.GpuVMInfo{
+			ID:                TowerString("gpu1"),
+			UserUsage:         models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
+			AvailableVgpusNum: TowerInt32(0), UserVgpuTypeName: TowerString(vGPUType),
+			Vms: []*models.GpuVMDetail{{ID: TowerString(elfMachine.Name), Name: TowerString(elfMachine.Name)}},
+		}, &models.GpuVMInfo{
+			ID: TowerString("gpu1"), AvailableVgpusNum: TowerInt32(0), UserVgpuTypeName: TowerString(vGPUType),
+			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
+			Vms:       []*models.GpuVMDetail{},
 		}), elfMachine)).To(gomega.BeTrue())
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID: "gpu1", AvailableCount: 0, VGPUType: vGPUType,
-			VMs: []GPUDeviceVM{{ID: elfMachine.Name, Name: elfMachine.Name}},
-		}, &GPUDeviceInfo{
-			ID: "gpu2", AvailableCount: 1, VGPUType: vGPUType,
-			VMs: []GPUDeviceVM{{ID: elfMachine.Name, Name: elfMachine.Name}},
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(&models.GpuVMInfo{
+			ID: TowerString("gpu1"), AvailableVgpusNum: TowerInt32(0), UserVgpuTypeName: TowerString(vGPUType),
+			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
+			Vms:       []*models.GpuVMDetail{{ID: TowerString(elfMachine.Name), Name: TowerString(elfMachine.Name)}},
+		}, &models.GpuVMInfo{
+			ID: TowerString("gpu2"), AvailableVgpusNum: TowerInt32(1), UserVgpuTypeName: TowerString(vGPUType),
+			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
+			Vms:       []*models.GpuVMDetail{{ID: TowerString(elfMachine.Name), Name: TowerString(elfMachine.Name)}},
 		}), elfMachine)).To(gomega.BeFalse())
 
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID: "gpu1", AvailableCount: 1, VGPUType: vGPUType,
-			VMs: []GPUDeviceVM{},
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(&models.GpuVMInfo{
+			ID: TowerString("gpu1"), AvailableVgpusNum: TowerInt32(1), UserVgpuTypeName: TowerString(vGPUType),
+			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
+			Vms:       nil,
 		}), elfMachine)).To(gomega.BeTrue())
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID: "gpu1", AvailableCount: 2, VGPUType: vGPUType,
-			VMs: []GPUDeviceVM{},
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(&models.GpuVMInfo{
+			ID: TowerString("gpu1"), AvailableVgpusNum: TowerInt32(2), UserVgpuTypeName: TowerString(vGPUType),
+			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
+			Vms:       []*models.GpuVMDetail{},
 		}), elfMachine)).To(gomega.BeFalse())
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID: "gpu1", AvailableCount: 1, VGPUType: vGPUType,
-			VMs: []GPUDeviceVM{{ID: "vm1", Name: "vm1"}},
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(&models.GpuVMInfo{
+			ID: TowerString("gpu1"), AvailableVgpusNum: TowerInt32(1), UserVgpuTypeName: TowerString(vGPUType),
+			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
+			Vms:       []*models.GpuVMDetail{{ID: TowerString("vm1"), Name: TowerString("vm1")}},
 		}), elfMachine)).To(gomega.BeTrue())
-		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID: "gpu1", AvailableCount: 2, VGPUType: vGPUType,
-			VMs: []GPUDeviceVM{{ID: "vm1", Name: "vm1"}},
+		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(&models.GpuVMInfo{
+			ID: TowerString("gpu1"), AvailableVgpusNum: TowerInt32(2), UserVgpuTypeName: TowerString(vGPUType),
+			UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
+			Vms:       []*models.GpuVMDetail{{ID: TowerString("vm1"), Name: TowerString("vm1")}},
 		}), elfMachine)).To(gomega.BeFalse())
-	})
-}
-
-func TestAggregateUnusedGPUDevicesToGPUDeviceInfos(t *testing.T) {
-	g := gomega.NewGomegaWithT(t)
-	host := &models.NestedHost{ID: TowerString("host1")}
-
-	t.Run("GPU", func(t *testing.T) {
-		gpuDevice := &models.GpuDevice{ID: TowerString("gpu1"), Host: host, Model: TowerString("A16"), UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH), UserVgpuTypeName: TowerString("")}
-		gpuDevices := []*models.GpuDevice{gpuDevice}
-		gpuDeviceInfos := NewGPUDeviceInfos()
-
-		AggregateUnusedGPUDevicesToGPUDeviceInfos(gpuDeviceInfos, gpuDevices)
-		g.Expect(gpuDeviceInfos.Len()).To(gomega.Equal(1))
-		g.Expect(*gpuDeviceInfos.Get(*gpuDevice.ID)).To(gomega.Equal(GPUDeviceInfo{
-			ID:             *gpuDevice.ID,
-			HostID:         *gpuDevice.Host.ID,
-			Model:          *gpuDevice.Model,
-			VGPUType:       *gpuDevice.UserVgpuTypeName,
-			AllocatedCount: 0,
-			AvailableCount: 1,
-		}))
-
-		AggregateUnusedGPUDevicesToGPUDeviceInfos(gpuDeviceInfos, gpuDevices)
-		g.Expect(gpuDeviceInfos.Len()).To(gomega.Equal(1))
-		g.Expect(gpuDeviceInfos.Contains(*gpuDevice.ID)).To(gomega.BeTrue())
-	})
-
-	t.Run("vGPU", func(t *testing.T) {
-		gpuDevice := &models.GpuDevice{ID: TowerString("gpu1"), Host: host, Model: TowerString("V100"), UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU), UserVgpuTypeName: TowerString(""), AvailableVgpusNum: TowerInt32(6)}
-		gpuDevices := []*models.GpuDevice{gpuDevice}
-		gpuDeviceInfos := NewGPUDeviceInfos()
-
-		AggregateUnusedGPUDevicesToGPUDeviceInfos(gpuDeviceInfos, gpuDevices)
-		g.Expect(gpuDeviceInfos.Len()).To(gomega.Equal(1))
-		g.Expect(*gpuDeviceInfos.Get(*gpuDevice.ID)).To(gomega.Equal(GPUDeviceInfo{
-			ID:             *gpuDevice.ID,
-			HostID:         *gpuDevice.Host.ID,
-			Model:          *gpuDevice.Model,
-			VGPUType:       *gpuDevice.UserVgpuTypeName,
-			AllocatedCount: 0,
-			AvailableCount: *gpuDevice.AvailableVgpusNum,
-		}))
-
-		AggregateUnusedGPUDevicesToGPUDeviceInfos(gpuDeviceInfos, gpuDevices)
-		g.Expect(gpuDeviceInfos.Len()).To(gomega.Equal(1))
-		g.Expect(gpuDeviceInfos.Contains(*gpuDevice.ID)).To(gomega.BeTrue())
-	})
-}
-
-func TestConvertVMGpuInfosToGPUDeviceInfos(t *testing.T) {
-	g := gomega.NewGomegaWithT(t)
-	host := &models.NestedHost{ID: TowerString("host1")}
-
-	t.Run("GPU", func(t *testing.T) {
-		vmGpuDetail := &models.VMGpuDetail{ID: TowerString("gpu1"), Host: host, Model: TowerString("A16"), UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH), UserVgpuTypeName: TowerString("")}
-		vmGpuInfo1 := &models.VMGpuInfo{ID: TowerString("1"), Name: TowerString("vm1"), GpuDevices: []*models.VMGpuDetail{vmGpuDetail}}
-		vmGpuInfo2 := &models.VMGpuInfo{ID: TowerString("2"), Name: TowerString("vm2"), GpuDevices: []*models.VMGpuDetail{vmGpuDetail}}
-
-		g.Expect(ConvertVMGpuInfosToGPUDeviceInfos(
-			[]*models.VMGpuInfo{},
-		)).To(gomega.BeEmpty())
-
-		g.Expect(ConvertVMGpuInfosToGPUDeviceInfos(
-			[]*models.VMGpuInfo{vmGpuInfo1},
-		)).To(gomega.Equal(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID:             *vmGpuDetail.ID,
-			HostID:         *vmGpuDetail.Host.ID,
-			Model:          *vmGpuDetail.Model,
-			VGPUType:       *vmGpuDetail.UserVgpuTypeName,
-			AllocatedCount: 1,
-			AvailableCount: 0,
-			VMs:            []GPUDeviceVM{{ID: *vmGpuInfo1.ID, Name: *vmGpuInfo1.Name, AllocatedCount: 1}},
-		})))
-
-		g.Expect(ConvertVMGpuInfosToGPUDeviceInfos(
-			[]*models.VMGpuInfo{vmGpuInfo1, vmGpuInfo2},
-		)).To(gomega.Equal(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID:             *vmGpuDetail.ID,
-			HostID:         *vmGpuDetail.Host.ID,
-			Model:          *vmGpuDetail.Model,
-			VGPUType:       *vmGpuDetail.UserVgpuTypeName,
-			AllocatedCount: 2,
-			AvailableCount: 0,
-			VMs: []GPUDeviceVM{
-				{ID: *vmGpuInfo1.ID, Name: *vmGpuInfo1.Name, AllocatedCount: 1},
-				{ID: *vmGpuInfo2.ID, Name: *vmGpuInfo2.Name, AllocatedCount: 1},
-			},
-		})))
-	})
-
-	t.Run("vGPU", func(t *testing.T) {
-		vmGpuDetail1 := &models.VMGpuDetail{ID: TowerString("gpu1"), Host: host, Model: TowerString("V100"), UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU), UserVgpuTypeName: TowerString("GRID V100-4C"), VgpuInstanceNum: TowerInt32(3), VgpuInstanceOnVMNum: TowerInt32(1)}
-		vmGpuDetail2 := &models.VMGpuDetail{ID: TowerString("gpu1"), Host: host, Model: TowerString("V100"), UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU), UserVgpuTypeName: TowerString("GRID V100-4C"), VgpuInstanceNum: TowerInt32(3), VgpuInstanceOnVMNum: TowerInt32(2)}
-		vmGpuDetail3 := &models.VMGpuDetail{ID: TowerString("gpu1"), Host: host, Model: TowerString("V100"), UserUsage: models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU), UserVgpuTypeName: TowerString("GRID V100-4C"), VgpuInstanceNum: TowerInt32(3), VgpuInstanceOnVMNum: TowerInt32(1)}
-		vmGpuInfo1 := &models.VMGpuInfo{ID: TowerString("1"), Name: TowerString("vm1"), GpuDevices: []*models.VMGpuDetail{vmGpuDetail1}}
-		vmGpuInfo2 := &models.VMGpuInfo{ID: TowerString("2"), Name: TowerString("vm2"), GpuDevices: []*models.VMGpuDetail{vmGpuDetail2}}
-		vmGpuInfo3 := &models.VMGpuInfo{ID: TowerString("1"), Name: TowerString("vm2"), GpuDevices: []*models.VMGpuDetail{vmGpuDetail3}}
-
-		g.Expect(ConvertVMGpuInfosToGPUDeviceInfos(
-			[]*models.VMGpuInfo{vmGpuInfo1},
-		)).To(gomega.Equal(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID:             *vmGpuDetail1.ID,
-			HostID:         *vmGpuDetail1.Host.ID,
-			Model:          *vmGpuDetail1.Model,
-			VGPUType:       *vmGpuDetail1.UserVgpuTypeName,
-			AllocatedCount: 1,
-			AvailableCount: 2,
-			VMs:            []GPUDeviceVM{{ID: *vmGpuInfo1.ID, Name: *vmGpuInfo1.Name, AllocatedCount: 1}},
-		})))
-
-		g.Expect(ConvertVMGpuInfosToGPUDeviceInfos(
-			[]*models.VMGpuInfo{vmGpuInfo1, vmGpuInfo2},
-		)).To(gomega.Equal(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID:             *vmGpuDetail1.ID,
-			HostID:         *vmGpuDetail1.Host.ID,
-			Model:          *vmGpuDetail1.Model,
-			VGPUType:       *vmGpuDetail1.UserVgpuTypeName,
-			AllocatedCount: 3,
-			AvailableCount: 0,
-			VMs: []GPUDeviceVM{
-				{ID: *vmGpuInfo1.ID, Name: *vmGpuInfo1.Name, AllocatedCount: 1},
-				{ID: *vmGpuInfo2.ID, Name: *vmGpuInfo2.Name, AllocatedCount: 2},
-			},
-		})))
-
-		g.Expect(ConvertVMGpuInfosToGPUDeviceInfos(
-			[]*models.VMGpuInfo{vmGpuInfo1, vmGpuInfo2, vmGpuInfo3},
-		)).To(gomega.Equal(NewGPUDeviceInfos(&GPUDeviceInfo{
-			ID:             *vmGpuDetail1.ID,
-			HostID:         *vmGpuDetail1.Host.ID,
-			Model:          *vmGpuDetail1.Model,
-			VGPUType:       *vmGpuDetail1.UserVgpuTypeName,
-			AllocatedCount: 4,
-			AvailableCount: 0,
-			VMs: []GPUDeviceVM{
-				{ID: *vmGpuInfo1.ID, Name: *vmGpuInfo1.Name, AllocatedCount: 1},
-				{ID: *vmGpuInfo2.ID, Name: *vmGpuInfo2.Name, AllocatedCount: 2},
-				{ID: *vmGpuInfo3.ID, Name: *vmGpuInfo3.Name, AllocatedCount: 1},
-			},
-		})))
 	})
 }

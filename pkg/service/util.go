@@ -207,11 +207,11 @@ func IsPlacementGroupTask(task *models.Task) bool {
 
 // HasGPUsCanNotBeUsedForVM returns whether the specified GPUs contains GPU
 // that cannot be used by the specified VM.
-func HasGPUsCanNotBeUsedForVM(gpuDeviceInfos GPUDeviceInfos, elfMachine *infrav1.ElfMachine) bool {
+func HasGPUsCanNotBeUsedForVM(gpuVMInfos GPUVMInfos, elfMachine *infrav1.ElfMachine) bool {
 	if elfMachine.RequiresPassThroughGPUDevices() {
-		for gpuID := range gpuDeviceInfos {
-			gpuInfo := gpuDeviceInfos[gpuID]
-			if gpuInfo.GetVMCount() >= 1 && !gpuInfo.FirstVMIs(elfMachine.Name) {
+		for gpuID := range gpuVMInfos {
+			gpuVMInfo := gpuVMInfos[gpuID]
+			if len(gpuVMInfo.Vms) >= 1 && !gpuVMInfoFirstVMIs(gpuVMInfo, elfMachine.Name) {
 				return true
 			}
 		}
@@ -219,28 +219,29 @@ func HasGPUsCanNotBeUsedForVM(gpuDeviceInfos GPUDeviceInfos, elfMachine *infrav1
 		return false
 	}
 
-	if gpuDeviceInfos.Len() == 0 {
+	if gpuVMInfos.Len() == 0 {
 		return false
 	}
 
 	gpuCountUsedByVM := 0
 	availableCountMap := make(map[string]int32)
-	for gpuID := range gpuDeviceInfos {
-		gpuInfo := gpuDeviceInfos[gpuID]
+	for gpuID := range gpuVMInfos {
+		gpuVMInfo := gpuVMInfos[gpuID]
 
-		if gpuInfo.ContainsVM(elfMachine.Name) {
+		if gpuVMInfoContainsVM(gpuVMInfo, elfMachine.Name) {
 			gpuCountUsedByVM += 1
 		}
 
-		if count, ok := availableCountMap[gpuInfo.VGPUType]; ok {
-			availableCountMap[gpuInfo.VGPUType] = count + gpuInfo.AvailableCount
+		availableCount := GetAvailableCountFromGPUVMInfo(gpuVMInfo)
+		if count, ok := availableCountMap[*gpuVMInfo.UserVgpuTypeName]; ok {
+			availableCountMap[*gpuVMInfo.UserVgpuTypeName] = count + availableCount
 		} else {
-			availableCountMap[gpuInfo.VGPUType] = gpuInfo.AvailableCount
+			availableCountMap[*gpuVMInfo.UserVgpuTypeName] = availableCount
 		}
 	}
 
 	if gpuCountUsedByVM > 0 {
-		return gpuCountUsedByVM != gpuDeviceInfos.Len()
+		return gpuCountUsedByVM != gpuVMInfos.Len()
 	}
 
 	vGPUDevices := elfMachine.Spec.VGPUDevices
@@ -253,87 +254,55 @@ func HasGPUsCanNotBeUsedForVM(gpuDeviceInfos GPUDeviceInfos, elfMachine *infrav1
 	return false
 }
 
-// AggregateUnusedGPUDevicesToGPUDeviceInfos selects the GPU device
-// that gpuDeviceInfos does not have from the specified GPU devices and add to it.
-// It should be used in conjunction with GetGPUDevicesAllocationInfo.
-//
-// GetGPUDevicesAllocationInfo only returns the GPUs that has been used by the virtual machine,
-// so need to aggregate the unused GPUs.
-func AggregateUnusedGPUDevicesToGPUDeviceInfos(gpuDeviceInfos GPUDeviceInfos, gpuDevices []*models.GpuDevice) {
-	for i := 0; i < len(gpuDevices); i++ {
-		if !gpuDeviceInfos.Contains(*gpuDevices[i].ID) {
-			gpuDeviceInfo := &GPUDeviceInfo{
-				ID:       *gpuDevices[i].ID,
-				HostID:   *gpuDevices[i].Host.ID,
-				Model:    *gpuDevices[i].Model,
-				VGPUType: *gpuDevices[i].UserVgpuTypeName,
-				// Not yet allocated to a VM, the value is 0
-				AllocatedCount: 0,
-				// Not yet allocated to a VM, value of GPU Passthrough is 1,
-				// value of vGPU is availableVgpusNum
-				AvailableCount: 1,
-			}
-			if *gpuDevices[i].UserUsage == models.GpuDeviceUsageVGPU {
-				gpuDeviceInfo.AvailableCount = *gpuDevices[i].AvailableVgpusNum
-			}
-
-			gpuDeviceInfos.Insert(gpuDeviceInfo)
-		}
+func gpuVMInfoFirstVMIs(gpuVMInfo *models.GpuVMInfo, vm string) bool {
+	if len(gpuVMInfo.Vms) == 0 {
+		return false
 	}
+	return *gpuVMInfo.Vms[0].ID == vm || *gpuVMInfo.Vms[0].Name == vm
 }
 
-// ConvertVMGpuInfosToGPUDeviceInfos Converts Tower's VMGpuInfo type to GPUDeviceInfos.
-// It should be used in conjunction with GetGPUDevicesAllocationInfo.
-//
-// Tower does not provide API to obtain the detailes of the VM allocated by the GPU Device.
-// So we need to get GPUDeviceInfos reversely through VMGpuInfo.
-func ConvertVMGpuInfosToGPUDeviceInfos(vmGPUInfos []*models.VMGpuInfo) GPUDeviceInfos {
-	gpuDeviceInfos := NewGPUDeviceInfos()
-	for i := 0; i < len(vmGPUInfos); i++ {
-		gpuDevices := vmGPUInfos[i].GpuDevices
-		for j := 0; j < len(gpuDevices); j++ {
-			allocatedCount := int32(1)
-			if *gpuDevices[j].UserUsage == models.GpuDeviceUsageVGPU {
-				allocatedCount = *gpuDevices[j].VgpuInstanceOnVMNum
-			}
-
-			gpuDeviceVM := GPUDeviceVM{
-				ID:             *vmGPUInfos[i].ID,
-				Name:           *vmGPUInfos[i].Name,
-				AllocatedCount: allocatedCount,
-			}
-
-			if gpuDeviceInfos.Contains(*gpuDevices[j].ID) {
-				gpuDeviceInfo := gpuDeviceInfos.Get(*gpuDevices[j].ID)
-				gpuDeviceInfo.VMs = append(gpuDeviceInfo.VMs, gpuDeviceVM)
-				gpuDeviceInfo.AllocatedCount += gpuDeviceVM.AllocatedCount
-				if *gpuDevices[j].UserUsage == models.GpuDeviceUsageVGPU {
-					gpuDeviceInfo.AvailableCount = calGPUAvailableCount(gpuDeviceInfo.AvailableCount, gpuDeviceVM.AllocatedCount)
-				}
-			} else {
-				availableCount := int32(0)
-				if *gpuDevices[j].UserUsage == models.GpuDeviceUsageVGPU {
-					availableCount = calGPUAvailableCount(*gpuDevices[j].VgpuInstanceNum, gpuDeviceVM.AllocatedCount)
-				}
-
-				gpuDeviceInfos.Insert(&GPUDeviceInfo{
-					ID:             *gpuDevices[j].ID,
-					HostID:         *gpuDevices[j].Host.ID,
-					Model:          *gpuDevices[j].Model,
-					VGPUType:       *gpuDevices[j].UserVgpuTypeName,
-					AllocatedCount: gpuDeviceVM.AllocatedCount,
-					AvailableCount: availableCount,
-					VMs:            []GPUDeviceVM{gpuDeviceVM},
-				})
-			}
+func gpuVMInfoContainsVM(gpuVMInfo *models.GpuVMInfo, vm string) bool {
+	for i := 0; i < len(gpuVMInfo.Vms); i++ {
+		if *gpuVMInfo.Vms[i].ID == vm || *gpuVMInfo.Vms[i].Name == vm {
+			return true
 		}
 	}
 
-	return gpuDeviceInfos
+	return false
 }
 
-func calGPUAvailableCount(availableCount, allocatedCount int32) int32 {
-	count := availableCount - allocatedCount
+// GetAvailableCountFromGPUVMInfo returns the number of GPU that can be allocated.
+func GetAvailableCountFromGPUVMInfo(gpuVMInfo *models.GpuVMInfo) int32 {
+	if *gpuVMInfo.UserUsage == models.GpuDeviceUsagePASSTHROUGH {
+		if len(gpuVMInfo.Vms) > 0 {
+			return 0
+		}
+
+		return 1
+	}
+
+	return *gpuVMInfo.AvailableVgpusNum
+}
+
+// CalculateAssignedAndAvailableNumForGPUVMInfos count the number of vGPU used by virtual machines(including stopped).
+func CalculateAssignedAndAvailableNumForGPUVMInfos(gpuVMInfos GPUVMInfos) {
+	gpuVMInfos.Iterate(func(gpuVMInfo *models.GpuVMInfo) {
+		if *gpuVMInfo.UserUsage == models.GpuDeviceUsagePASSTHROUGH {
+			return
+		}
+
+		assignedVgpusNum := int32(0)
+		for i := 0; i < len(gpuVMInfo.Vms); i++ {
+			assignedVgpusNum += *gpuVMInfo.Vms[i].VgpuInstanceOnVMNum
+		}
+		gpuVMInfo.AssignedVgpusNum = &assignedVgpusNum
+		availableVGPUNum := calGPUAvailableVgpusNum(*gpuVMInfo.VgpuInstanceNum, *gpuVMInfo.AssignedVgpusNum)
+		gpuVMInfo.AvailableVgpusNum = &availableVGPUNum
+	})
+}
+
+func calGPUAvailableVgpusNum(vgpuInstanceNum, assignedVGPUsNum int32) int32 {
+	count := vgpuInstanceNum - assignedVGPUsNum
 	if count < 0 {
 		count = 0
 	}

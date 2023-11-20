@@ -80,6 +80,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx *context.MachineContex
 
 	availableHosts := hosts.FilterAvailableHostsWithEnoughMemory(*service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
 	if len(availableHosts) == 0 {
+		ctx.Logger.V(2).Info("No available hosts for selecting GPUs")
 		return nil, nil, nil
 	}
 
@@ -88,40 +89,28 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx *context.MachineContex
 	if ctx.ElfMachine.RequiresVGPUDevices() {
 		gpuDeviceUsage = models.GpuDeviceUsageVGPU
 	}
-	gpuDevices, err := ctx.VMService.FindGPUDevicesByHostIDs(availableHosts.IDs(), gpuDeviceUsage)
-	if err != nil || len(gpuDevices) == 0 {
+	gpuVMInfos, err := ctx.VMService.GetGPUDevicesAllocationInfoByHostIDs(availableHosts.IDs(), gpuDeviceUsage)
+	if err != nil || len(gpuVMInfos) == 0 {
 		return nil, nil, err
 	}
 
-	gpuDeviceIDs := make([]string, len(gpuDevices))
-	for i := 0; i < len(gpuDevices); i++ {
-		gpuDeviceIDs[i] = *gpuDevices[i].ID
-	}
-	// Get GPU devices with VMs and allocation details.
-	gpuDeviceInfos, err := ctx.VMService.GetGPUDevicesAllocationInfo(gpuDeviceIDs)
-	if err != nil {
-		return nil, nil, err
-	}
+	service.CalculateAssignedAndAvailableNumForGPUVMInfos(gpuVMInfos)
 
-	service.AggregateUnusedGPUDevicesToGPUDeviceInfos(gpuDeviceInfos, gpuDevices)
-
-	// Filter already used GPU devices.
-	gpuDeviceInfos = gpuDeviceInfos.Filter(func(g *service.GPUDeviceInfo) bool {
-		return g.AvailableCount > 0
-	})
+	// Filter available GPU devices.
+	gpuVMInfos = gpuVMInfos.FilterAvailableGPUVMInfos()
 
 	// Filter locked GPU devices.
-	gpuDeviceInfos = filterGPUDeviceInfosByLockGPUDevices(ctx.ElfCluster.Spec.Cluster, gpuDeviceInfos)
+	gpuVMInfos = filterGPUVMInfosByLockGPUDevices(ctx.ElfCluster.Spec.Cluster, gpuVMInfos)
 
 	// Group GPU deviceInfos by host.
-	hostGPUDeviceInfoMap := make(map[string]service.GPUDeviceInfos)
+	hostGPUVMInfoMap := make(map[string]service.GPUVMInfos)
 	hostIDSet := sets.NewString()
-	gpuDeviceInfos.Iterate(func(gpuDeviceInfo *service.GPUDeviceInfo) {
-		hostIDSet.Insert(gpuDeviceInfo.HostID)
-		if gpuInfos, ok := hostGPUDeviceInfoMap[gpuDeviceInfo.HostID]; !ok {
-			hostGPUDeviceInfoMap[gpuDeviceInfo.HostID] = service.NewGPUDeviceInfos(gpuDeviceInfo)
+	gpuVMInfos.Iterate(func(gpuVMInfo *models.GpuVMInfo) {
+		hostIDSet.Insert(*gpuVMInfo.Host.ID)
+		if gpuInfos, ok := hostGPUVMInfoMap[*gpuVMInfo.Host.ID]; !ok {
+			hostGPUVMInfoMap[*gpuVMInfo.Host.ID] = service.NewGPUVMInfos(gpuVMInfo)
 		} else {
-			gpuInfos.Insert(gpuDeviceInfo)
+			gpuInfos.Insert(gpuVMInfo)
 		}
 	})
 
@@ -138,16 +127,16 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx *context.MachineContex
 	}
 
 	for i := 0; i < len(unsortedHostIDs); i++ {
-		hostGPUDeviceInfos, ok := hostGPUDeviceInfoMap[unsortedHostIDs[i]]
+		hostGPUVMInfos, ok := hostGPUVMInfoMap[unsortedHostIDs[i]]
 		if !ok {
 			continue
 		}
 
 		var selectedGPUDeviceInfos []*service.GPUDeviceInfo
 		if ctx.ElfMachine.RequiresPassThroughGPUDevices() {
-			selectedGPUDeviceInfos = selectGPUDevicesForVM(hostGPUDeviceInfos, ctx.ElfMachine.Spec.GPUDevices)
+			selectedGPUDeviceInfos = selectGPUDevicesForVM(hostGPUVMInfos, ctx.ElfMachine.Spec.GPUDevices)
 		} else {
-			selectedGPUDeviceInfos = selectVGPUDevicesForVM(hostGPUDeviceInfos, ctx.ElfMachine.Spec.VGPUDevices)
+			selectedGPUDeviceInfos = selectVGPUDevicesForVM(hostGPUVMInfos, ctx.ElfMachine.Spec.VGPUDevices)
 		}
 
 		if len(selectedGPUDeviceInfos) > 0 {
@@ -169,27 +158,27 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx *context.MachineContex
 
 // selectGPUDevicesForVM selects the GPU devices required by the virtual machine from the host's GPU devices.
 // Empty GPU devices indicates that the host's GPU devices cannot meet the GPU requirements of the virtual machine.
-func selectGPUDevicesForVM(hostGPUDeviceInfos service.GPUDeviceInfos, requiredGPUDevices []infrav1.GPUPassthroughDeviceSpec) []*service.GPUDeviceInfo {
+func selectGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredGPUDevices []infrav1.GPUPassthroughDeviceSpec) []*service.GPUDeviceInfo {
 	// Group GPU devices by model.
-	modelGPUDeviceMap := make(map[string][]*service.GPUDeviceInfo)
-	hostGPUDeviceInfos.Iterate(func(gpuDeviceInfo *service.GPUDeviceInfo) {
-		if gpuInfos, ok := modelGPUDeviceMap[gpuDeviceInfo.Model]; !ok {
-			modelGPUDeviceMap[gpuDeviceInfo.Model] = []*service.GPUDeviceInfo{gpuDeviceInfo}
+	modelGPUVMInfoMap := make(map[string][]*models.GpuVMInfo)
+	hostGPUVMInfos.Iterate(func(gpuVMInfo *models.GpuVMInfo) {
+		if gpuVMInfos, ok := modelGPUVMInfoMap[*gpuVMInfo.Model]; !ok {
+			modelGPUVMInfoMap[*gpuVMInfo.Model] = []*models.GpuVMInfo{gpuVMInfo}
 		} else {
-			modelGPUDeviceMap[gpuDeviceInfo.Model] = append(gpuInfos, gpuDeviceInfo)
+			modelGPUVMInfoMap[*gpuVMInfo.Model] = append(gpuVMInfos, gpuVMInfo)
 		}
 	})
 
 	var selectedGPUDeviceInfos []*service.GPUDeviceInfo
 	for i := 0; i < len(requiredGPUDevices); i++ {
-		gpuDevices, ok := modelGPUDeviceMap[requiredGPUDevices[i].Model]
-		if !ok || len(gpuDevices) < int(requiredGPUDevices[i].Count) {
+		gpuVMInfos, ok := modelGPUVMInfoMap[requiredGPUDevices[i].Model]
+		if !ok || len(gpuVMInfos) < int(requiredGPUDevices[i].Count) {
 			return nil
 		}
 
-		gpuInfos := gpuDevices[:int(requiredGPUDevices[i].Count)]
+		gpuInfos := gpuVMInfos[:int(requiredGPUDevices[i].Count)]
 		for j := 0; j < len(gpuInfos); j++ {
-			selectedGPUDeviceInfos = append(selectedGPUDeviceInfos, &service.GPUDeviceInfo{ID: gpuInfos[j].ID, AllocatedCount: 1, AvailableCount: 1})
+			selectedGPUDeviceInfos = append(selectedGPUDeviceInfos, &service.GPUDeviceInfo{ID: *gpuInfos[j].ID, AllocatedCount: 1, AvailableCount: 1})
 		}
 	}
 
@@ -198,39 +187,40 @@ func selectGPUDevicesForVM(hostGPUDeviceInfos service.GPUDeviceInfos, requiredGP
 
 // selectVGPUDevicesForVM selects the vGPU devices required by the virtual machine from the host's vGPU devices.
 // Empty vGPU devices indicates that the host's vGPU devices cannot meet the vGPU requirements of the virtual machine.
-func selectVGPUDevicesForVM(hostGPUDeviceInfos service.GPUDeviceInfos, requiredVGPUDevices []infrav1.VGPUDeviceSpec) []*service.GPUDeviceInfo {
+func selectVGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredVGPUDevices []infrav1.VGPUDeviceSpec) []*service.GPUDeviceInfo {
 	// Group vGPU devices by vGPU type.
-	typeVGPUDeviceInfoMap := make(map[string][]*service.GPUDeviceInfo)
-	hostGPUDeviceInfos.Iterate(func(gpuDeviceInfo *service.GPUDeviceInfo) {
-		if gpuInfos, ok := typeVGPUDeviceInfoMap[gpuDeviceInfo.VGPUType]; !ok {
-			typeVGPUDeviceInfoMap[gpuDeviceInfo.VGPUType] = []*service.GPUDeviceInfo{gpuDeviceInfo}
+	typeVGPUVMInfoMap := make(map[string][]*models.GpuVMInfo)
+	hostGPUVMInfos.Iterate(func(gpuVMInfo *models.GpuVMInfo) {
+		if gpuVMInfos, ok := typeVGPUVMInfoMap[*gpuVMInfo.UserVgpuTypeName]; !ok {
+			typeVGPUVMInfoMap[*gpuVMInfo.UserVgpuTypeName] = []*models.GpuVMInfo{gpuVMInfo}
 		} else {
-			typeVGPUDeviceInfoMap[gpuDeviceInfo.VGPUType] = append(gpuInfos, gpuDeviceInfo)
+			typeVGPUVMInfoMap[*gpuVMInfo.UserVgpuTypeName] = append(gpuVMInfos, gpuVMInfo)
 		}
 	})
 
 	var selectedGPUDeviceInfos []*service.GPUDeviceInfo
 	for i := 0; i < len(requiredVGPUDevices); i++ {
-		gpuDeviceInfos, ok := typeVGPUDeviceInfoMap[requiredVGPUDevices[i].Type]
+		gpuVMInfos, ok := typeVGPUVMInfoMap[requiredVGPUDevices[i].Type]
 		if !ok {
 			return nil
 		}
 
 		var gpuInfos []*service.GPUDeviceInfo
 		requiredCount := requiredVGPUDevices[i].Count
-		for j := 0; j < len(gpuDeviceInfos); j++ {
-			if gpuDeviceInfos[j].AvailableCount <= 0 {
+		for j := 0; j < len(gpuVMInfos); j++ {
+			availableCount := service.GetAvailableCountFromGPUVMInfo(gpuVMInfos[j])
+			if availableCount <= 0 {
 				continue
 			}
 
-			if gpuDeviceInfos[j].AvailableCount >= requiredCount {
-				gpuInfos = append(gpuInfos, &service.GPUDeviceInfo{ID: gpuDeviceInfos[j].ID, AllocatedCount: requiredCount, AvailableCount: gpuDeviceInfos[j].AvailableCount})
+			if availableCount >= requiredCount {
+				gpuInfos = append(gpuInfos, &service.GPUDeviceInfo{ID: *gpuVMInfos[j].ID, AllocatedCount: requiredCount, AvailableCount: availableCount})
 				requiredCount = 0
 
 				break
 			} else {
-				gpuInfos = append(gpuInfos, &service.GPUDeviceInfo{ID: gpuDeviceInfos[j].ID, AllocatedCount: gpuDeviceInfos[j].AvailableCount, AvailableCount: gpuDeviceInfos[j].AvailableCount})
-				requiredCount -= gpuDeviceInfos[j].AvailableCount
+				gpuInfos = append(gpuInfos, &service.GPUDeviceInfo{ID: *gpuVMInfos[j].ID, AllocatedCount: *gpuVMInfos[j].AvailableVgpusNum, AvailableCount: availableCount})
+				requiredCount -= *gpuVMInfos[j].AvailableVgpusNum
 			}
 		}
 
@@ -378,28 +368,20 @@ func (r *ElfMachineReconciler) removeVMGPUDevices(ctx *context.MachineContext, v
 // checkGPUsCanBeUsedForVM checks whether GPU devices can be used by the specified virtual machine.
 // The return true means the GPU devices can be used for the virtual machine.
 func (r *ElfMachineReconciler) checkGPUsCanBeUsedForVM(ctx *context.MachineContext, gpuDeviceIDs []string) (bool, error) {
-	gpuDeviceInfos := getGPUDeviceInfosFromCache(gpuDeviceIDs)
-	if gpuDeviceInfos.Len() != len(gpuDeviceIDs) {
-		gpuDevices, err := ctx.VMService.FindGPUDevicesByIDs(gpuDeviceIDs)
-		if err != nil || len(gpuDevices) != len(gpuDeviceIDs) {
+	gpuVMInfos := getGPUVMInfosFromCache(gpuDeviceIDs)
+	if gpuVMInfos.Len() != len(gpuDeviceIDs) {
+		var err error
+		gpuVMInfos, err = ctx.VMService.GetGPUDevicesAllocationInfoByIDs(gpuDeviceIDs)
+		if err != nil || len(gpuVMInfos) != len(gpuDeviceIDs) {
 			return false, err
 		}
 
-		gpuDeviceInfos, err = ctx.VMService.GetGPUDevicesAllocationInfo(gpuDeviceIDs)
-		if err != nil {
-			return false, err
-		}
+		service.CalculateAssignedAndAvailableNumForGPUVMInfos(gpuVMInfos)
 
-		service.AggregateUnusedGPUDevicesToGPUDeviceInfos(gpuDeviceInfos, gpuDevices)
-
-		setGPUDeviceInfosCache(gpuDeviceInfos)
-
-		if gpuDeviceInfos.Len() != len(gpuDeviceIDs) {
-			return false, nil
-		}
+		setGPUVMInfosCache(gpuVMInfos)
 	}
 
-	if service.HasGPUsCanNotBeUsedForVM(gpuDeviceInfos, ctx.ElfMachine) {
+	if service.HasGPUsCanNotBeUsedForVM(gpuVMInfos, ctx.ElfMachine) {
 		return false, nil
 	}
 

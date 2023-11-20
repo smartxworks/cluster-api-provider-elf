@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	corev1 "k8s.io/api/core/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
@@ -171,20 +172,20 @@ var _ = Describe("TowerCache", func() {
 
 	It("GPU Cache", func() {
 		gpuID := "gpu"
-		gpuDeviceInfo := service.GPUDeviceInfo{ID: gpuID}
-		gpuDeviceInfos := service.NewGPUDeviceInfos(&gpuDeviceInfo)
-		setGPUDeviceInfosCache(gpuDeviceInfos)
-		cachedGPUDeviceInfos := getGPUDeviceInfosFromCache([]string{gpuID})
+		gpuVMInfo := models.GpuVMInfo{ID: service.TowerString(gpuID)}
+		gpuVMInfos := service.NewGPUVMInfos(&gpuVMInfo)
+		setGPUVMInfosCache(gpuVMInfos)
+		cachedGPUDeviceInfos := getGPUVMInfosFromCache([]string{gpuID})
 		Expect(cachedGPUDeviceInfos.Len()).To(Equal(1))
-		Expect(*cachedGPUDeviceInfos.Get(gpuDeviceInfo.ID)).To(Equal(gpuDeviceInfo))
+		Expect(*cachedGPUDeviceInfos.Get(*gpuVMInfo.ID)).To(Equal(gpuVMInfo))
 		time.Sleep(gpuCacheDuration)
-		Expect(getGPUDeviceInfosFromCache([]string{gpuID})).To(BeEmpty())
+		Expect(getGPUVMInfosFromCache([]string{gpuID})).To(BeEmpty())
 	})
 })
 
-func removeGPUDeviceInfosCache(gpuIDs []string) {
+func removeGPUVMInfosCache(gpuIDs []string) {
 	for i := 0; i < len(gpuIDs); i++ {
-		vmTaskErrorCache.Delete(getKeyForGPUDeviceInfo(gpuIDs[i]))
+		vmTaskErrorCache.Delete(getKeyForGPUVMInfo(gpuIDs[i]))
 	}
 }
 

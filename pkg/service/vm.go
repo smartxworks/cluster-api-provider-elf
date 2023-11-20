@@ -72,9 +72,8 @@ type VMService interface {
 	AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error)
 	DeleteVMPlacementGroupByID(ctx goctx.Context, id string) (bool, error)
 	DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context, placementGroupName string) (int, error)
-	FindGPUDevicesByHostIDs(hostIDs []string, gpuDeviceUsage models.GpuDeviceUsage) ([]*models.GpuDevice, error)
-	FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDevice, error)
-	GetGPUDevicesAllocationInfo(gpuIDs []string) (GPUDeviceInfos, error)
+	GetGPUDevicesAllocationInfoByHostIDs(hostIDs []string, gpuDeviceUsage models.GpuDeviceUsage) (GPUVMInfos, error)
+	GetGPUDevicesAllocationInfoByIDs(gpuIDs []string) (GPUVMInfos, error)
 	GetVMGPUAllocationInfo(id string) (*models.VMGpuInfo, error)
 }
 
@@ -944,9 +943,31 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context
 	return len(getVMPlacementGroupsResp.Payload), nil
 }
 
-func (svr *TowerVMService) FindGPUDevicesByHostIDs(hostIDs []string, gpuDeviceUsage models.GpuDeviceUsage) ([]*models.GpuDevice, error) {
+// GetGPUDevicesAllocationInfoByIDs returns the specified GPU devices with VMs and allocation details.
+func (svr *TowerVMService) GetGPUDevicesAllocationInfoByIDs(gpuIDs []string) (GPUVMInfos, error) {
+	if len(gpuIDs) == 0 {
+		return NewGPUVMInfos(), nil
+	}
+
+	getDetailVMInfoByGpuDevicesParams := clientgpu.NewGetDetailVMInfoByGpuDevicesParams()
+	getDetailVMInfoByGpuDevicesParams.RequestBody = &models.GetGpuDevicesRequestBody{
+		Where: &models.GpuDeviceWhereInput{
+			IDIn: gpuIDs,
+		},
+	}
+
+	getDetailVMInfoByGpuDevicesResp, err := svr.Session.GpuDevice.GetDetailVMInfoByGpuDevices(getDetailVMInfoByGpuDevicesParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewGPUVMInfosFromList(getDetailVMInfoByGpuDevicesResp.Payload), nil
+}
+
+// GetGPUDevicesAllocationInfoByHostIDs returns the GPU devices of specified hosts with VMs and allocation details.
+func (svr *TowerVMService) GetGPUDevicesAllocationInfoByHostIDs(hostIDs []string, gpuDeviceUsage models.GpuDeviceUsage) (GPUVMInfos, error) {
 	if len(hostIDs) == 0 {
-		return nil, nil
+		return NewGPUVMInfos(), nil
 	}
 
 	where := &models.GpuDeviceWhereInput{
@@ -961,54 +982,17 @@ func (svr *TowerVMService) FindGPUDevicesByHostIDs(hostIDs []string, gpuDeviceUs
 		where.AvailableVgpusNumGt = TowerInt32(0)
 	}
 
-	getGpuDevicesParams := clientgpu.NewGetGpuDevicesParams()
-	getGpuDevicesParams.RequestBody = &models.GetGpuDevicesRequestBody{Where: where}
+	getDetailVMInfoByGpuDevicesParams := clientgpu.NewGetDetailVMInfoByGpuDevicesParams()
+	getDetailVMInfoByGpuDevicesParams.RequestBody = &models.GetGpuDevicesRequestBody{
+		Where: &models.GpuDeviceWhereInput{},
+	}
 
-	getGpuDevicesResp, err := svr.Session.GpuDevice.GetGpuDevices(getGpuDevicesParams)
+	getDetailVMInfoByGpuDevicesResp, err := svr.Session.GpuDevice.GetDetailVMInfoByGpuDevices(getDetailVMInfoByGpuDevicesParams)
 	if err != nil {
 		return nil, err
 	}
 
-	return getGpuDevicesResp.Payload, nil
-}
-
-func (svr *TowerVMService) FindGPUDevicesByIDs(gpuIDs []string) ([]*models.GpuDevice, error) {
-	if len(gpuIDs) == 0 {
-		return nil, nil
-	}
-
-	getGpuDevicesParams := clientgpu.NewGetGpuDevicesParams()
-	getGpuDevicesParams.RequestBody = &models.GetGpuDevicesRequestBody{
-		Where: &models.GpuDeviceWhereInput{
-			IDIn: gpuIDs,
-		},
-	}
-
-	getGpuDevicesResp, err := svr.Session.GpuDevice.GetGpuDevices(getGpuDevicesParams)
-	if err != nil {
-		return nil, err
-	}
-
-	return getGpuDevicesResp.Payload, nil
-}
-
-// GetGPUDevicesAllocationInfo returns the specified GPU devices with VMs and allocation details.
-func (svr *TowerVMService) GetGPUDevicesAllocationInfo(gpuIDs []string) (GPUDeviceInfos, error) {
-	getVMGpuDeviceInfoParams := clientvm.NewGetVMGpuDeviceInfoParams()
-	getVMGpuDeviceInfoParams.RequestBody = &models.GetVmsRequestBody{
-		Where: &models.VMWhereInput{
-			GpuDevicesSome: &models.GpuDeviceWhereInput{
-				IDIn: gpuIDs,
-			},
-		},
-	}
-
-	getVMGpuDeviceInfoResp, err := svr.Session.VM.GetVMGpuDeviceInfo(getVMGpuDeviceInfoParams)
-	if err != nil {
-		return nil, err
-	}
-
-	return ConvertVMGpuInfosToGPUDeviceInfos(getVMGpuDeviceInfoResp.Payload), nil
+	return NewGPUVMInfosFromList(getDetailVMInfoByGpuDevicesResp.Payload), nil
 }
 
 // GetVMGPUAllocationInfo returns the GPU details allocated to the virtual machine.

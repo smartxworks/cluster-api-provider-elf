@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
@@ -207,15 +208,16 @@ func lockGPUDevicesForVM(clusterID, vmName, hostID string, gpuDeviceInfos []*ser
 	return true
 }
 
-func filterGPUDeviceInfosByLockGPUDevices(clusterID string, gpuDeviceInfos service.GPUDeviceInfos) service.GPUDeviceInfos {
+func filterGPUVMInfosByLockGPUDevices(clusterID string, gpuVMInfos service.GPUVMInfos) service.GPUVMInfos {
 	gpuLock.Lock()
 	defer gpuLock.Unlock()
 
 	lockedClusterGPUs := getLockedClusterGPUsWithoutLock(clusterID)
 	lockedCountMap := getLockedCountMapWithoutLock(lockedClusterGPUs)
 
-	return gpuDeviceInfos.Filter(func(g *service.GPUDeviceInfo) bool {
-		if lockedCount, ok := lockedCountMap[g.ID]; ok && lockedCount >= g.AvailableCount {
+	return gpuVMInfos.Filter(func(g *models.GpuVMInfo) bool {
+		availableCount := service.GetAvailableCountFromGPUVMInfo(g)
+		if lockedCount, ok := lockedCountMap[*g.ID]; ok && lockedCount >= availableCount {
 			return false
 		}
 

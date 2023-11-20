@@ -10,7 +10,7 @@ require (
 	github.com/onsi/gomega v1.27.10
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
-	github.com/smartxworks/cloudtower-go-sdk/v2 v2.12.1-0.20231102021857-ae16239443e2
+	github.com/smartxworks/cloudtower-go-sdk/v2 v2.13.1-0.20231116110941-d411454388af
 	golang.org/x/mod v0.12.0
 	k8s.io/api v0.27.2
 	k8s.io/apiextensions-apiserver v0.27.2

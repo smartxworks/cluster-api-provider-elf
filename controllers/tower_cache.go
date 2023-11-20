@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
 
@@ -170,31 +171,31 @@ func getKeyForDuplicatePlacementGroupError(placementGroup string) string {
 // gpuCacheDuration is the lifespan of gpu cache.
 const gpuCacheDuration = 3 * time.Second
 
-func getKeyForGPUDeviceInfo(gpuID string) string {
-	return fmt.Sprintf("gpu:device:info:%s", gpuID)
+func getKeyForGPUVMInfo(gpuID string) string {
+	return fmt.Sprintf("gpu:vm:info:%s", gpuID)
 }
 
-// setGPUDeviceInfosCache saves the specified GPU device infos to the memory,
+// setGPUVMInfosCache saves the specified GPU device infos to the memory,
 // which can reduce access to the Tower service.
-func setGPUDeviceInfosCache(gpuDeviceInfos service.GPUDeviceInfos) {
-	gpuDeviceInfos.Iterate(func(g *service.GPUDeviceInfo) {
-		vmTaskErrorCache.Set(getKeyForGPUDeviceInfo(g.ID), *g, gpuCacheDuration)
+func setGPUVMInfosCache(gpuVMInfos service.GPUVMInfos) {
+	gpuVMInfos.Iterate(func(g *models.GpuVMInfo) {
+		vmTaskErrorCache.Set(getKeyForGPUVMInfo(*g.ID), *g, gpuCacheDuration)
 	})
 }
 
 // setGPUDeviceInfosCache gets the specified GPU device infos from the memory.
-func getGPUDeviceInfosFromCache(gpuIDs []string) service.GPUDeviceInfos {
-	gpuDeviceInfos := service.NewGPUDeviceInfos()
+func getGPUVMInfosFromCache(gpuIDs []string) service.GPUVMInfos {
+	gpuVMInfos := service.NewGPUVMInfos()
 	for i := 0; i < len(gpuIDs); i++ {
-		key := getKeyForGPUDeviceInfo(gpuIDs[i])
+		key := getKeyForGPUVMInfo(gpuIDs[i])
 		if val, found := vmTaskErrorCache.Get(key); found {
-			if gpuDeviceInfo, ok := val.(service.GPUDeviceInfo); ok {
-				gpuDeviceInfos.Insert(&gpuDeviceInfo)
+			if gpuVMInfo, ok := val.(models.GpuVMInfo); ok {
+				gpuVMInfos.Insert(&gpuVMInfo)
 			}
 			// Delete unexpected data.
 			vmTaskErrorCache.Delete(key)
 		}
 	}
 
-	return gpuDeviceInfos
+	return gpuVMInfos
 }
