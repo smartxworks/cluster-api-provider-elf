@@ -169,7 +169,9 @@ func (s Hosts) IDs() []string {
 	return res
 }
 
-// GPUVMInfos is a set of GPUVMInfos.
+// GPUVMInfos is a set of GpuVMInfos.
+// Key is the ID of GPU device.
+// Value is the GpuVMInfo type with VMs and allocation details.
 type GPUVMInfos map[string]*models.GpuVMInfo
 
 // NewGPUVMInfos creates a GPUVMInfos. from a list of values.

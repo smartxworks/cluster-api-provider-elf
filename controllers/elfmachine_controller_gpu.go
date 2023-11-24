@@ -80,7 +80,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx *context.MachineContex
 
 	availableHosts := hosts.FilterAvailableHostsWithEnoughMemory(*service.TowerMemory(ctx.ElfMachine.Spec.MemoryMiB))
 	if len(availableHosts) == 0 {
-		ctx.Logger.V(2).Info("No available hosts for selecting GPUs")
+		ctx.Logger.V(2).Info("Waiting for enough available hosts")
 		return nil, nil, nil
 	}
 

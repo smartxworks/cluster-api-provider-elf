@@ -80,11 +80,11 @@ type ElfMachineSpec struct {
 	// +optional
 	DiskGiB int32 `json:"diskGiB,omitempty"`
 
-	// GPUDevices is the list of GPUs used by the virtual machine.
+	// GPUDevices is the list of physical GPUs used by the virtual machine.
 	// +optional
 	GPUDevices []GPUPassthroughDeviceSpec `json:"gpuDevices,omitempty"`
 
-	// VGPUDevices is the list of vGPUs used by the virtual machine.
+	// VGPUDevices is the list of virtual GPUs used by the virtual machine.
 	// +optional
 	VGPUDevices []VGPUDeviceSpec `json:"vgpuDevices,omitempty"`
 
