@@ -80,11 +80,11 @@ type ElfMachineSpec struct {
 	// +optional
 	DiskGiB int32 `json:"diskGiB,omitempty"`
 
-	// GPUDevices is the list of GPUs used by the virtual machine.
+	// GPUDevices is the list of physical GPUs used by the virtual machine.
 	// +optional
 	GPUDevices []GPUPassthroughDeviceSpec `json:"gpuDevices,omitempty"`
 
-	// VGPUDevices is the list of vGPUs used by the virtual machine.
+	// VGPUDevices is the list of virtual GPUs used by the virtual machine.
 	// +optional
 	VGPUDevices []VGPUDeviceSpec `json:"vgpuDevices,omitempty"`
 
@@ -319,7 +319,15 @@ func (m *ElfMachine) GetVMDisconnectionTimestamp() *metav1.Time {
 }
 
 func (m *ElfMachine) RequiresGPUDevices() bool {
-	return len(m.Spec.GPUDevices) > 0 || len(m.Spec.VGPUDevices) > 0
+	return m.RequiresPassThroughGPUDevices() || m.RequiresVGPUDevices()
+}
+
+func (m *ElfMachine) RequiresPassThroughGPUDevices() bool {
+	return len(m.Spec.GPUDevices) > 0
+}
+
+func (m *ElfMachine) RequiresVGPUDevices() bool {
+	return len(m.Spec.VGPUDevices) > 0
 }
 
 //+kubebuilder:object:root=true

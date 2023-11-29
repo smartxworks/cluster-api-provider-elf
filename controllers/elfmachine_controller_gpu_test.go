@@ -61,6 +61,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 	ctx := goctx.Background()
 
 	gpuModel := "A16"
+	vGPUType := "V100"
 	unexpectedError := errors.New("unexpected error")
 
 	BeforeEach(func() {
@@ -105,35 +106,39 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 
 		It("should check and use locked GPUs", func() {
 			host := fake.NewTowerHost()
-			gpu := fake.NewTowerGPU()
-			gpu.Host = &models.NestedHost{ID: host.ID}
-			gpu.Model = service.TowerString(gpuModel)
-			gpuIDs := []string{*gpu.ID}
-			gpusDevices := []*models.GpuDevice{gpu}
+			gpuVMInfo := fake.NewTowerGPUVMInfo()
+			gpuVMInfo.Host = &models.NestedHost{ID: host.ID}
+			gpuVMInfo.Model = service.TowerString(gpuModel)
+			gpuIDs := []string{*gpuVMInfo.ID}
+			gpuVMInfos := service.NewGPUVMInfos(gpuVMInfo)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host), nil)
-			mockVMService.EXPECT().FindGPUDevicesByHostIDs([]string{*host.ID}).Return(gpusDevices, nil)
+			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByHostIDs([]string{*host.ID}, models.GpuDeviceUsagePASSTHROUGH).Return(gpuVMInfos, nil)
 
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			hostID, gpus, err := reconciler.selectHostAndGPUsForVM(machineContext, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(*hostID).To(Equal(*host.ID))
-			Expect(gpus).To(Equal(gpusDevices))
+			Expect(gpus).To(HaveLen(1))
+			Expect(gpus[0].ID).To(Equal(*gpuVMInfo.ID))
+			Expect(gpus[0].AllocatedCount).To(Equal(int32(1)))
 
-			mockVMService.EXPECT().FindGPUDevicesByIDs(gpuIDs).Return(gpusDevices, nil)
+			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByIDs([]string{*gpuVMInfo.ID}).Return(gpuVMInfos, nil)
 			hostID, gpus, err = reconciler.selectHostAndGPUsForVM(machineContext, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(*hostID).To(Equal(*host.ID))
-			Expect(gpus).To(Equal(gpusDevices))
+			Expect(gpus).To(HaveLen(1))
+			Expect(gpus[0].ID).To(Equal(*gpuVMInfo.ID))
+			Expect(gpus[0].AllocatedCount).To(Equal(int32(1)))
 			Expect(logBuffer.String()).To(ContainSubstring("Found locked VM GPU devices"))
 
 			logBuffer.Reset()
-			gpu.Vms = []*models.NestedVM{{ID: service.TowerString("id"), Name: service.TowerString("vm")}}
-			mockVMService.EXPECT().FindGPUDevicesByIDs(gpuIDs).Return(gpusDevices, nil)
-			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host), nil)
-			mockVMService.EXPECT().FindGPUDevicesByHostIDs([]string{*host.ID}).Return(gpusDevices, nil)
+			removeGPUVMInfosCache(gpuIDs)
+			gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: service.TowerString("id"), Name: service.TowerString("vm")}}
+			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(nil, nil)
+			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByIDs([]string{*gpuVMInfo.ID}).Return(gpuVMInfos, nil)
 			hostID, gpus, err = reconciler.selectHostAndGPUsForVM(machineContext, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(hostID).To(BeNil())
@@ -146,25 +151,89 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 
 		It("should prioritize the preferred host", func() {
 			host := fake.NewTowerHost()
-			gpu := fake.NewTowerGPU()
-			gpu.Host = &models.NestedHost{ID: host.ID}
-			gpu.Model = service.TowerString(gpuModel)
+			gpuVMInfo := fake.NewTowerGPUVMInfo()
+			gpuVMInfo.Host = &models.NestedHost{ID: host.ID}
 			preferredHost := fake.NewTowerHost()
-			preferredGPU := fake.NewTowerGPU()
-			preferredGPU.Host = &models.NestedHost{ID: preferredHost.ID}
-			preferredGPU.Model = service.TowerString(gpuModel)
-			gpusDevices := []*models.GpuDevice{gpu, preferredGPU}
+			preferredGPUVMInfo := fake.NewTowerGPUVMInfo()
+			preferredGPUVMInfo.Host = &models.NestedHost{ID: preferredHost.ID}
+			gpuVMInfos := service.NewGPUVMInfos(gpuVMInfo, preferredGPUVMInfo)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host, preferredHost), nil)
-			mockVMService.EXPECT().FindGPUDevicesByHostIDs(gomock.InAnyOrder([]string{*host.ID, *preferredHost.ID})).Return(gpusDevices, nil)
+			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByHostIDs(gomock.InAnyOrder([]string{*host.ID, *preferredHost.ID}), models.GpuDeviceUsagePASSTHROUGH).Return(gpuVMInfos, nil)
 
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			hostID, gpus, err := reconciler.selectHostAndGPUsForVM(machineContext, *preferredHost.ID)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(*hostID).To(Equal(*preferredHost.ID))
-			Expect(gpus).To(Equal([]*models.GpuDevice{preferredGPU}))
+			Expect(gpus).To(HaveLen(1))
+			Expect(gpus[0].ID).To(Equal(*preferredGPUVMInfo.ID))
+			Expect(gpus[0].AllocatedCount).To(Equal(int32(1)))
+		})
+
+		It("select vGPUs", func() {
+			host := fake.NewTowerHost()
+			gpuVMInfo1 := fake.NewTowerVGPUVMInfo(1)
+			gpuVMInfo1.Vms = []*models.GpuVMDetail{}
+			gpuVMInfo1.Host = &models.NestedHost{ID: host.ID}
+			gpuVMInfo2 := fake.NewTowerVGPUVMInfo(3)
+			gpuVMInfo2.Vms = []*models.GpuVMDetail{{VgpuInstanceOnVMNum: service.TowerInt32(1)}}
+			gpuVMInfo2.Host = &models.NestedHost{ID: host.ID}
+			gpuVMInfos := service.NewGPUVMInfos(gpuVMInfo1, gpuVMInfo2)
+			requiredVGPUDevice := infrav1.VGPUDeviceSpec{Type: vGPUType, Count: 3}
+			elfMachine.Spec.GPUDevices = nil
+			elfMachine.Spec.VGPUDevices = []infrav1.VGPUDeviceSpec{requiredVGPUDevice}
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(), nil)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			hostID, gpus, err := reconciler.selectHostAndGPUsForVM(machineContext, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(hostID).To(BeNil())
+			Expect(gpus).To(BeEmpty())
+
+			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host), nil)
+			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByHostIDs([]string{*host.ID}, models.GpuDeviceUsageVGPU).Return(service.NewGPUVMInfos(), nil)
+			hostID, gpus, err = reconciler.selectHostAndGPUsForVM(machineContext, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(hostID).To(BeNil())
+			Expect(gpus).To(BeEmpty())
+
+			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host), nil)
+			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByHostIDs([]string{*host.ID}, models.GpuDeviceUsageVGPU).Return(gpuVMInfos, nil)
+			hostID, gpus, err = reconciler.selectHostAndGPUsForVM(machineContext, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(hostID).NotTo(BeNil())
+			Expect(*hostID).To(Equal(*host.ID))
+			Expect(gpus).To(HaveLen(2))
+			Expect(gpus).To(ContainElements(&service.GPUDeviceInfo{
+				ID:             *gpuVMInfo1.ID,
+				AllocatedCount: 1,
+				AvailableCount: 1,
+			}, &service.GPUDeviceInfo{
+				ID:             *gpuVMInfo2.ID,
+				AllocatedCount: 2,
+				AvailableCount: 2,
+			}))
+			lockedGPUs := getGPUDevicesLockedByVM(elfCluster.Spec.Cluster, elfMachine.Name)
+			Expect(lockedGPUs.GPUDevices).To(HaveLen(2))
+			Expect(lockedGPUs.GPUDevices).To(ContainElements(lockedGPUDevice{ID: *gpuVMInfo1.ID, Count: 1}, lockedGPUDevice{ID: *gpuVMInfo2.ID, Count: 2}))
+
+			unlockGPUDevicesLockedByVM(elfCluster.Spec.Cluster, elfMachine.Name)
+			lockGPUDevicesForVM(elfCluster.Spec.Cluster, fake.UUID(), *host.ID, []*service.GPUDeviceInfo{{
+				ID:             *gpuVMInfo1.ID,
+				AllocatedCount: 1,
+				AvailableCount: 1,
+			}})
+			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host), nil)
+			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByHostIDs([]string{*host.ID}, models.GpuDeviceUsageVGPU).Return(gpuVMInfos, nil)
+			hostID, gpus, err = reconciler.selectHostAndGPUsForVM(machineContext, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(hostID).To(BeNil())
+			Expect(gpus).To(BeEmpty())
 		})
 	})
 
@@ -240,17 +309,17 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 
 		It("should check if GPU devices can be used for VM", func() {
 			host := fake.NewTowerHost()
-			gpu := fake.NewTowerGPU()
-			gpu.Host = &models.NestedHost{ID: host.ID}
-			gpu.Model = service.TowerString(gpuModel)
-			gpu.Vms = []*models.NestedVM{{ID: service.TowerString("id"), Name: service.TowerString("vm")}}
+			gpuVMInfo := fake.NewTowerGPUVMInfo()
+			gpuVMInfo.Host = &models.NestedHost{ID: host.ID}
+			gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: service.TowerString("id"), Name: service.TowerString("vm")}}
+			gpuVMInfos := service.NewGPUVMInfos(gpuVMInfo)
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.Host = &models.NestedHost{ID: host.ID}
 			vm.Status = models.NewVMStatus(models.VMStatusSTOPPED)
-			vm.GpuDevices = []*models.NestedGpuDevice{{ID: gpu.ID, Name: gpu.Model}}
+			vm.GpuDevices = []*models.NestedGpuDevice{{ID: gpuVMInfo.ID, Name: gpuVMInfo.Model}}
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
-			mockVMService.EXPECT().FindGPUDevicesByIDs([]string{*gpu.ID}).Times(2).Return([]*models.GpuDevice{gpu}, nil)
+			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByIDs([]string{*gpuVMInfo.ID}).Times(2).Return(gpuVMInfos, nil)
 			mockVMService.EXPECT().RemoveGPUDevices(elfMachine.Status.VMRef, gomock.Len(1)).Return(nil, unexpectedError)
 
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -261,7 +330,8 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			Expect(ok).To(BeFalse())
 			Expect(logBuffer.String()).To(ContainSubstring("GPU devices of VM are already in use, so remove and reallocate"))
 
-			gpu.Vms = []*models.NestedVM{{ID: vm.ID, Name: vm.Name}}
+			removeGPUVMInfosCache([]string{*gpuVMInfo.ID})
+			gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: vm.ID, Name: vm.Name}}
 			ok, err = reconciler.reconcileGPUDevices(machineContext, vm)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ok).To(BeTrue())
@@ -278,15 +348,15 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.Host = &models.NestedHost{ID: service.TowerString(fake.ID())}
 			elfMachine.Status.VMRef = *vm.LocalID
-			gpu := fake.NewTowerGPU()
-			gpu.Host = &models.NestedHost{ID: host.ID}
-			gpu.Model = service.TowerString(gpuModel)
+			gpuVMInfo := fake.NewTowerGPUVMInfo()
+			gpuVMInfo.Host = &models.NestedHost{ID: host.ID}
+			gpuVMInfos := service.NewGPUVMInfos(gpuVMInfo)
 			task := fake.NewTowerTask()
 			withTaskVM := fake.NewWithTaskVM(vm, task)
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Times(2).Return(service.NewHosts(host), nil)
-			mockVMService.EXPECT().FindGPUDevicesByHostIDs([]string{*host.ID}).Times(2).Return([]*models.GpuDevice{gpu}, nil)
+			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByHostIDs([]string{*host.ID}, models.GpuDeviceUsagePASSTHROUGH).Times(2).Return(gpuVMInfos, nil)
 			mockVMService.EXPECT().Migrate(*vm.ID, *host.ID).Return(withTaskVM, nil)
 
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -312,14 +382,14 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.Host = &models.NestedHost{ID: host.ID}
 			elfMachine.Status.VMRef = *vm.LocalID
-			gpu := fake.NewTowerGPU()
-			gpu.Host = &models.NestedHost{ID: host.ID}
-			gpu.Model = service.TowerString(gpuModel)
+			gpuVMInfo := fake.NewTowerGPUVMInfo()
+			gpuVMInfo.Host = &models.NestedHost{ID: host.ID}
+			gpuVMInfos := service.NewGPUVMInfos(gpuVMInfo)
 			task := fake.NewTowerTask()
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Times(2).Return(service.NewHosts(host), nil)
-			mockVMService.EXPECT().FindGPUDevicesByHostIDs([]string{*host.ID}).Times(2).Return([]*models.GpuDevice{gpu}, nil)
+			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByHostIDs([]string{*host.ID}, models.GpuDeviceUsagePASSTHROUGH).Times(2).Return(gpuVMInfos, nil)
 			mockVMService.EXPECT().AddGPUDevices(elfMachine.Status.VMRef, gomock.Any()).Return(task, nil)
 
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -365,6 +435,20 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			Expect(err).NotTo(HaveOccurred())
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.UpdatingReason}})
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+
+			gpuID := fake.ID()
+			vmGPUInfo := &models.VMGpuInfo{GpuDevices: []*models.VMGpuDetail{{ID: service.TowerString(gpuID), VgpuInstanceOnVMNum: service.TowerInt32(2)}}}
+			elfMachine.Spec.GPUDevices = nil
+			elfMachine.Spec.VGPUDevices = []infrav1.VGPUDeviceSpec{{Type: vGPUType, Count: 2}}
+			conditions.MarkFalse(elfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, service.VGPUInsufficientError)
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			mockVMService.EXPECT().GetVMGPUAllocationInfo(*vm.ID).Return(vmGPUInfo, nil)
+			mockVMService.EXPECT().RemoveGPUDevices(elfMachine.Status.VMRef, []*models.VMGpuOperationParams{{GpuID: service.TowerString(gpuID), Amount: service.TowerInt32(2)}}).Return(nil, unexpectedError)
+			err = reconciler.removeVMGPUDevices(machineContext, vm)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(unexpectedError.Error()))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
 		})
 	})
 
@@ -430,5 +514,106 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 					node.Labels[labelsutil.ClusterAutoscalerCAPIGPULabel] == labelsutil.ConvertToLabelValue(gpuModel)
 			}, timeout).Should(BeTrue())
 		})
+	})
+
+	It("checkGPUsCanBeUsedForVM", func() {
+		host := fake.NewTowerHost()
+		gpuVMInfo := fake.NewTowerGPUVMInfo()
+		gpuVMInfo.Host = &models.NestedHost{ID: host.ID}
+		gpuIDs := []string{*gpuVMInfo.ID}
+		elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{Model: "A16", Count: 1})
+		ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+		fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+
+		mockVMService.EXPECT().GetGPUDevicesAllocationInfoByIDs(gpuIDs).Return(service.NewGPUVMInfos(), nil)
+		machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+		reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+		ok, err := reconciler.checkGPUsCanBeUsedForVM(machineContext, gpuIDs)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ok).To(BeFalse())
+
+		mockVMService.EXPECT().GetGPUDevicesAllocationInfoByIDs(gpuIDs).Return(service.NewGPUVMInfos(gpuVMInfo), nil)
+		ok, err = reconciler.checkGPUsCanBeUsedForVM(machineContext, gpuIDs)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ok).To(BeTrue())
+
+		// Use cache
+		ok, err = reconciler.checkGPUsCanBeUsedForVM(machineContext, gpuIDs)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ok).To(BeTrue())
+
+		removeGPUVMInfosCache(gpuIDs)
+		gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: service.TowerString("vm1"), Name: service.TowerString("vm1")}}
+		mockVMService.EXPECT().GetGPUDevicesAllocationInfoByIDs(gpuIDs).Return(service.NewGPUVMInfos(gpuVMInfo), nil)
+		ok, err = reconciler.checkGPUsCanBeUsedForVM(machineContext, gpuIDs)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ok).To(BeFalse())
+	})
+
+	It("selectGPUDevicesForVM", func() {
+		model := "A16"
+		host := &models.NestedHost{ID: service.TowerString("host")}
+		gpuVMInfo1 := fake.NewTowerGPUVMInfo()
+		gpuVMInfo1.Host = host
+		gpuVMInfo2 := fake.NewTowerGPUVMInfo()
+		gpuVMInfo2.Host = host
+
+		gpus := selectGPUDevicesForVM(service.NewGPUVMInfos(), []infrav1.GPUPassthroughDeviceSpec{{Model: model, Count: 1}})
+		Expect(gpus).To(BeEmpty())
+
+		gpus = selectGPUDevicesForVM(service.NewGPUVMInfos(gpuVMInfo1), []infrav1.GPUPassthroughDeviceSpec{{Model: model, Count: 1}})
+		Expect(gpus).To(Equal([]*service.GPUDeviceInfo{
+			{ID: *gpuVMInfo1.ID, AllocatedCount: 1, AvailableCount: 1},
+		}))
+
+		gpus = selectGPUDevicesForVM(service.NewGPUVMInfos(gpuVMInfo1), []infrav1.GPUPassthroughDeviceSpec{{Model: model, Count: 2}})
+		Expect(gpus).To(BeEmpty())
+
+		gpus = selectGPUDevicesForVM(service.NewGPUVMInfos(gpuVMInfo1, gpuVMInfo2), []infrav1.GPUPassthroughDeviceSpec{{Model: model, Count: 2}})
+		Expect(gpus).To(ContainElements(&service.GPUDeviceInfo{
+			ID: *gpuVMInfo1.ID, AllocatedCount: 1, AvailableCount: 1,
+		}, &service.GPUDeviceInfo{
+			ID: *gpuVMInfo2.ID, AllocatedCount: 1, AvailableCount: 1,
+		}))
+	})
+
+	It("selectVGPUDevicesForVM", func() {
+		host := &models.NestedHost{ID: service.TowerString("host")}
+		vGPUVMInfo1 := fake.NewTowerVGPUVMInfo(1)
+		vGPUVMInfo1.Host = host
+		vGPUVMInfo2 := fake.NewTowerVGPUVMInfo(2)
+		vGPUVMInfo2.Host = host
+		requiredVGPUDevice := infrav1.VGPUDeviceSpec{Type: *vGPUVMInfo1.UserVgpuTypeName, Count: 1}
+		requiredVGPUDevices := []infrav1.VGPUDeviceSpec{requiredVGPUDevice}
+		gpuVMInfos := service.NewGPUVMInfos()
+		gpus := selectVGPUDevicesForVM(gpuVMInfos, requiredVGPUDevices)
+		Expect(gpus).To(BeEmpty())
+
+		vGPUVMInfo1.AssignedVgpusNum = service.TowerInt32(1)
+		vGPUVMInfo1.AvailableVgpusNum = service.TowerInt32(0)
+		gpuVMInfos = service.NewGPUVMInfos(vGPUVMInfo1)
+		gpus = selectVGPUDevicesForVM(gpuVMInfos, requiredVGPUDevices)
+		Expect(gpus).To(BeEmpty())
+
+		vGPUVMInfo1.AvailableVgpusNum = service.TowerInt32(1)
+		gpuVMInfos = service.NewGPUVMInfos(vGPUVMInfo1)
+		gpus = selectVGPUDevicesForVM(gpuVMInfos, requiredVGPUDevices)
+		Expect(gpus).To(Equal([]*service.GPUDeviceInfo{{ID: *vGPUVMInfo1.ID, AllocatedCount: requiredVGPUDevice.Count, AvailableCount: *vGPUVMInfo1.AvailableVgpusNum}}))
+
+		requiredVGPUDevice.Count = 3
+		requiredVGPUDevices[0] = requiredVGPUDevice
+		gpus = selectVGPUDevicesForVM(gpuVMInfos, requiredVGPUDevices)
+		Expect(gpus).To(BeEmpty())
+
+		vGPUVMInfo2.AvailableVgpusNum = service.TowerInt32(2)
+		vGPUVMInfo2.AssignedVgpusNum = service.TowerInt32(1)
+		gpuVMInfos.Insert(vGPUVMInfo2)
+		gpus = selectVGPUDevicesForVM(gpuVMInfos, requiredVGPUDevices)
+		Expect(gpus).To(ContainElements(&service.GPUDeviceInfo{
+			ID: *vGPUVMInfo1.ID, AllocatedCount: 1, AvailableCount: *vGPUVMInfo1.AvailableVgpusNum,
+		}, &service.GPUDeviceInfo{
+			ID: *vGPUVMInfo2.ID, AllocatedCount: 2, AvailableCount: *vGPUVMInfo2.AvailableVgpusNum,
+		}))
+		Expect(gpus[0].AllocatedCount + gpus[1].AllocatedCount).To(Equal(requiredVGPUDevice.Count))
 	})
 })

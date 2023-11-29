@@ -27,6 +27,7 @@ const (
 	HostNotFound              = "HOST_NOT_FOUND"
 	VMTemplateNotFound        = "VM_TEMPLATE_NOT_FOUND"
 	VMNotFound                = "VM_NOT_FOUND"
+	VMGPUInfoNotFound         = "VM_GPU_INFO_NOT_FOUND"
 	VMDuplicate               = "VM_DUPLICATE"
 	TaskNotFound              = "TASK_NOT_FOUND"
 	VlanNotFound              = "VLAN_NOT_FOUND"
@@ -41,6 +42,7 @@ const (
 	PlacementGroupPriorError  = "PlacementGroupPriorFilter"
 	VMDuplicateError          = "VM_DUPLICATED_NAME"
 	GPUAssignFailed           = "GPU_ASSIGN_FAILED"
+	VGPUInsufficientError     = "PRECHECK_REQUEST_VGPU_COUNT_MORE_THAN_AVAILABLE"
 )
 
 func IsVMNotFound(err error) bool {
@@ -61,6 +63,10 @@ func IsShutDownTimeout(message string) bool {
 
 func IsGPUAssignFailed(message string) bool {
 	return strings.Contains(message, GPUAssignFailed)
+}
+
+func IsVGPUInsufficientError(message string) bool {
+	return strings.Contains(message, VGPUInsufficientError)
 }
 
 func IsTaskNotFound(err error) bool {

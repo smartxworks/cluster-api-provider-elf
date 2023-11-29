@@ -193,6 +193,10 @@ func IsUpdateVMTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "Edit VM")
 }
 
+func IsVMColdMigrationTask(task *models.Task) bool {
+	return strings.Contains(GetTowerString(task.Description), "performing a cold migration")
+}
+
 func IsVMMigrationTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "performing a live migration")
 }
@@ -201,24 +205,107 @@ func IsPlacementGroupTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "VM placement group") // Update VM placement group
 }
 
-// GPUCanBeUsedForVM returns whether the virtual machine can use the specified GPU.
-func GPUCanBeUsedForVM(gpuDevice *models.GpuDevice, vm string) bool {
-	if len(gpuDevice.Vms) == 0 ||
-		*gpuDevice.Vms[0].ID == vm ||
-		*gpuDevice.Vms[0].Name == vm {
-		return true
+// HasGPUsCanNotBeUsedForVM returns whether the specified GPUs contains GPU
+// that cannot be used by the specified VM.
+func HasGPUsCanNotBeUsedForVM(gpuVMInfos GPUVMInfos, elfMachine *infrav1.ElfMachine) bool {
+	if elfMachine.RequiresPassThroughGPUDevices() {
+		for gpuID := range gpuVMInfos {
+			gpuVMInfo := gpuVMInfos[gpuID]
+			if len(gpuVMInfo.Vms) >= 1 && !gpuVMInfoFirstVMIs(gpuVMInfo, elfMachine.Name) {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	if gpuVMInfos.Len() == 0 {
+		return false
+	}
+
+	gpuCountUsedByVM := 0
+	availableCountMap := make(map[string]int32)
+	for gpuID := range gpuVMInfos {
+		gpuVMInfo := gpuVMInfos[gpuID]
+
+		if gpuVMInfoContainsVM(gpuVMInfo, elfMachine.Name) {
+			gpuCountUsedByVM += 1
+		}
+
+		availableCount := GetAvailableCountFromGPUVMInfo(gpuVMInfo)
+		if count, ok := availableCountMap[*gpuVMInfo.UserVgpuTypeName]; ok {
+			availableCountMap[*gpuVMInfo.UserVgpuTypeName] = count + availableCount
+		} else {
+			availableCountMap[*gpuVMInfo.UserVgpuTypeName] = availableCount
+		}
+	}
+
+	if gpuCountUsedByVM > 0 {
+		return gpuCountUsedByVM != gpuVMInfos.Len()
+	}
+
+	vGPUDevices := elfMachine.Spec.VGPUDevices
+	for i := 0; i < len(vGPUDevices); i++ {
+		if count, ok := availableCountMap[vGPUDevices[i].Type]; !ok || vGPUDevices[i].Count > count {
+			return true
+		}
 	}
 
 	return false
 }
 
-func FilterOutGPUsCanNotBeUsedForVM(gpuDevices []*models.GpuDevice, vm string) []*models.GpuDevice {
-	var gpus []*models.GpuDevice
-	for i := 0; i < len(gpuDevices); i++ {
-		if GPUCanBeUsedForVM(gpuDevices[i], vm) {
-			gpus = append(gpus, gpuDevices[i])
+func gpuVMInfoFirstVMIs(gpuVMInfo *models.GpuVMInfo, vm string) bool {
+	if len(gpuVMInfo.Vms) == 0 {
+		return false
+	}
+	return *gpuVMInfo.Vms[0].ID == vm || *gpuVMInfo.Vms[0].Name == vm
+}
+
+func gpuVMInfoContainsVM(gpuVMInfo *models.GpuVMInfo, vm string) bool {
+	for i := 0; i < len(gpuVMInfo.Vms); i++ {
+		if *gpuVMInfo.Vms[i].ID == vm || *gpuVMInfo.Vms[i].Name == vm {
+			return true
 		}
 	}
 
-	return gpus
+	return false
+}
+
+// GetAvailableCountFromGPUVMInfo returns the number of GPU that can be allocated.
+func GetAvailableCountFromGPUVMInfo(gpuVMInfo *models.GpuVMInfo) int32 {
+	if *gpuVMInfo.UserUsage == models.GpuDeviceUsagePASSTHROUGH {
+		if len(gpuVMInfo.Vms) > 0 {
+			return 0
+		}
+
+		return 1
+	}
+
+	return *gpuVMInfo.AvailableVgpusNum
+}
+
+// CalculateAssignedAndAvailableNumForGPUVMInfos count the number of vGPU used by virtual machines(including stopped).
+func CalculateAssignedAndAvailableNumForGPUVMInfos(gpuVMInfos GPUVMInfos) {
+	gpuVMInfos.Iterate(func(gpuVMInfo *models.GpuVMInfo) {
+		if *gpuVMInfo.UserUsage == models.GpuDeviceUsagePASSTHROUGH {
+			return
+		}
+
+		assignedVgpusNum := int32(0)
+		for i := 0; i < len(gpuVMInfo.Vms); i++ {
+			assignedVgpusNum += *gpuVMInfo.Vms[i].VgpuInstanceOnVMNum
+		}
+		gpuVMInfo.AssignedVgpusNum = &assignedVgpusNum
+		availableVGPUNum := calGPUAvailableVgpusNum(*gpuVMInfo.VgpuInstanceNum, *gpuVMInfo.AssignedVgpusNum)
+		gpuVMInfo.AvailableVgpusNum = &availableVGPUNum
+	})
+}
+
+func calGPUAvailableVgpusNum(vgpuInstanceNum, assignedVGPUsNum int32) int32 {
+	count := vgpuInstanceNum - assignedVGPUsNum
+	if count < 0 {
+		count = 0
+	}
+
+	return count
 }

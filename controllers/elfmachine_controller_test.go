@@ -510,7 +510,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task1, nil)
-			mockVMService.EXPECT().PowerOn(*vm.LocalID).Return(task2, nil)
+			mockVMService.EXPECT().PowerOn(*vm.LocalID, "").Return(task2, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -573,7 +573,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task1, nil)
-			mockVMService.EXPECT().PowerOn(*vm.LocalID).Return(nil, errors.New("some error"))
+			mockVMService.EXPECT().PowerOn(*vm.LocalID, "").Return(nil, errors.New("some error"))
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -606,7 +606,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().Get(elfMachine.Status.VMRef).Return(vm, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).Return(task1, nil)
-			mockVMService.EXPECT().PowerOn(*vm.LocalID).Return(task2, nil)
+			mockVMService.EXPECT().PowerOn(*vm.LocalID, "").Return(task2, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -729,7 +729,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 			machineContext.VMService = mockVMService
 
-			mockVMService.EXPECT().PowerOn(elfMachine.Status.VMRef).Return(task, nil)
+			mockVMService.EXPECT().PowerOn(elfMachine.Status.VMRef, "").Return(task, nil)
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err := reconciler.reconcileVMStatus(machineContext, vm)
 			Expect(ok).To(BeFalse())
@@ -824,6 +824,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			It("should", func() {
 				resetVMTaskErrorCache()
 				vm := fake.NewTowerVM()
+				vm.Host = &models.NestedHost{ID: service.TowerString(fake.ID())}
 				elfMachine.Status.VMRef = *vm.LocalID
 				elfCluster.Spec.Cluster = clusterKey
 				ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -832,18 +833,28 @@ var _ = Describe("ElfMachineReconciler", func() {
 				machineContext.VMService = mockVMService
 				recordIsUnmet(machineContext, clusterKey, true)
 				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-				err := reconciler.powerOnVM(machineContext)
+				err := reconciler.powerOnVM(machineContext, vm)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(logBuffer.String()).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
 
 				task := fake.NewTowerTask()
-				mockVMService.EXPECT().PowerOn(elfMachine.Status.VMRef).Return(task, nil)
+				mockVMService.EXPECT().PowerOn(elfMachine.Status.VMRef, "").Return(task, nil)
 				expireELFScheduleVMError(machineContext, clusterKey)
-				err = reconciler.powerOnVM(machineContext)
+				err = reconciler.powerOnVM(machineContext, vm)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(logBuffer.String()).To(ContainSubstring("and the retry silence period passes, will try to power on the VM again"))
 				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PoweringOnReason}})
 				resetVMTaskErrorCache()
+
+				// GPU
+				unexpectedError := errors.New("unexpected error")
+				elfMachine.Spec.GPUDevices = []infrav1.GPUPassthroughDeviceSpec{{Model: "A16", Count: 1}}
+				ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+				mockVMService.EXPECT().PowerOn(elfMachine.Status.VMRef, *vm.Host.ID).Return(nil, unexpectedError)
+				err = reconciler.powerOnVM(machineContext, vm)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(unexpectedError.Error()))
 			})
 		})
 	})
@@ -3051,10 +3062,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle failed/succeeded task", func() {
+			elfMachine.Spec.GPUDevices = []infrav1.GPUPassthroughDeviceSpec{{Model: "A16", Count: 1}}
+
 			resetVMTaskErrorCache()
 			task := fake.NewTowerTask()
 			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
-			task.ErrorMessage = service.TowerString(service.MemoryInsufficientError)
 			elfMachine.Status.TaskRef = *task.ID
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
@@ -3062,15 +3074,22 @@ var _ = Describe("ElfMachineReconciler", func() {
 			machineContext.VMService = mockVMService
 			mockVMService.EXPECT().GetTask(elfMachine.Status.TaskRef).AnyTimes().Return(task, nil)
 
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm.EntityAsyncStatus = models.NewEntityAsyncStatus(models.EntityAsyncStatusUPDATING)
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-			ok, err := reconciler.reconcileVMTask(machineContext, nil)
+			ok, err := reconciler.reconcileVMTask(machineContext, vm)
+			Expect(ok).Should(BeFalse())
+			Expect(err).ShouldNot(HaveOccurred())
+
+			elfMachine.Status.TaskRef = *task.ID
+			task.ErrorMessage = service.TowerString(service.MemoryInsufficientError)
+			ok, err = reconciler.reconcileVMTask(machineContext, nil)
 			Expect(ok).Should(BeTrue())
 			Expect(err.Error()).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
 			Expect(logBuffer.String()).To(ContainSubstring("VM task failed"))
 
-			logBuffer = new(bytes.Buffer)
-			klog.SetOutput(logBuffer)
+			logBuffer.Reset()
 			task.ErrorMessage = service.TowerString(service.PlacementGroupMustError)
 			elfMachine.Status.TaskRef = *task.ID
 			ok, err = reconciler.reconcileVMTask(machineContext, nil)
@@ -3083,6 +3102,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(msg).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
 			Expect(err).ShouldNot(HaveOccurred())
 
+			// Start VM
 			task.Status = models.NewTaskStatus(models.TaskStatusSUCCESSED)
 			task.Description = service.TowerString("Start VM")
 			elfMachine.Status.TaskRef = *task.ID
@@ -3106,6 +3126,36 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			ok, _ = acquireTicketForCreateVM(elfMachine.Name, true)
 			Expect(ok).To(BeFalse())
+
+			// GPU
+			gpuDeviceInfo := &service.GPUDeviceInfo{ID: "gpu", AllocatedCount: 0, AvailableCount: 1}
+			gpuDeviceInfos := []*service.GPUDeviceInfo{gpuDeviceInfo}
+
+			tests := []struct {
+				description string
+				status      models.TaskStatus
+			}{
+				{"Create a VM", models.TaskStatusFAILED},
+				{"Start VM", models.TaskStatusFAILED},
+				{"Edit VM", models.TaskStatusFAILED},
+				{"performing a cold migration", models.TaskStatusFAILED},
+				{"Create a VM", models.TaskStatusSUCCESSED},
+				{"Start VM", models.TaskStatusSUCCESSED},
+				{"Edit VM", models.TaskStatusSUCCESSED},
+			}
+
+			for _, tc := range tests {
+				lockGPUDevicesForVM(elfCluster.Spec.Cluster, elfMachine.Name, "", gpuDeviceInfos)
+				Expect(getGPUDevicesLockedByVM(elfCluster.Spec.Cluster, elfMachine.Name)).NotTo(BeNil())
+				task.Status = models.NewTaskStatus(tc.status)
+				task.Description = service.TowerString(tc.description)
+				task.ErrorMessage = service.TowerString("error")
+				elfMachine.Status.TaskRef = *task.ID
+				ok, err = reconciler.reconcileVMTask(machineContext, nil)
+				Expect(ok).Should(BeTrue())
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(getGPUDevicesLockedByVM(elfCluster.Spec.Cluster, elfMachine.Name)).To(BeNil())
+			}
 		})
 	})
 

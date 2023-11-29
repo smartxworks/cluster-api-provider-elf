@@ -81,3 +81,47 @@ func TestHostCollection(t *testing.T) {
 		g.Expect(NewHosts(host1, host2).Difference(NewHosts(host2)).Contains(*host1.ID)).To(gomega.BeTrue())
 	})
 }
+
+func TestGPUVMInfoCollection(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	t.Run("Find", func(t *testing.T) {
+		gpuVMInfo1 := &models.GpuVMInfo{ID: TowerString("gpu1")}
+		gpuVMInfo2 := &models.GpuVMInfo{ID: TowerString("gpu2")}
+
+		gpuVMInfos := NewGPUVMInfos()
+		g.Expect(gpuVMInfos.Get("404")).To(gomega.BeNil())
+		g.Expect(gpuVMInfos.Len()).To(gomega.Equal(0))
+
+		gpuVMInfos.Insert(gpuVMInfo1)
+		g.Expect(gpuVMInfos.Contains("gpu1")).To(gomega.BeTrue())
+		g.Expect(gpuVMInfos.Get("gpu1")).To(gomega.Equal(gpuVMInfo1))
+		g.Expect(gpuVMInfos.UnsortedList()).To(gomega.Equal([]*models.GpuVMInfo{gpuVMInfo1}))
+		count := 0
+		gpuID := *gpuVMInfo1.ID
+		gpuVMInfos.Iterate(func(g *models.GpuVMInfo) {
+			count += 1
+			gpuID = *g.ID
+		})
+		g.Expect(count).To(gomega.Equal(1))
+		g.Expect(gpuID).To(gomega.Equal(*gpuVMInfo1.ID))
+
+		gpuVMInfos = NewGPUVMInfosFromList([]*models.GpuVMInfo{gpuVMInfo1, gpuVMInfo2})
+		filteredGPUVMInfos := gpuVMInfos.Filter(func(g *models.GpuVMInfo) bool {
+			return g.ID != gpuVMInfo1.ID
+		})
+		g.Expect(filteredGPUVMInfos.Len()).To(gomega.Equal(1))
+		g.Expect(filteredGPUVMInfos.Contains(*gpuVMInfo2.ID)).To(gomega.BeTrue())
+
+		gpuVMInfo1.UserUsage = models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH)
+		g.Expect(NewGPUVMInfos(gpuVMInfo1).FilterAvailableGPUVMInfos().Len()).To(gomega.Equal(1))
+		gpuVMInfo1.Vms = []*models.GpuVMDetail{{}}
+		g.Expect(NewGPUVMInfos(gpuVMInfo1).FilterAvailableGPUVMInfos().Len()).To(gomega.Equal(0))
+
+		gpuVMInfo2.UserUsage = models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU)
+		gpuVMInfo2.AvailableVgpusNum = TowerInt32(1)
+		g.Expect(NewGPUVMInfos(gpuVMInfo2).FilterAvailableGPUVMInfos().Len()).To(gomega.Equal(1))
+		gpuVMInfo2.AvailableVgpusNum = TowerInt32(0)
+		g.Expect(NewGPUVMInfos(gpuVMInfo2).FilterAvailableGPUVMInfos().Len()).To(gomega.Equal(0))
+	})
+}

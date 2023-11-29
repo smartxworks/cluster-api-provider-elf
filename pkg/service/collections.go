@@ -168,3 +168,110 @@ func (s Hosts) IDs() []string {
 	}
 	return res
 }
+
+// GPUVMInfos is a set of GpuVMInfos.
+// Key is the ID of GPU device.
+// Value is the GpuVMInfo type with VMs and allocation details.
+type GPUVMInfos map[string]*models.GpuVMInfo
+
+// NewGPUVMInfos creates a GPUVMInfos. from a list of values.
+func NewGPUVMInfos(gpuVMInfo ...*models.GpuVMInfo) GPUVMInfos {
+	ss := make(GPUVMInfos, len(gpuVMInfo))
+	ss.Insert(gpuVMInfo...)
+	return ss
+}
+
+// NewGPUVMInfosFromList creates a Hosts from the given host slice.
+func NewGPUVMInfosFromList(gpuVMInfos []*models.GpuVMInfo) GPUVMInfos {
+	ss := make(GPUVMInfos, len(gpuVMInfos))
+	for i := range gpuVMInfos {
+		ss.Insert(gpuVMInfos[i])
+	}
+	return ss
+}
+
+func (s GPUVMInfos) Insert(gpuVMInfos ...*models.GpuVMInfo) {
+	for i := range gpuVMInfos {
+		if gpuVMInfos[i] != nil {
+			g := gpuVMInfos[i]
+			s[*g.ID] = g
+		}
+	}
+}
+
+// UnsortedList returns the slice with contents in random order.
+func (s GPUVMInfos) UnsortedList() []*models.GpuVMInfo {
+	res := make([]*models.GpuVMInfo, 0, len(s))
+	for _, value := range s {
+		res = append(res, value)
+	}
+	return res
+}
+
+// Get returns a GPUVMInfo of the specified gpuID.
+func (s GPUVMInfos) Get(gpuID string) *models.GpuVMInfo {
+	if gpuVMInfo, ok := s[gpuID]; ok {
+		return gpuVMInfo
+	}
+	return nil
+}
+
+func (s GPUVMInfos) Contains(gpuID string) bool {
+	_, ok := s[gpuID]
+	return ok
+}
+
+func (s GPUVMInfos) Len() int {
+	return len(s)
+}
+
+func (s GPUVMInfos) Iterate(fn func(*models.GpuVMInfo)) {
+	for _, g := range s {
+		fn(g)
+	}
+}
+
+// Filter returns a GPUVMInfos containing only the GPUVMInfos that match all of the given GPUVMInfoFilters.
+func (s GPUVMInfos) Filter(filters ...GPUVMInfoFilterFunc) GPUVMInfos {
+	return newFilteredGPUVMInfoCollection(GPUVMInfoFilterAnd(filters...), s.UnsortedList()...)
+}
+
+// newFilteredGPUVMInfoCollection creates a GPUVMInfos from a filtered list of values.
+func newFilteredGPUVMInfoCollection(filter GPUVMInfoFilterFunc, gpuVMInfos ...*models.GpuVMInfo) GPUVMInfos {
+	ss := make(GPUVMInfos, len(gpuVMInfos))
+	for i := range gpuVMInfos {
+		g := gpuVMInfos[i]
+		if filter(g) {
+			ss.Insert(g)
+		}
+	}
+	return ss
+}
+
+// GPUVMInfoFilterFunc is the functon definition for a filter.
+type GPUVMInfoFilterFunc func(*models.GpuVMInfo) bool
+
+// GPUVMInfoFilterAnd returns a filter that returns true if all of the given filters returns true.
+func GPUVMInfoFilterAnd(filters ...GPUVMInfoFilterFunc) GPUVMInfoFilterFunc {
+	return func(g *models.GpuVMInfo) bool {
+		for _, f := range filters {
+			if !f(g) {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// FilterAvailableGPUVMInfos returns a GPUVMInfos containing the GPUs
+// which can allocatable for virtual machines.
+func (s GPUVMInfos) FilterAvailableGPUVMInfos() GPUVMInfos {
+	return s.Filter(func(gpuVMInfo *models.GpuVMInfo) bool {
+		if (*gpuVMInfo.UserUsage == models.GpuDeviceUsagePASSTHROUGH && len(gpuVMInfo.Vms) > 0) ||
+			(*gpuVMInfo.UserUsage == models.GpuDeviceUsageVGPU && *gpuVMInfo.AvailableVgpusNum <= 0) {
+			return false
+		}
+
+		return true
+	})
+}

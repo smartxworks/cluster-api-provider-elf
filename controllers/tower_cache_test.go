@@ -18,15 +18,18 @@ package controllers
 
 import (
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	corev1 "k8s.io/api/core/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
 
@@ -166,7 +169,25 @@ var _ = Describe("TowerCache", func() {
 		Expect(err).ShouldNot(HaveOccurred())
 		expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForPlacementGroupPolicySatisfiedReason}})
 	})
+
+	It("GPU Cache", func() {
+		gpuID := "gpu"
+		gpuVMInfo := models.GpuVMInfo{ID: service.TowerString(gpuID)}
+		gpuVMInfos := service.NewGPUVMInfos(&gpuVMInfo)
+		setGPUVMInfosCache(gpuVMInfos)
+		cachedGPUDeviceInfos := getGPUVMInfosFromCache([]string{gpuID})
+		Expect(cachedGPUDeviceInfos.Len()).To(Equal(1))
+		Expect(*cachedGPUDeviceInfos.Get(*gpuVMInfo.ID)).To(Equal(gpuVMInfo))
+		time.Sleep(gpuCacheDuration)
+		Expect(getGPUVMInfosFromCache([]string{gpuID})).To(BeEmpty())
+	})
 })
+
+func removeGPUVMInfosCache(gpuIDs []string) {
+	for i := 0; i < len(gpuIDs); i++ {
+		vmTaskErrorCache.Delete(getKeyForGPUVMInfo(gpuIDs[i]))
+	}
+}
 
 func getKey(ctx *context.MachineContext, name string) string {
 	if name == clusterKey {

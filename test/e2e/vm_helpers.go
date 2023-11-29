@@ -64,7 +64,7 @@ type PowerOnVMInput struct {
 
 // PowerOnVM power on a VM.
 func PowerOnVM(ctx context.Context, input PowerOnVMInput, intervals ...interface{}) {
-	task, err := input.VMService.PowerOn(input.UUID)
+	task, err := input.VMService.PowerOn(input.UUID, "")
 	Expect(err).ShouldNot(HaveOccurred())
 
 	Eventually(func() (bool, error) {
@@ -76,7 +76,7 @@ func PowerOnVM(ctx context.Context, input PowerOnVMInput, intervals ...interface
 		if *task.Status == models.TaskStatusSUCCESSED {
 			return true, nil
 		} else if *task.Status == models.TaskStatusFAILED {
-			task, err = input.VMService.PowerOn(input.UUID)
+			task, err = input.VMService.PowerOn(input.UUID, "")
 
 			return false, err
 		}

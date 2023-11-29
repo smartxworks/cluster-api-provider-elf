@@ -532,23 +532,25 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		}
 
 		var hostID *string
-		var gpuDevices []*models.GpuDevice
+		var gpuDeviceInfos []*service.GPUDeviceInfo
 		// The virtual machine of the Control Plane does not support GPU Devices.
 		if machineutil.IsControlPlaneMachine(ctx.Machine) {
 			hostID, err = r.preCheckPlacementGroup(ctx)
 			if err != nil || hostID == nil {
+				releaseTicketForCreateVM(ctx.ElfMachine.Name)
 				return nil, false, err
 			}
 		} else {
-			hostID, gpuDevices, err = r.selectHostAndGPUsForVM(ctx, "")
+			hostID, gpuDeviceInfos, err = r.selectHostAndGPUsForVM(ctx, "")
 			if err != nil || hostID == nil {
+				releaseTicketForCreateVM(ctx.ElfMachine.Name)
 				return nil, false, err
 			}
 		}
 
 		ctx.Logger.Info("Create VM for ElfMachine")
 
-		withTaskVM, err := ctx.VMService.Clone(ctx.ElfCluster, ctx.ElfMachine, bootstrapData, *hostID, gpuDevices)
+		withTaskVM, err := ctx.VMService.Clone(ctx.ElfCluster, ctx.ElfMachine, bootstrapData, *hostID, gpuDeviceInfos)
 		if err != nil {
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
 
@@ -729,7 +731,7 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 			return false, r.updateVM(ctx, vm)
 		}
 
-		return false, r.powerOnVM(ctx)
+		return false, r.powerOnVM(ctx, vm)
 	case models.VMStatusSUSPENDED:
 		// In some abnormal conditions, the VM will be in a suspended state,
 		// e.g. wrong settings in VM or an exception occurred in the Guest OS.
@@ -789,7 +791,7 @@ func (r *ElfMachineReconciler) powerOffVM(ctx *context.MachineContext) error {
 	return nil
 }
 
-func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext) error {
+func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext, vm *models.VM) error {
 	if ok, message, err := isELFScheduleVMErrorRecorded(ctx); err != nil {
 		return err
 	} else if ok {
@@ -810,7 +812,14 @@ func (r *ElfMachineReconciler) powerOnVM(ctx *context.MachineContext) error {
 		return nil
 	}
 
-	task, err := ctx.VMService.PowerOn(ctx.ElfMachine.Status.VMRef)
+	hostID := ""
+	// Starting a virtual machine with GPU/vGPU does not support automatic scheduling,
+	// and need to specify the host where the GPU/vGPU is allocated.
+	if ctx.ElfMachine.RequiresGPUDevices() {
+		hostID = *vm.Host.ID
+	}
+
+	task, err := ctx.VMService.PowerOn(ctx.ElfMachine.Status.VMRef, hostID)
 	if err != nil {
 		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOnFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 
@@ -849,6 +858,11 @@ func (r *ElfMachineReconciler) updateVM(ctx *context.MachineContext, vm *models.
 	return nil
 }
 
+// reconcileVMTask handles virtual machine tasks.
+//
+// The return value:
+// 1. true indicates that the virtual machine task has completed (success or failure).
+// 2. false indicates that the virtual machine task has not been completed yet.
 func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *models.VM) (taskDone bool, reterr error) {
 	taskRef := ctx.ElfMachine.Status.TaskRef
 	vmRef := ctx.ElfMachine.Status.VMRef
@@ -882,60 +896,26 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 		if taskDone {
 			ctx.ElfMachine.SetTask("")
 		}
+
+		// The task is completed but entityAsyncStatus may not be equal to nil.
+		// So need to wait for the current operation of the virtual machine to complete.
+		// Avoid resource lock conflicts caused by concurrent operations of ELF.
+		if vm != nil && vm.EntityAsyncStatus != nil {
+			taskDone = false
+		}
 	}()
 
 	switch *task.Status {
 	case models.TaskStatusFAILED:
-		errorMessage := service.GetTowerString(task.ErrorMessage)
-		if service.IsGPUAssignFailed(errorMessage) {
-			errorMessage = service.ParseGPUAssignFailed(errorMessage)
-		}
-		conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, errorMessage)
-
-		if service.IsCloudInitConfigError(errorMessage) {
-			ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.CloudInitConfigError)
-			ctx.ElfMachine.Status.FailureMessage = pointer.String(fmt.Sprintf("VM cloud-init config error: %s", service.FormatCloudInitError(errorMessage)))
-		}
-
-		ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "taskErrorMessage", errorMessage, "taskErrorCode", service.GetTowerString(task.ErrorCode), "taskDescription", service.GetTowerString(task.Description))
-
-		switch {
-		case service.IsCloneVMTask(task):
-			releaseTicketForCreateVM(ctx.ElfMachine.Name)
-
-			if service.IsVMDuplicateError(errorMessage) {
-				setVMDuplicate(ctx.ElfMachine.Name)
-			}
-
-			if ctx.ElfMachine.RequiresGPUDevices() {
-				unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
-			}
-		case service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task):
-			if ctx.ElfMachine.RequiresGPUDevices() {
-				unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
-			}
-		case service.IsMemoryInsufficientError(errorMessage):
-			recordElfClusterMemoryInsufficient(ctx, true)
-			message := fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
-			ctx.Logger.Info(message)
-
-			return true, errors.New(message)
-		case service.IsPlacementGroupError(errorMessage):
-			if err := recordPlacementGroupPolicyNotSatisfied(ctx, true); err != nil {
-				return true, err
-			}
-			message := "The placement group policy can not be satisfied"
-			ctx.Logger.Info(message)
-
-			return true, errors.New(message)
+		if err := r.reconcileVMFailedTask(ctx, task, taskRef, vmRef); err != nil {
+			return true, err
 		}
 	case models.TaskStatusSUCCESSED:
 		ctx.Logger.Info("VM task succeeded", "vmRef", vmRef, "taskRef", taskRef, "taskDescription", service.GetTowerString(task.Description))
 
-		if service.IsCloneVMTask(task) || service.IsUpdateVMTask(task) {
-			if ctx.ElfMachine.RequiresGPUDevices() {
-				unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
-			}
+		if ctx.ElfMachine.RequiresGPUDevices() &&
+			(service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task)) {
+			unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 		}
 
 		if service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) {
@@ -955,6 +935,55 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 	}
 
 	return false, nil
+}
+
+// reconcileVMFailedTask handles failed virtual machine tasks.
+func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx *context.MachineContext, task *models.Task, taskRef, vmRef string) error {
+	errorMessage := service.GetTowerString(task.ErrorMessage)
+	if service.IsGPUAssignFailed(errorMessage) {
+		errorMessage = service.ParseGPUAssignFailed(errorMessage)
+	}
+	conditions.MarkFalse(ctx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, errorMessage)
+
+	if service.IsCloudInitConfigError(errorMessage) {
+		ctx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.CloudInitConfigError)
+		ctx.ElfMachine.Status.FailureMessage = pointer.String(fmt.Sprintf("VM cloud-init config error: %s", service.FormatCloudInitError(errorMessage)))
+	}
+
+	ctx.Logger.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "taskErrorMessage", errorMessage, "taskErrorCode", service.GetTowerString(task.ErrorCode), "taskDescription", service.GetTowerString(task.Description))
+
+	switch {
+	case service.IsCloneVMTask(task):
+		releaseTicketForCreateVM(ctx.ElfMachine.Name)
+
+		if service.IsVMDuplicateError(errorMessage) {
+			setVMDuplicate(ctx.ElfMachine.Name)
+		}
+
+		if ctx.ElfMachine.RequiresGPUDevices() {
+			unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
+		}
+	case service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task) || service.IsVMColdMigrationTask(task):
+		if ctx.ElfMachine.RequiresGPUDevices() {
+			unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
+		}
+	case service.IsMemoryInsufficientError(errorMessage):
+		recordElfClusterMemoryInsufficient(ctx, true)
+		message := fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
+		ctx.Logger.Info(message)
+
+		return errors.New(message)
+	case service.IsPlacementGroupError(errorMessage):
+		if err := recordPlacementGroupPolicyNotSatisfied(ctx, true); err != nil {
+			return err
+		}
+		message := "The placement group policy can not be satisfied"
+		ctx.Logger.Info(message)
+
+		return errors.New(message)
+	}
+
+	return nil
 }
 
 func (r *ElfMachineReconciler) reconcileProviderID(ctx *context.MachineContext, vm *models.VM) error {

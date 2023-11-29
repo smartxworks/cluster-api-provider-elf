@@ -21,12 +21,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
 const (
@@ -162,4 +164,38 @@ func getKeyForInsufficientMemoryError(clusterID string) string {
 
 func getKeyForDuplicatePlacementGroupError(placementGroup string) string {
 	return fmt.Sprintf("pg:duplicate:%s", placementGroup)
+}
+
+/* GPU */
+
+// gpuCacheDuration is the lifespan of gpu cache.
+const gpuCacheDuration = 3 * time.Second
+
+func getKeyForGPUVMInfo(gpuID string) string {
+	return fmt.Sprintf("gpu:vm:info:%s", gpuID)
+}
+
+// setGPUVMInfosCache saves the specified GPU device infos to the memory,
+// which can reduce access to the Tower service.
+func setGPUVMInfosCache(gpuVMInfos service.GPUVMInfos) {
+	gpuVMInfos.Iterate(func(g *models.GpuVMInfo) {
+		vmTaskErrorCache.Set(getKeyForGPUVMInfo(*g.ID), *g, gpuCacheDuration)
+	})
+}
+
+// setGPUDeviceInfosCache gets the specified GPU device infos from the memory.
+func getGPUVMInfosFromCache(gpuIDs []string) service.GPUVMInfos {
+	gpuVMInfos := service.NewGPUVMInfos()
+	for i := 0; i < len(gpuIDs); i++ {
+		key := getKeyForGPUVMInfo(gpuIDs[i])
+		if val, found := vmTaskErrorCache.Get(key); found {
+			if gpuVMInfo, ok := val.(models.GpuVMInfo); ok {
+				gpuVMInfos.Insert(&gpuVMInfo)
+			}
+			// Delete unexpected data.
+			vmTaskErrorCache.Delete(key)
+		}
+	}
+
+	return gpuVMInfos
 }

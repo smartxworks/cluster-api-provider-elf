@@ -151,11 +151,27 @@ func NewWithTaskVMPlacementGroup(placementGroup *models.VMPlacementGroup, task *
 	}
 }
 
-func NewTowerGPU() *models.GpuDevice {
-	return &models.GpuDevice{
-		ID:      pointer.String(ID()),
-		LocalID: pointer.String(UUID()),
-		Name:    pointer.String(ID()),
-		Model:   pointer.String("A16"),
+func NewTowerGPUVMInfo() *models.GpuVMInfo {
+	return &models.GpuVMInfo{
+		ID:               pointer.String(ID()),
+		LocalID:          pointer.String(UUID()),
+		Name:             pointer.String(ID()),
+		Model:            pointer.String("A16"),
+		UserUsage:        models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH),
+		UserVgpuTypeName: pointer.String(""),
+	}
+}
+
+func NewTowerVGPUVMInfo(vGPUCount int32) *models.GpuVMInfo {
+	return &models.GpuVMInfo{
+		ID:                pointer.String(ID()),
+		LocalID:           pointer.String(UUID()),
+		Name:              pointer.String(ID()),
+		UserVgpuTypeName:  pointer.String("V100"),
+		UserUsage:         models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
+		VgpuInstanceNum:   pointer.Int32(vGPUCount),
+		AvailableVgpusNum: pointer.Int32(vGPUCount),
+		AssignedVgpusNum:  pointer.Int32(0),
+		Model:             pointer.String(""),
 	}
 }
