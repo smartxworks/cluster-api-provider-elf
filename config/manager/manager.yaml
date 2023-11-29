@@ -9,12 +9,24 @@ spec:
   selector:
     matchLabels:
       control-plane: controller-manager
-  replicas: 1
+  replicas: 2
   template:
     metadata:
       labels:
         control-plane: controller-manager
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    cluster.x-k8s.io/provider: infrastructure-elf
+                    control-plane: controller-manager
+                topologyKey: kubernetes.io/hostname
+                namespaces:
+                  - cape-system
+              weight: 1
       containers:
       - args:
         - --leader-elect
