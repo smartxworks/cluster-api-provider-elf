@@ -970,21 +970,19 @@ func (svr *TowerVMService) GetGPUDevicesAllocationInfoByHostIDs(hostIDs []string
 		return NewGPUVMInfos(), nil
 	}
 
-	where := &models.GpuDeviceWhereInput{
-		UserUsage: models.NewGpuDeviceUsage(gpuDeviceUsage),
-		Host: &models.HostWhereInput{
-			IDIn: hostIDs,
+	getDetailVMInfoByGpuDevicesParams := clientgpu.NewGetDetailVMInfoByGpuDevicesParams()
+	getDetailVMInfoByGpuDevicesParams.RequestBody = &models.GetGpuDevicesRequestBody{
+		Where: &models.GpuDeviceWhereInput{
+			UserUsage: models.NewGpuDeviceUsage(gpuDeviceUsage),
+			Host: &models.HostWhereInput{
+				IDIn: hostIDs,
+			},
 		},
 	}
 
 	// Filter GPU devices whose vGPU has been fully used
 	if gpuDeviceUsage == models.GpuDeviceUsageVGPU {
-		where.AvailableVgpusNumGt = TowerInt32(0)
-	}
-
-	getDetailVMInfoByGpuDevicesParams := clientgpu.NewGetDetailVMInfoByGpuDevicesParams()
-	getDetailVMInfoByGpuDevicesParams.RequestBody = &models.GetGpuDevicesRequestBody{
-		Where: &models.GpuDeviceWhereInput{},
+		getDetailVMInfoByGpuDevicesParams.RequestBody.Where.AvailableVgpusNumGt = TowerInt32(0)
 	}
 
 	getDetailVMInfoByGpuDevicesResp, err := svr.Session.GpuDevice.GetDetailVMInfoByGpuDevices(getDetailVMInfoByGpuDevicesParams)
