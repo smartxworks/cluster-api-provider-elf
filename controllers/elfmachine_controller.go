@@ -255,9 +255,12 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx *context.MachineContext) er
 	if *vm.Status == models.VMStatusRUNNING {
 		var task *models.Task
 		var err error
-		// If VM shutdown timed out or VMGracefulShutdown is set to false, simply power off the VM.
+		// The vGPU license release logic requires the VM to be shutdown gracefully, so if ElfMachine is configured with vGPU,
+		// we should perform a graceful shutdown to ensure that the vGPU license can be released.
+		// Therefore, if the ElfMachine is configured with vGPU or ElfCluster.Spec.VMGracefulShutdown is true, the virtual machine will be shutdown normally.
+		// But if the VM shutdown timed out, simply power off the VM.
 		if service.IsShutDownTimeout(conditions.GetMessage(ctx.ElfMachine, infrav1.VMProvisionedCondition)) ||
-			!ctx.ElfCluster.Spec.VMGracefulShutdown {
+			!(ctx.ElfMachine.RequiresVGPUDevices() || ctx.ElfCluster.Spec.VMGracefulShutdown) {
 			task, err = ctx.VMService.PowerOff(ctx.ElfMachine.Status.VMRef)
 		} else {
 			task, err = ctx.VMService.ShutDown(ctx.ElfMachine.Status.VMRef)
