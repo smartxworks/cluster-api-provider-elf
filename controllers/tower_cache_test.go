@@ -170,6 +170,22 @@ var _ = Describe("TowerCache", func() {
 		expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForPlacementGroupPolicySatisfiedReason}})
 	})
 
+	It("PG Cache", func() {
+		pgName := "pg"
+		pg := fake.NewVMPlacementGroup(nil)
+		pg.Name = &pgName
+		Expect(getPGFromCache(pgName)).To(BeNil())
+
+		setPGCache(pg)
+		Expect(getPGFromCache(pgName)).To(Equal(pg))
+		time.Sleep(pgCacheDuration)
+		Expect(getPGFromCache(pgName)).To(BeNil())
+
+		setPGCache(pg)
+		delPGCaches([]string{pgName})
+		Expect(getPGFromCache(pgName)).To(BeNil())
+	})
+
 	It("GPU Cache", func() {
 		gpuID := "gpu"
 		gpuVMInfo := models.GpuVMInfo{ID: service.TowerString(gpuID)}

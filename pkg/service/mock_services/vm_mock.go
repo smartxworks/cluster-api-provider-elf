@@ -159,10 +159,10 @@ func (mr *MockVMServiceMockRecorder) DeleteVMPlacementGroupByID(ctx, id interfac
 }
 
 // DeleteVMPlacementGroupsByNamePrefix mocks base method.
-func (m *MockVMService) DeleteVMPlacementGroupsByNamePrefix(ctx context.Context, placementGroupName string) (int, error) {
+func (m *MockVMService) DeleteVMPlacementGroupsByNamePrefix(ctx context.Context, placementGroupName string) ([]string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteVMPlacementGroupsByNamePrefix", ctx, placementGroupName)
-	ret0, _ := ret[0].(int)
+	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -166,6 +166,40 @@ func getKeyForDuplicatePlacementGroupError(placementGroup string) string {
 	return fmt.Sprintf("pg:duplicate:%s", placementGroup)
 }
 
+// pgCacheDuration is the lifespan of placement group cache.
+const pgCacheDuration = 10 * time.Second
+
+func getKeyForPGCache(pgName string) string {
+	return fmt.Sprintf("pg:%s:cache", pgName)
+}
+
+// setPGCache saves the specified placement group to the memory,
+// which can reduce access to the Tower service.
+func setPGCache(pg *models.VMPlacementGroup) {
+	vmTaskErrorCache.Set(getKeyForPGCache(*pg.Name), *pg, gpuCacheDuration)
+}
+
+// delPGCaches deletes the specified placement group caches.
+func delPGCaches(pgNames []string) {
+	for i := 0; i < len(pgNames); i++ {
+		vmTaskErrorCache.Delete(getKeyForPGCache(pgNames[i]))
+	}
+}
+
+// getPGFromCache gets the specified placement group from the memory.
+func getPGFromCache(pgName string) *models.VMPlacementGroup {
+	key := getKeyForPGCache(pgName)
+	if val, found := vmTaskErrorCache.Get(key); found {
+		if pg, ok := val.(models.VMPlacementGroup); ok {
+			return &pg
+		}
+		// Delete unexpected data.
+		vmTaskErrorCache.Delete(key)
+	}
+
+	return nil
+}
+
 /* GPU */
 
 // gpuCacheDuration is the lifespan of gpu cache.

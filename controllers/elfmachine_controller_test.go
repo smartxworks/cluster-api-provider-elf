@@ -1136,12 +1136,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 				mockVMService.EXPECT().FindByIDs([]string{*vm2.ID}).Return([]*models.VM{vm2}, nil)
 				mockVMService.EXPECT().AddVMsToPlacementGroup(placementGroup, gomock.Any()).Return(task, nil)
 				mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(task, nil)
+				setPGCache(placementGroup)
 
 				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 				ok, err := reconciler.joinPlacementGroup(machineContext, vm)
 				Expect(ok).To(BeTrue())
 				Expect(err).To(BeZero())
 				Expect(logBuffer.String()).To(ContainSubstring("Updating placement group succeeded"))
+				Expect(getPGFromCache(*placementGroup.Name)).To(BeNil())
 			})
 
 			It("should not migrate VM when VM is running and KCP is in rolling update", func() {
@@ -2670,10 +2672,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
 			mockVMService.EXPECT().DeleteVMPlacementGroupByID(gomock.Any(), *placementGroup.ID).Return(true, nil)
 
+			setPGCache(placementGroup)
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err = reconciler.deletePlacementGroup(machineContext)
 			Expect(ok).To(BeTrue())
 			Expect(err).NotTo(HaveOccurred())
+			Expect(getPGFromCache(*placementGroup.Name)).To(BeNil())
 
 			md.DeletionTimestamp = nil
 			md.Spec.Replicas = pointer.Int32(0)
@@ -2989,6 +2993,31 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Tower has duplicate placement group, skip creating placement group %s", placementGroupName)))
+		})
+
+		It("should save and get placement group cache", func() {
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctrlContext.Client, machine, cluster)
+			Expect(err).NotTo(HaveOccurred())
+			placementGroup := fake.NewVMPlacementGroup(nil)
+			placementGroup.Name = service.TowerString(placementGroupName)
+
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+			Expect(getPGFromCache(*placementGroup.Name)).To(BeNil())
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			pg, err := reconciler.getPlacementGroup(machineContext, placementGroupName)
+			Expect(err).To(BeZero())
+			Expect(pg).To(Equal(placementGroup))
+			Expect(getPGFromCache(*placementGroup.Name)).To(Equal(placementGroup))
+
+			// Use cache
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			pg, err = reconciler.getPlacementGroup(machineContext, placementGroupName)
+			Expect(err).To(BeZero())
+			Expect(pg).To(Equal(placementGroup))
+			Expect(getPGFromCache(*placementGroup.Name)).To(Equal(placementGroup))
 		})
 	})
 

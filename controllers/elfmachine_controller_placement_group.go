@@ -116,7 +116,7 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx *context.MachineContext,
 
 	ctx.Logger.Info("Creating placement group succeeded", "taskID", *task.ID, "placementGroup", placementGroupName)
 
-	placementGroup, err := ctx.VMService.GetVMPlacementGroup(placementGroupName)
+	placementGroup, err := r.getPlacementGroup(ctx, placementGroupName)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +345,14 @@ func (r *ElfMachineReconciler) getAvailableHostsForVM(ctx *context.MachineContex
 	return availableHosts
 }
 
+// getPlacementGroup returns the specified placement group.
+// getPlacementGroup will get the placement group from the cache first.
+// If the placement group does not exist in the cache, it will be fetched from Tower and saved to the cache(expiration time is 10s).
 func (r *ElfMachineReconciler) getPlacementGroup(ctx *context.MachineContext, placementGroupName string) (*models.VMPlacementGroup, error) {
+	if placementGroup := getPGFromCache(placementGroupName); placementGroup != nil {
+		return placementGroup, nil
+	}
+
 	placementGroup, err := ctx.VMService.GetVMPlacementGroup(placementGroupName)
 	if err != nil {
 		return nil, err
@@ -357,6 +364,9 @@ func (r *ElfMachineReconciler) getPlacementGroup(ctx *context.MachineContext, pl
 
 		return nil, nil
 	}
+
+	// Save placement group cache.
+	setPGCache(placementGroup)
 
 	return placementGroup, nil
 }
@@ -563,6 +573,9 @@ func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx *context.MachineContex
 		return err
 	}
 
+	// Delete placement group cache.
+	delPGCaches([]string{*placementGroup.Name})
+
 	taskID := *task.ID
 	task, err = ctx.VMService.WaitTask(ctx, taskID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval)
 	if err != nil {
@@ -638,6 +651,9 @@ func (r *ElfMachineReconciler) deletePlacementGroup(ctx *context.MachineContext)
 		return false, nil
 	} else {
 		ctx.Logger.Info(fmt.Sprintf("Placement group %s deleted", *placementGroup.Name))
+
+		// Delete placement group cache.
+		delPGCaches([]string{*placementGroup.Name})
 	}
 
 	return true, nil
