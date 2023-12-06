@@ -40,12 +40,12 @@ const (
 
 var _ = Describe("TowerCache", func() {
 	BeforeEach(func() {
-		resetVMTaskErrorCache()
+		resetMemoryCache()
 	})
 
 	It("should set memoryInsufficient/policyNotSatisfied", func() {
 		for _, name := range []string{clusterKey, placementGroupKey} {
-			resetVMTaskErrorCache()
+			resetMemoryCache()
 			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 			elfCluster.Spec.Cluster = name
 			md := fake.NewMD()
@@ -56,11 +56,11 @@ var _ = Describe("TowerCache", func() {
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
 			key := getKey(machineContext, name)
 
-			_, found := vmTaskErrorCache.Get(key)
+			_, found := memoryCache.Get(key)
 			Expect(found).To(BeFalse())
 
 			recordIsUnmet(machineContext, name, true)
-			_, found = vmTaskErrorCache.Get(key)
+			_, found = memoryCache.Get(key)
 			Expect(found).To(BeTrue())
 			resource := getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
@@ -75,13 +75,13 @@ var _ = Describe("TowerCache", func() {
 			resource = getClusterResource(key)
 			Expect(resource).To(BeNil())
 
-			resetVMTaskErrorCache()
-			_, found = vmTaskErrorCache.Get(key)
+			resetMemoryCache()
+			_, found = memoryCache.Get(key)
 			Expect(found).To(BeFalse())
 
 			recordIsUnmet(machineContext, name, false)
 			resource = getClusterResource(key)
-			_, found = vmTaskErrorCache.Get(key)
+			_, found = memoryCache.Get(key)
 			Expect(found).To(BeFalse())
 			Expect(resource).To(BeNil())
 
@@ -90,7 +90,7 @@ var _ = Describe("TowerCache", func() {
 			Expect(resource).To(BeNil())
 
 			recordIsUnmet(machineContext, name, true)
-			_, found = vmTaskErrorCache.Get(key)
+			_, found = memoryCache.Get(key)
 			Expect(found).To(BeTrue())
 			resource = getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
@@ -99,7 +99,7 @@ var _ = Describe("TowerCache", func() {
 
 	It("should return whether need to detect", func() {
 		for _, name := range []string{clusterKey, placementGroupKey} {
-			resetVMTaskErrorCache()
+			resetMemoryCache()
 			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 			elfCluster.Spec.Cluster = name
 			md := fake.NewMD()
@@ -110,7 +110,7 @@ var _ = Describe("TowerCache", func() {
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
 			key := getKey(machineContext, name)
 
-			_, found := vmTaskErrorCache.Get(key)
+			_, found := memoryCache.Get(key)
 			Expect(found).To(BeFalse())
 			ok, err := canRetryVMOperation(machineContext)
 			Expect(ok).To(BeFalse())
@@ -138,7 +138,7 @@ var _ = Describe("TowerCache", func() {
 	})
 
 	It("isELFScheduleVMErrorRecorded", func() {
-		resetVMTaskErrorCache()
+		resetMemoryCache()
 		elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 		elfCluster.Spec.Cluster = clusterKey
 		md := fake.NewMD()
@@ -161,7 +161,7 @@ var _ = Describe("TowerCache", func() {
 		Expect(err).ShouldNot(HaveOccurred())
 		expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForELFClusterWithSufficientMemoryReason}})
 
-		resetVMTaskErrorCache()
+		resetMemoryCache()
 		recordIsUnmet(machineContext, placementGroupKey, true)
 		ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
 		Expect(ok).To(BeTrue())
@@ -201,7 +201,7 @@ var _ = Describe("TowerCache", func() {
 
 func removeGPUVMInfosCache(gpuIDs []string) {
 	for i := 0; i < len(gpuIDs); i++ {
-		vmTaskErrorCache.Delete(getKeyForGPUVMInfo(gpuIDs[i]))
+		memoryCache.Delete(getKeyForGPUVMInfo(gpuIDs[i]))
 	}
 }
 
@@ -230,5 +230,5 @@ func expireELFScheduleVMError(ctx *context.MachineContext, name string) {
 	resource := getClusterResource(key)
 	resource.LastDetected = resource.LastDetected.Add(-resourceSilenceTime)
 	resource.LastRetried = resource.LastRetried.Add(-resourceSilenceTime)
-	vmTaskErrorCache.Set(key, resource, resourceDuration)
+	memoryCache.Set(key, resource, resourceDuration)
 }

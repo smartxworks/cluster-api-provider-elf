@@ -38,7 +38,7 @@ const (
 	placementGroupSilenceTime = time.Minute * 5
 )
 
-var vmTaskErrorCache = cache.New(5*time.Minute, 10*time.Minute)
+var memoryCache = cache.New(5*time.Minute, 10*time.Minute)
 var vmConcurrentCache = cache.New(5*time.Minute, 6*time.Minute)
 
 var vmOperationLock sync.Mutex
@@ -50,7 +50,7 @@ func acquireTicketForCreateVM(vmName string, isControlPlaneVM bool) (bool, strin
 	vmOperationLock.Lock()
 	defer vmOperationLock.Unlock()
 
-	if _, found := vmTaskErrorCache.Get(getKeyForVMDuplicate(vmName)); found {
+	if _, found := memoryCache.Get(getKeyForVMDuplicate(vmName)); found {
 		return false, "Duplicate virtual machine detected"
 	}
 
@@ -79,18 +79,18 @@ func releaseTicketForCreateVM(vmName string) {
 // Tower API currently does not have a concurrency limit for operations on the same virtual machine,
 // which may cause task to fail.
 func acquireTicketForUpdatingVM(vmName string) bool {
-	if _, found := vmTaskErrorCache.Get(getKeyForVM(vmName)); found {
+	if _, found := memoryCache.Get(getKeyForVM(vmName)); found {
 		return false
 	}
 
-	vmTaskErrorCache.Set(getKeyForVM(vmName), nil, vmOperationRateLimit)
+	memoryCache.Set(getKeyForVM(vmName), nil, vmOperationRateLimit)
 
 	return true
 }
 
 // setVMDuplicate sets whether virtual machine is duplicated.
 func setVMDuplicate(vmName string) {
-	vmTaskErrorCache.Set(getKeyForVMDuplicate(vmName), nil, vmSilenceTime)
+	memoryCache.Set(getKeyForVMDuplicate(vmName), nil, vmSilenceTime)
 }
 
 // acquireTicketForPlacementGroupOperation returns whether placement group operation
@@ -99,28 +99,28 @@ func acquireTicketForPlacementGroupOperation(groupName string) bool {
 	placementGroupOperationLock.Lock()
 	defer placementGroupOperationLock.Unlock()
 
-	if _, found := vmTaskErrorCache.Get(getKeyForPlacementGroup(groupName)); found {
+	if _, found := memoryCache.Get(getKeyForPlacementGroup(groupName)); found {
 		return false
 	}
 
-	vmTaskErrorCache.Set(getKeyForPlacementGroup(groupName), nil, cache.NoExpiration)
+	memoryCache.Set(getKeyForPlacementGroup(groupName), nil, cache.NoExpiration)
 
 	return true
 }
 
 // releaseTicketForPlacementGroupOperation releases the placement group being operated.
 func releaseTicketForPlacementGroupOperation(groupName string) {
-	vmTaskErrorCache.Delete(getKeyForPlacementGroup(groupName))
+	memoryCache.Delete(getKeyForPlacementGroup(groupName))
 }
 
 // setPlacementGroupDuplicate sets whether placement group is duplicated.
 func setPlacementGroupDuplicate(groupName string) {
-	vmTaskErrorCache.Set(getKeyForPlacementGroupDuplicate(groupName), nil, placementGroupSilenceTime)
+	memoryCache.Set(getKeyForPlacementGroupDuplicate(groupName), nil, placementGroupSilenceTime)
 }
 
 // canCreatePlacementGroup returns whether placement group creation can be performed.
 func canCreatePlacementGroup(groupName string) bool {
-	_, found := vmTaskErrorCache.Get(getKeyForPlacementGroupDuplicate(groupName))
+	_, found := memoryCache.Get(getKeyForPlacementGroupDuplicate(groupName))
 
 	return !found
 }
