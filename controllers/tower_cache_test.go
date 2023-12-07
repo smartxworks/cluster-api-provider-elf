@@ -56,11 +56,11 @@ var _ = Describe("TowerCache", func() {
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
 			key := getKey(machineContext, name)
 
-			_, found := memoryCache.Get(key)
+			_, found := inMemoryCache.Get(key)
 			Expect(found).To(BeFalse())
 
 			recordIsUnmet(machineContext, name, true)
-			_, found = memoryCache.Get(key)
+			_, found = inMemoryCache.Get(key)
 			Expect(found).To(BeTrue())
 			resource := getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
@@ -76,12 +76,12 @@ var _ = Describe("TowerCache", func() {
 			Expect(resource).To(BeNil())
 
 			resetMemoryCache()
-			_, found = memoryCache.Get(key)
+			_, found = inMemoryCache.Get(key)
 			Expect(found).To(BeFalse())
 
 			recordIsUnmet(machineContext, name, false)
 			resource = getClusterResource(key)
-			_, found = memoryCache.Get(key)
+			_, found = inMemoryCache.Get(key)
 			Expect(found).To(BeFalse())
 			Expect(resource).To(BeNil())
 
@@ -90,7 +90,7 @@ var _ = Describe("TowerCache", func() {
 			Expect(resource).To(BeNil())
 
 			recordIsUnmet(machineContext, name, true)
-			_, found = memoryCache.Get(key)
+			_, found = inMemoryCache.Get(key)
 			Expect(found).To(BeTrue())
 			resource = getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
@@ -110,7 +110,7 @@ var _ = Describe("TowerCache", func() {
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
 			key := getKey(machineContext, name)
 
-			_, found := memoryCache.Get(key)
+			_, found := inMemoryCache.Get(key)
 			Expect(found).To(BeFalse())
 			ok, err := canRetryVMOperation(machineContext)
 			Expect(ok).To(BeFalse())
@@ -201,7 +201,7 @@ var _ = Describe("TowerCache", func() {
 
 func removeGPUVMInfosCache(gpuIDs []string) {
 	for i := 0; i < len(gpuIDs); i++ {
-		memoryCache.Delete(getKeyForGPUVMInfo(gpuIDs[i]))
+		inMemoryCache.Delete(getKeyForGPUVMInfo(gpuIDs[i]))
 	}
 }
 
@@ -230,5 +230,5 @@ func expireELFScheduleVMError(ctx *context.MachineContext, name string) {
 	resource := getClusterResource(key)
 	resource.LastDetected = resource.LastDetected.Add(-resourceSilenceTime)
 	resource.LastRetried = resource.LastRetried.Add(-resourceSilenceTime)
-	memoryCache.Set(key, resource, resourceDuration)
+	inMemoryCache.Set(key, resource, resourceDuration)
 }

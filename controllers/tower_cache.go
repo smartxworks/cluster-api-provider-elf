@@ -79,9 +79,9 @@ func isELFScheduleVMErrorRecorded(ctx *context.MachineContext) (bool, string, er
 func recordElfClusterMemoryInsufficient(ctx *context.MachineContext, isInsufficient bool) {
 	key := getKeyForInsufficientMemoryError(ctx.ElfCluster.Spec.Cluster)
 	if isInsufficient {
-		memoryCache.Set(key, newClusterResource(), resourceDuration)
+		inMemoryCache.Set(key, newClusterResource(), resourceDuration)
 	} else {
-		memoryCache.Delete(key)
+		inMemoryCache.Delete(key)
 	}
 }
 
@@ -94,9 +94,9 @@ func recordPlacementGroupPolicyNotSatisfied(ctx *context.MachineContext, isPGPol
 
 	key := getKeyForDuplicatePlacementGroupError(placementGroupName)
 	if isPGPolicyNotSatisfied {
-		memoryCache.Set(key, newClusterResource(), resourceDuration)
+		inMemoryCache.Set(key, newClusterResource(), resourceDuration)
 	} else {
-		memoryCache.Delete(key)
+		inMemoryCache.Delete(key)
 	}
 
 	return nil
@@ -146,13 +146,13 @@ func canRetry(key string) bool {
 }
 
 func getClusterResource(key string) *clusterResource {
-	if val, found := memoryCache.Get(key); found {
+	if val, found := inMemoryCache.Get(key); found {
 		if resource, ok := val.(*clusterResource); ok {
 			return resource
 		}
 
 		// Delete unexpected data.
-		memoryCache.Delete(key)
+		inMemoryCache.Delete(key)
 	}
 
 	return nil
@@ -176,25 +176,25 @@ func getKeyForPGCache(pgName string) string {
 // setPGCache saves the specified placement group to the memory,
 // which can reduce access to the Tower service.
 func setPGCache(pg *models.VMPlacementGroup) {
-	memoryCache.Set(getKeyForPGCache(*pg.Name), *pg, gpuCacheDuration)
+	inMemoryCache.Set(getKeyForPGCache(*pg.Name), *pg, gpuCacheDuration)
 }
 
 // delPGCaches deletes the specified placement group caches.
 func delPGCaches(pgNames []string) {
 	for i := 0; i < len(pgNames); i++ {
-		memoryCache.Delete(getKeyForPGCache(pgNames[i]))
+		inMemoryCache.Delete(getKeyForPGCache(pgNames[i]))
 	}
 }
 
 // getPGFromCache gets the specified placement group from the memory.
 func getPGFromCache(pgName string) *models.VMPlacementGroup {
 	key := getKeyForPGCache(pgName)
-	if val, found := memoryCache.Get(key); found {
+	if val, found := inMemoryCache.Get(key); found {
 		if pg, ok := val.(models.VMPlacementGroup); ok {
 			return &pg
 		}
 		// Delete unexpected data.
-		memoryCache.Delete(key)
+		inMemoryCache.Delete(key)
 	}
 
 	return nil
@@ -213,7 +213,7 @@ func getKeyForGPUVMInfo(gpuID string) string {
 // which can reduce access to the Tower service.
 func setGPUVMInfosCache(gpuVMInfos service.GPUVMInfos) {
 	gpuVMInfos.Iterate(func(g *models.GpuVMInfo) {
-		memoryCache.Set(getKeyForGPUVMInfo(*g.ID), *g, gpuCacheDuration)
+		inMemoryCache.Set(getKeyForGPUVMInfo(*g.ID), *g, gpuCacheDuration)
 	})
 }
 
@@ -222,12 +222,12 @@ func getGPUVMInfosFromCache(gpuIDs []string) service.GPUVMInfos {
 	gpuVMInfos := service.NewGPUVMInfos()
 	for i := 0; i < len(gpuIDs); i++ {
 		key := getKeyForGPUVMInfo(gpuIDs[i])
-		if val, found := memoryCache.Get(key); found {
+		if val, found := inMemoryCache.Get(key); found {
 			if gpuVMInfo, ok := val.(models.GpuVMInfo); ok {
 				gpuVMInfos.Insert(&gpuVMInfo)
 			}
 			// Delete unexpected data.
-			memoryCache.Delete(key)
+			inMemoryCache.Delete(key)
 		}
 	}
 
