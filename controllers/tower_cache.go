@@ -79,9 +79,9 @@ func isELFScheduleVMErrorRecorded(ctx *context.MachineContext) (bool, string, er
 func recordElfClusterMemoryInsufficient(ctx *context.MachineContext, isInsufficient bool) {
 	key := getKeyForInsufficientMemoryError(ctx.ElfCluster.Spec.Cluster)
 	if isInsufficient {
-		vmTaskErrorCache.Set(key, newClusterResource(), resourceDuration)
+		inMemoryCache.Set(key, newClusterResource(), resourceDuration)
 	} else {
-		vmTaskErrorCache.Delete(key)
+		inMemoryCache.Delete(key)
 	}
 }
 
@@ -94,9 +94,9 @@ func recordPlacementGroupPolicyNotSatisfied(ctx *context.MachineContext, isPGPol
 
 	key := getKeyForDuplicatePlacementGroupError(placementGroupName)
 	if isPGPolicyNotSatisfied {
-		vmTaskErrorCache.Set(key, newClusterResource(), resourceDuration)
+		inMemoryCache.Set(key, newClusterResource(), resourceDuration)
 	} else {
-		vmTaskErrorCache.Delete(key)
+		inMemoryCache.Delete(key)
 	}
 
 	return nil
@@ -146,13 +146,13 @@ func canRetry(key string) bool {
 }
 
 func getClusterResource(key string) *clusterResource {
-	if val, found := vmTaskErrorCache.Get(key); found {
+	if val, found := inMemoryCache.Get(key); found {
 		if resource, ok := val.(*clusterResource); ok {
 			return resource
 		}
 
 		// Delete unexpected data.
-		vmTaskErrorCache.Delete(key)
+		inMemoryCache.Delete(key)
 	}
 
 	return nil
@@ -164,6 +164,40 @@ func getKeyForInsufficientMemoryError(clusterID string) string {
 
 func getKeyForDuplicatePlacementGroupError(placementGroup string) string {
 	return fmt.Sprintf("pg:duplicate:%s", placementGroup)
+}
+
+// pgCacheDuration is the lifespan of placement group cache.
+const pgCacheDuration = 20 * time.Second
+
+func getKeyForPGCache(pgName string) string {
+	return fmt.Sprintf("pg:%s:cache", pgName)
+}
+
+// setPGCache saves the specified placement group to the memory,
+// which can reduce access to the Tower service.
+func setPGCache(pg *models.VMPlacementGroup) {
+	inMemoryCache.Set(getKeyForPGCache(*pg.Name), *pg, gpuCacheDuration)
+}
+
+// delPGCaches deletes the specified placement group caches.
+func delPGCaches(pgNames []string) {
+	for i := 0; i < len(pgNames); i++ {
+		inMemoryCache.Delete(getKeyForPGCache(pgNames[i]))
+	}
+}
+
+// getPGFromCache gets the specified placement group from the memory.
+func getPGFromCache(pgName string) *models.VMPlacementGroup {
+	key := getKeyForPGCache(pgName)
+	if val, found := inMemoryCache.Get(key); found {
+		if pg, ok := val.(models.VMPlacementGroup); ok {
+			return &pg
+		}
+		// Delete unexpected data.
+		inMemoryCache.Delete(key)
+	}
+
+	return nil
 }
 
 /* GPU */
@@ -179,7 +213,7 @@ func getKeyForGPUVMInfo(gpuID string) string {
 // which can reduce access to the Tower service.
 func setGPUVMInfosCache(gpuVMInfos service.GPUVMInfos) {
 	gpuVMInfos.Iterate(func(g *models.GpuVMInfo) {
-		vmTaskErrorCache.Set(getKeyForGPUVMInfo(*g.ID), *g, gpuCacheDuration)
+		inMemoryCache.Set(getKeyForGPUVMInfo(*g.ID), *g, gpuCacheDuration)
 	})
 }
 
@@ -188,12 +222,12 @@ func getGPUVMInfosFromCache(gpuIDs []string) service.GPUVMInfos {
 	gpuVMInfos := service.NewGPUVMInfos()
 	for i := 0; i < len(gpuIDs); i++ {
 		key := getKeyForGPUVMInfo(gpuIDs[i])
-		if val, found := vmTaskErrorCache.Get(key); found {
+		if val, found := inMemoryCache.Get(key); found {
 			if gpuVMInfo, ok := val.(models.GpuVMInfo); ok {
 				gpuVMInfos.Insert(&gpuVMInfo)
 			}
 			// Delete unexpected data.
-			vmTaskErrorCache.Delete(key)
+			inMemoryCache.Delete(key)
 		}
 	}
 

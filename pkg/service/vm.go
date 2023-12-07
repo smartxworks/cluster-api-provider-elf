@@ -71,7 +71,7 @@ type VMService interface {
 	GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error)
 	AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error)
 	DeleteVMPlacementGroupByID(ctx goctx.Context, id string) (bool, error)
-	DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context, placementGroupName string) (int, error)
+	DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context, placementGroupName string) ([]string, error)
 	GetGPUDevicesAllocationInfoByHostIDs(hostIDs []string, gpuDeviceUsage models.GpuDeviceUsage) (GPUVMInfos, error)
 	GetGPUDevicesAllocationInfoByIDs(gpuIDs []string) (GPUVMInfos, error)
 	GetVMGPUAllocationInfo(id string) (*models.VMGpuInfo, error)
@@ -907,9 +907,9 @@ func (svr *TowerVMService) DeleteVMPlacementGroupByID(ctx goctx.Context, id stri
 // DeleteVMPlacementGroupsByNamePrefix deletes placement groups by name prefix.
 //
 // The return value:
-// 1. 0 indicates that all specified placements have been deleted.
-// 2. > 0 indicates that the names of the placement groups being deleted.
-func (svr *TowerVMService) DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context, namePrefix string) (int, error) {
+// 1. Empty string array indicates that all specified placements have been deleted.
+// 2. Non-empty string array indicates that the names of the placement groups being deleted.
+func (svr *TowerVMService) DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context, namePrefix string) ([]string, error) {
 	// Deleting placement groups in batches, Tower will create a deletion task
 	// for each placement group.
 	// Some tasks may fail, and failed tasks need to be deleted again.
@@ -923,9 +923,9 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context
 
 	getVMPlacementGroupsResp, err := svr.Session.VMPlacementGroup.GetVMPlacementGroups(getVMPlacementGroupsParams)
 	if err != nil {
-		return 0, err
+		return nil, err
 	} else if len(getVMPlacementGroupsResp.Payload) == 0 {
-		return 0, nil
+		return nil, nil
 	}
 
 	deleteVMPlacementGroupParams := clientvmplacementgroup.NewDeleteVMPlacementGroupParams()
@@ -937,10 +937,15 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context
 	}
 
 	if _, err := svr.Session.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams); err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return len(getVMPlacementGroupsResp.Payload), nil
+	pgNames := make([]string, len(getVMPlacementGroupsResp.Payload))
+	for i := 0; i < len(getVMPlacementGroupsResp.Payload); i++ {
+		pgNames[i] = *getVMPlacementGroupsResp.Payload[i].Name
+	}
+
+	return pgNames, nil
 }
 
 // GetGPUDevicesAllocationInfoByIDs returns the specified GPU devices with VMs and allocation details.

@@ -259,7 +259,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should create a new VM if none exists", func() {
-			resetVMTaskErrorCache()
+			resetMemoryCache()
 			vm := fake.NewTowerVM()
 			vm.Name = &elfMachine.Name
 			elfCluster.Spec.Cluster = clusterKey
@@ -297,7 +297,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.ID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			resetVMTaskErrorCache()
+			resetMemoryCache()
 		})
 
 		It("should recover from lost task", func() {
@@ -822,7 +822,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		Context("powerOnVM", func() {
 			It("should", func() {
-				resetVMTaskErrorCache()
+				resetMemoryCache()
 				vm := fake.NewTowerVM()
 				vm.Host = &models.NestedHost{ID: service.TowerString(fake.ID())}
 				elfMachine.Status.VMRef = *vm.LocalID
@@ -844,7 +844,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(logBuffer.String()).To(ContainSubstring("and the retry silence period passes, will try to power on the VM again"))
 				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PoweringOnReason}})
-				resetVMTaskErrorCache()
+				resetMemoryCache()
 
 				// GPU
 				unexpectedError := errors.New("unexpected error")
@@ -1136,12 +1136,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 				mockVMService.EXPECT().FindByIDs([]string{*vm2.ID}).Return([]*models.VM{vm2}, nil)
 				mockVMService.EXPECT().AddVMsToPlacementGroup(placementGroup, gomock.Any()).Return(task, nil)
 				mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(task, nil)
+				setPGCache(placementGroup)
 
 				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 				ok, err := reconciler.joinPlacementGroup(machineContext, vm)
 				Expect(ok).To(BeTrue())
 				Expect(err).To(BeZero())
 				Expect(logBuffer.String()).To(ContainSubstring("Updating placement group succeeded"))
+				Expect(getPGFromCache(*placementGroup.Name)).To(BeNil())
 			})
 
 			It("should not migrate VM when VM is running and KCP is in rolling update", func() {
@@ -2670,10 +2672,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
 			mockVMService.EXPECT().DeleteVMPlacementGroupByID(gomock.Any(), *placementGroup.ID).Return(true, nil)
 
+			setPGCache(placementGroup)
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err = reconciler.deletePlacementGroup(machineContext)
 			Expect(ok).To(BeTrue())
 			Expect(err).NotTo(HaveOccurred())
+			Expect(getPGFromCache(*placementGroup.Name)).To(BeNil())
 
 			md.DeletionTimestamp = nil
 			md.Spec.Replicas = pointer.Int32(0)
@@ -2952,7 +2956,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
-			resetVMTaskErrorCache()
+			resetMemoryCache()
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
@@ -2966,7 +2970,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
-			resetVMTaskErrorCache()
+			resetMemoryCache()
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
@@ -2989,6 +2993,31 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Tower has duplicate placement group, skip creating placement group %s", placementGroupName)))
+		})
+
+		It("should save and get placement group cache", func() {
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctrlContext.Client, machine, cluster)
+			Expect(err).NotTo(HaveOccurred())
+			placementGroup := fake.NewVMPlacementGroup(nil)
+			placementGroup.Name = service.TowerString(placementGroupName)
+
+			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
+			Expect(getPGFromCache(*placementGroup.Name)).To(BeNil())
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			pg, err := reconciler.getPlacementGroup(machineContext, placementGroupName)
+			Expect(err).To(BeZero())
+			Expect(pg).To(Equal(placementGroup))
+			Expect(getPGFromCache(*placementGroup.Name)).To(Equal(placementGroup))
+
+			// Use cache
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			pg, err = reconciler.getPlacementGroup(machineContext, placementGroupName)
+			Expect(err).To(BeZero())
+			Expect(pg).To(Equal(placementGroup))
+			Expect(getPGFromCache(*placementGroup.Name)).To(Equal(placementGroup))
 		})
 	})
 
@@ -3123,7 +3152,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should handle failed/succeeded task", func() {
 			elfMachine.Spec.GPUDevices = []infrav1.GPUPassthroughDeviceSpec{{Model: "A16", Count: 1}}
 
-			resetVMTaskErrorCache()
+			resetMemoryCache()
 			task := fake.NewTowerTask()
 			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
 			elfMachine.Status.TaskRef = *task.ID
