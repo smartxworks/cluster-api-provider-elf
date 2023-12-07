@@ -57,6 +57,7 @@ import (
 	labelsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 	patchutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/patch"
+	typesutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/types"
 )
 
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines,verbs=get;list;watch;create;update;patch;delete
@@ -609,14 +610,14 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 
 	vmRef := util.GetVMRef(vm)
 	// If vmRef is in UUID format, it means that the ELF VM created.
-	if !machineutil.IsUUID(vmRef) {
+	if !typesutil.IsUUID(vmRef) {
 		ctx.Logger.Info("The VM is being created", "vmRef", vmRef)
 
 		return vm, false, nil
 	}
 
 	// When ELF VM created, set UUID to VMRef
-	if !machineutil.IsUUID(ctx.ElfMachine.Status.VMRef) {
+	if !typesutil.IsUUID(ctx.ElfMachine.Status.VMRef) {
 		ctx.ElfMachine.SetVM(vmRef)
 	}
 
@@ -657,7 +658,7 @@ func (r *ElfMachineReconciler) getVM(ctx *context.MachineContext) (*models.VM, e
 		return nil, err
 	}
 
-	if machineutil.IsUUID(ctx.ElfMachine.Status.VMRef) {
+	if typesutil.IsUUID(ctx.ElfMachine.Status.VMRef) {
 		vmDisconnectionTimestamp := ctx.ElfMachine.GetVMDisconnectionTimestamp()
 		if vmDisconnectionTimestamp == nil {
 			now := metav1.Now()

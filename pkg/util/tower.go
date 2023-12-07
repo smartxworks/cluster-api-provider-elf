@@ -20,7 +20,7 @@ import (
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
-	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
+	typesutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/types"
 )
 
 // GetVMRef returns the ID or localID of the VM.
@@ -34,7 +34,7 @@ func GetVMRef(vm *models.VM) string {
 	}
 
 	vmLocalID := service.GetTowerString(vm.LocalID)
-	if machineutil.IsUUID(vmLocalID) {
+	if typesutil.IsUUID(vmLocalID) {
 		return vmLocalID
 	}
 

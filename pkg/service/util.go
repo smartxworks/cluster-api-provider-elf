@@ -26,6 +26,7 @@ import (
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
+	typesutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/types"
 )
 
 // GetUpdatedVMRestrictedFields returns the updated restricted fields of the VM compared to ElfMachine.
@@ -308,4 +309,28 @@ func calGPUAvailableVgpusNum(vgpuInstanceNum, assignedVGPUsNum int32) int32 {
 	}
 
 	return count
+}
+
+// parseOwnerFromCreatedBy parse owner from createdBy annotation.
+//
+// The owner can be in one of the following two formats:
+// 1. ${Tower username}_${Tower auth_config_id}, e.g. caas.smartx_7e98ecbb-779e-43f6-8330-1bc1d29fffc7.
+// 2. ${Tower username}, e.g. root. If auth_config_id is not set, it means it is a LOCAL user.
+func parseOwnerFromCreatedBy(createdBy string) string {
+	lastIndex := strings.LastIndex(createdBy, "@")
+	if len(createdBy) <= 1 || lastIndex <= 0 || lastIndex == len(createdBy) {
+		return createdBy
+	}
+
+	username := createdBy[0:lastIndex]
+	authConfigID := createdBy[lastIndex+1:]
+
+	// If authConfigID is not in UUID format, it means username contains the last `@` character,
+	// return createdBy directly.
+	if !typesutil.IsUUID(authConfigID) {
+		return createdBy
+	}
+
+	// last `@` replaced with `_`.
+	return fmt.Sprintf("%s_%s", username, authConfigID)
 }
