@@ -244,7 +244,7 @@ func (svr *TowerVMService) Clone(
 
 	var owner *models.VMOwnerParams
 	if createdBy := annotationsutil.GetCreatedBy(elfCluster); createdBy != "" {
-		creator := parseOwnerFromCreatedBy(createdBy)
+		creator := parseOwnerFromCreatedByAnnotation(createdBy)
 		owner = &models.VMOwnerParams{
 			SearchFor: TowerString(VMOwnerSearchForUsername),
 			Value:     TowerString(creator),

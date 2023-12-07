@@ -311,12 +311,16 @@ func calGPUAvailableVgpusNum(vgpuInstanceNum, assignedVGPUsNum int32) int32 {
 	return count
 }
 
-// parseOwnerFromCreatedBy parse owner from createdBy annotation.
+// parseOwnerFromCreatedByAnnotation parse owner from createdBy annotation.
+//
+// The createdBy can be in one of the following two formats:
+// 1. ${Tower username}@${Tower auth_config_id}.
+// 2. ${Tower username}.
 //
 // The owner can be in one of the following two formats:
 // 1. ${Tower username}_${Tower auth_config_id}, e.g. caas.smartx_7e98ecbb-779e-43f6-8330-1bc1d29fffc7.
 // 2. ${Tower username}, e.g. root. If auth_config_id is not set, it means it is a LOCAL user.
-func parseOwnerFromCreatedBy(createdBy string) string {
+func parseOwnerFromCreatedByAnnotation(createdBy string) string {
 	lastIndex := strings.LastIndex(createdBy, "@")
 	if len(createdBy) <= 1 || lastIndex <= 0 || lastIndex == len(createdBy) {
 		return createdBy

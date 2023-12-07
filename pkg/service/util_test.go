@@ -262,25 +262,25 @@ func TestHasGPUsCanNotBeUsedForVM(t *testing.T) {
 	})
 }
 
-func TestParseOwnerFromCreatedBy(t *testing.T) {
+func TestParseOwnerFromCreatedByAnnotation(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 
-	t.Run("ParseOwnerFromCreatedBy", func(t *testing.T) {
-		g.Expect(parseOwnerFromCreatedBy("")).To(gomega.Equal(""))
-		g.Expect(parseOwnerFromCreatedBy("a")).To(gomega.Equal("a"))
-		g.Expect(parseOwnerFromCreatedBy("@")).To(gomega.Equal("@"))
-		g.Expect(parseOwnerFromCreatedBy("a@")).To(gomega.Equal("a@"))
-		g.Expect(parseOwnerFromCreatedBy("@a")).To(gomega.Equal("@a"))
-		g.Expect(parseOwnerFromCreatedBy("@@")).To(gomega.Equal("@@"))
-		g.Expect(parseOwnerFromCreatedBy("root")).To(gomega.Equal("root"))
-		g.Expect(parseOwnerFromCreatedBy("@root")).To(gomega.Equal("@root"))
-		g.Expect(parseOwnerFromCreatedBy("ro@ot")).To(gomega.Equal("ro@ot"))
-		g.Expect(parseOwnerFromCreatedBy("root@")).To(gomega.Equal("root@"))
-		g.Expect(parseOwnerFromCreatedBy("@ro@ot@")).To(gomega.Equal("@ro@ot@"))
-		g.Expect(parseOwnerFromCreatedBy("root@123456")).To(gomega.Equal("root@123456"))
-		g.Expect(parseOwnerFromCreatedBy("root@d8dc20fc-e197-41da-83b6-c903c88663fd")).To(gomega.Equal("root_d8dc20fc-e197-41da-83b6-c903c88663fd"))
-		g.Expect(parseOwnerFromCreatedBy("@root@d8dc20fc-e197-41da-83b6-c903c88663fd")).To(gomega.Equal("@root_d8dc20fc-e197-41da-83b6-c903c88663fd"))
-		g.Expect(parseOwnerFromCreatedBy("root@@d8dc20fc-e197-41da-83b6-c903c88663fd")).To(gomega.Equal("root@_d8dc20fc-e197-41da-83b6-c903c88663fd"))
-		g.Expect(parseOwnerFromCreatedBy("root@d8dc20fc-e197-41da-83b6-c903c88663fd@")).To(gomega.Equal("root@d8dc20fc-e197-41da-83b6-c903c88663fd@"))
+	t.Run("parseOwnerFromCreatedByAnnotation", func(t *testing.T) {
+		g.Expect(parseOwnerFromCreatedByAnnotation("")).To(gomega.Equal(""))
+		g.Expect(parseOwnerFromCreatedByAnnotation("a")).To(gomega.Equal("a"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("@")).To(gomega.Equal("@"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("a@")).To(gomega.Equal("a@"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("@a")).To(gomega.Equal("@a"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("@@")).To(gomega.Equal("@@"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("root")).To(gomega.Equal("root"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("@root")).To(gomega.Equal("@root"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("ro@ot")).To(gomega.Equal("ro@ot"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("root@")).To(gomega.Equal("root@"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("@ro@ot@")).To(gomega.Equal("@ro@ot@"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("root@123456")).To(gomega.Equal("root@123456"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("root@d8dc20fc-e197-41da-83b6-c903c88663fd")).To(gomega.Equal("root_d8dc20fc-e197-41da-83b6-c903c88663fd"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("@root@d8dc20fc-e197-41da-83b6-c903c88663fd")).To(gomega.Equal("@root_d8dc20fc-e197-41da-83b6-c903c88663fd"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("root@@d8dc20fc-e197-41da-83b6-c903c88663fd")).To(gomega.Equal("root@_d8dc20fc-e197-41da-83b6-c903c88663fd"))
+		g.Expect(parseOwnerFromCreatedByAnnotation("root@d8dc20fc-e197-41da-83b6-c903c88663fd@")).To(gomega.Equal("root@d8dc20fc-e197-41da-83b6-c903c88663fd@"))
 	})
 }
