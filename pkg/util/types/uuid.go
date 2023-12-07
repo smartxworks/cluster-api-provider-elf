@@ -14,16 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package service
+package types
+
+import "regexp"
 
 const (
-	// VMPlacementGroupDescription is the description of vm placement group.
-	VMPlacementGroupDescription = "This is VM placement group created by CAPE, don't delete it!"
-
-	// SKSVMTemplateUIDLabel is the label used to find the virtual machine template.
-	SKSVMTemplateUIDLabel = "system.cloudtower/sks-template-uid"
+	// UUIDPattern is a regex pattern and is used by ConvertUUIDToProviderID
+	// to convert a UUID into a providerID string.
+	UUIDPattern = `(?i)^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$`
 )
 
-// VMOwnerSearchForUsername is used to specify the ower source of the virtual machine.
-// TODO: Tower SDK will provide the VMOwnerSearchFor enumeration types in the new version.
-const VMOwnerSearchForUsername = "username"
+func IsUUID(uuid string) bool {
+	if uuid == "" {
+		return false
+	}
+
+	pattern := regexp.MustCompile(UUIDPattern)
+
+	return pattern.MatchString(uuid)
+}

@@ -43,6 +43,15 @@ func GetPlacementGroupName(o metav1.Object) string {
 	return annotations[infrav1.PlacementGroupNameAnnotation]
 }
 
+func GetCreatedBy(o metav1.Object) string {
+	annotations := o.GetAnnotations()
+	if annotations == nil {
+		return ""
+	}
+
+	return annotations[infrav1.CreatedByAnnotation]
+}
+
 // AddAnnotations sets the desired annotations on the object and returns true if the annotations have changed.
 func AddAnnotations(o metav1.Object, desired map[string]string) bool {
 	return annotations.AddAnnotations(o, desired)

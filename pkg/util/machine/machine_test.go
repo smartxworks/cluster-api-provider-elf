@@ -183,49 +183,6 @@ func TestConvertUUIDtoProviderID(t *testing.T) {
 	}
 }
 
-func TestIsUUID(t *testing.T) {
-	g := gomega.NewGomegaWithT(t)
-
-	testCases := []struct {
-		name   string
-		uuid   string
-		isUUID bool
-	}{
-		{
-			name:   "empty uuid",
-			uuid:   "",
-			isUUID: false,
-		},
-		{
-			name:   "invalid uuid",
-			uuid:   "1234",
-			isUUID: false,
-		},
-		{
-			name:   "valid uuid",
-			uuid:   "12345678-1234-1234-1234-123456789abc",
-			isUUID: true,
-		},
-		{
-			name:   "mixed case",
-			uuid:   "12345678-1234-1234-1234-123456789AbC",
-			isUUID: true,
-		},
-		{
-			name:   "invalid hex chars",
-			uuid:   "12345678-1234-1234-1234-123456789abg",
-			isUUID: false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			isUUID := IsUUID(tc.uuid)
-			g.Expect(isUUID).To(gomega.Equal(tc.isUUID))
-		})
-	}
-}
-
 func TestGetNetworkStatus(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 

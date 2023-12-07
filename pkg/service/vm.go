@@ -39,6 +39,7 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/session"
+	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 )
 
 type VMService interface {
@@ -241,11 +242,21 @@ func (svr *TowerVMService) Clone(
 		hostID = *host.ID
 	}
 
+	var owner *models.VMOwnerParams
+	if createdBy := annotationsutil.GetCreatedBy(elfCluster); createdBy != "" {
+		creator := parseOwnerFromCreatedByAnnotation(createdBy)
+		owner = &models.VMOwnerParams{
+			SearchFor: TowerString(VMOwnerSearchForUsername),
+			Value:     TowerString(creator),
+		}
+	}
+
 	vmCreateVMFromTemplateParams := &models.VMCreateVMFromContentLibraryTemplateParams{
 		ClusterID:   cluster.ID,
 		HostID:      TowerString(hostID),
 		Name:        TowerString(elfMachine.Name),
 		Description: TowerString(fmt.Sprintf(config.VMDescription, elfCluster.Spec.Tower.Server)),
+		Owner:       owner,
 		Vcpu:        vCPU,
 		CPUCores:    cpuCores,
 		CPUSockets:  cpuSockets,

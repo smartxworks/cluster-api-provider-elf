@@ -33,6 +33,13 @@ const (
 
 	// CAPEVersionAnnotation is the annotation identifying the version of CAPE that the resource reconciled by.
 	CAPEVersionAnnotation = "cape.infrastructure.cluster.x-k8s.io/cape-version"
+
+	// CreatedByAnnotation is the annotation identifying the creator of the resource.
+	//
+	// The creator can be in one of the following two formats:
+	// 1. ${Tower username}@${Tower auth_config_id}, e.g. caas.smartx@7e98ecbb-779e-43f6-8330-1bc1d29fffc7.
+	// 2. ${Tower username}, e.g. root. If auth_config_id is not set, it means it is a LOCAL user.
+	CreatedByAnnotation = "cape.infrastructure.cluster.x-k8s.io/created-by"
 )
 
 // Labels.

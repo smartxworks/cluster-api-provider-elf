@@ -42,6 +42,7 @@ import (
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 	kcputil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/kcp"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
+	typesutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/types"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/version"
 )
 
@@ -258,7 +259,7 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx *context.MachineCon
 
 	elfMachineMap := make(map[string]*infrav1.ElfMachine)
 	for i := 0; i < len(elfMachines); i++ {
-		if machineutil.IsUUID(elfMachines[i].Status.VMRef) {
+		if typesutil.IsUUID(elfMachines[i].Status.VMRef) {
 			elfMachineMap[elfMachines[i].Name] = elfMachines[i]
 		}
 	}
@@ -359,7 +360,7 @@ func (r *ElfMachineReconciler) getPlacementGroup(ctx *context.MachineContext, pl
 	}
 
 	// Placement group is performing an operation
-	if !machineutil.IsUUID(*placementGroup.LocalID) || placementGroup.EntityAsyncStatus != nil {
+	if !typesutil.IsUUID(*placementGroup.LocalID) || placementGroup.EntityAsyncStatus != nil {
 		ctx.Logger.Info("Waiting for placement group task done", "placementGroup", *placementGroup.Name)
 
 		return nil, nil

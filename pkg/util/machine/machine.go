@@ -29,6 +29,7 @@ import (
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	labelsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
+	typesutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/types"
 )
 
 const (
@@ -39,10 +40,6 @@ const (
 	// ProviderIDPattern is a regex pattern and is used by ConvertProviderIDToUUID
 	// to convert a providerID into a UUID string.
 	ProviderIDPattern = `(?i)^` + ProviderIDPrefix + `([a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12})$`
-
-	// UUIDPattern is a regex pattern and is used by ConvertUUIDToProviderID
-	// to convert a UUID into a providerID string.
-	UUIDPattern = `(?i)^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$`
 )
 
 // ErrNoMachineIPAddr indicates that no valid IP addresses were found in a machine context.
@@ -132,21 +129,11 @@ func ConvertProviderIDToUUID(providerID *string) string {
 }
 
 func ConvertUUIDToProviderID(uuid string) string {
-	if !IsUUID(uuid) {
+	if !typesutil.IsUUID(uuid) {
 		return ""
 	}
 
 	return ProviderIDPrefix + uuid
-}
-
-func IsUUID(uuid string) bool {
-	if uuid == "" {
-		return false
-	}
-
-	pattern := regexp.MustCompile(UUIDPattern)
-
-	return pattern.MatchString(uuid)
 }
 
 func GetNetworkStatus(ipsStr string) []infrav1.NetworkStatus {
