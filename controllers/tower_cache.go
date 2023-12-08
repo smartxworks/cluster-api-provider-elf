@@ -176,7 +176,7 @@ func getKeyForPGCache(pgName string) string {
 // setPGCache saves the specified placement group to the memory,
 // which can reduce access to the Tower service.
 func setPGCache(pg *models.VMPlacementGroup) {
-	inMemoryCache.Set(getKeyForPGCache(*pg.Name), *pg, gpuCacheDuration)
+	inMemoryCache.Set(getKeyForPGCache(*pg.Name), *pg, pgCacheDuration)
 }
 
 // delPGCaches deletes the specified placement group caches.
@@ -192,6 +192,33 @@ func getPGFromCache(pgName string) *models.VMPlacementGroup {
 	if val, found := inMemoryCache.Get(key); found {
 		if pg, ok := val.(models.VMPlacementGroup); ok {
 			return &pg
+		}
+		// Delete unexpected data.
+		inMemoryCache.Delete(key)
+	}
+
+	return nil
+}
+
+// labelCacheDuration is the lifespan of label cache.
+const labelCacheDuration = 30 * time.Minute
+
+func getKeyForLabelCache(labelKey string) string {
+	return fmt.Sprintf("label:%s:cache", labelKey)
+}
+
+// setLabelCache saves the specified label to the memory,
+// which can reduce access to the Tower service.
+func setLabelCache(label *models.Label) {
+	inMemoryCache.Set(getKeyForLabelCache(*label.Key), *label, labelCacheDuration)
+}
+
+// getLabelFromCache gets the specified label from the memory.
+func getLabelFromCache(labelKey string) *models.Label {
+	key := getKeyForLabelCache(labelKey)
+	if val, found := inMemoryCache.Get(key); found {
+		if label, ok := val.(models.Label); ok {
+			return &label
 		}
 		// Delete unexpected data.
 		inMemoryCache.Delete(key)

@@ -448,10 +448,8 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx *context.MachineContext) (rec
 	}
 
 	// Reconcile the ElfMachine's Labels using the cluster info
-	if len(vm.Labels) == 0 {
-		if ok, err := r.reconcileLabels(ctx, vm); !ok {
-			return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile labels")
-		}
+	if ok, err := r.reconcileLabels(ctx, vm); !ok {
+		return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile labels")
 	}
 
 	// Reconcile the ElfMachine's providerID using the VM's UUID.
@@ -1188,10 +1186,26 @@ func (r *ElfMachineReconciler) getBootstrapData(ctx *context.MachineContext) (st
 }
 
 func (r *ElfMachineReconciler) reconcileLabels(ctx *context.MachineContext, vm *models.VM) (bool, error) {
-	creatorLabel, err := ctx.VMService.UpsertLabel(towerresources.GetVMLabelManaged(), "true")
-	if err != nil {
-		return false, errors.Wrapf(err, "failed to upsert label "+towerresources.GetVMLabelManaged())
+	managedLabelKey := towerresources.GetVMLabelManaged()
+	managedLabel := getLabelFromCache(managedLabelKey)
+	if managedLabel == nil {
+		var err error
+		managedLabel, err = ctx.VMService.UpsertLabel(managedLabelKey, "true")
+		if err != nil {
+			return false, errors.Wrapf(err, "failed to upsert label "+towerresources.GetVMLabelManaged())
+		}
+
+		setLabelCache(managedLabel)
 	}
+
+	// If the virtual machine has been labeled with managed label,
+	// it is considered that all labels have been labeled.
+	for i := 0; i < len(vm.Labels); i++ {
+		if *vm.Labels[i].ID == *managedLabel.ID {
+			return true, nil
+		}
+	}
+
 	namespaceLabel, err := ctx.VMService.UpsertLabel(towerresources.GetVMLabelNamespace(), ctx.ElfMachine.Namespace)
 	if err != nil {
 		return false, errors.Wrapf(err, "failed to upsert label "+towerresources.GetVMLabelNamespace())
@@ -1209,7 +1223,7 @@ func (r *ElfMachineReconciler) reconcileLabels(ctx *context.MachineContext, vm *
 		}
 	}
 
-	labelIDs := []string{*namespaceLabel.ID, *clusterNameLabel.ID, *creatorLabel.ID}
+	labelIDs := []string{*namespaceLabel.ID, *clusterNameLabel.ID, *managedLabel.ID}
 	if machineutil.IsControlPlaneMachine(ctx.ElfMachine) {
 		labelIDs = append(labelIDs, *vipLabel.ID)
 	}

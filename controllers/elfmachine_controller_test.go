@@ -3447,6 +3447,48 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
+
+	Context("reconcileLabels", func() {
+		It("should add labels to the VM", func() {
+			managedLabel := &models.Label{
+				ID:    service.TowerString("managed-label"),
+				Key:   service.TowerString(towerresources.GetVMLabelManaged()),
+				Value: service.TowerString("true"),
+			}
+			namespaceLabel := &models.Label{
+				ID:    service.TowerString("namespace-label"),
+				Key:   service.TowerString(towerresources.GetVMLabelNamespace()),
+				Value: service.TowerString(elfMachine.Namespace),
+			}
+
+			clusterNameLabel := &models.Label{
+				ID:    service.TowerString("cluster-label"),
+				Key:   service.TowerString(towerresources.GetVMLabelClusterName()),
+				Value: service.TowerString(elfCluster.Name),
+			}
+
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.VMService = mockVMService
+			mockVMService.EXPECT().UpsertLabel(*managedLabel.Key, *managedLabel.Value).Return(managedLabel, nil)
+			mockVMService.EXPECT().UpsertLabel(*namespaceLabel.Key, *namespaceLabel.Value).Return(namespaceLabel, nil)
+			mockVMService.EXPECT().UpsertLabel(*clusterNameLabel.Key, *clusterNameLabel.Value).Return(clusterNameLabel, nil)
+			mockVMService.EXPECT().AddLabelsToVM(*vm.ID, gomock.InAnyOrder([]string{*managedLabel.ID, *namespaceLabel.ID, *clusterNameLabel.ID})).Times(1)
+
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileLabels(machineContext, vm)
+			Expect(ok).To(BeTrue())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(getLabelFromCache(*managedLabel.Key)).To(Equal(managedLabel))
+
+			vm.Labels = []*models.NestedLabel{{ID: managedLabel.ID}}
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err = reconciler.reconcileLabels(machineContext, vm)
+			Expect(ok).To(BeTrue())
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
 })
 
 func waitStaticIPAllocationSpec(mockNewVMService func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (service.VMService, error),
