@@ -3450,7 +3450,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 	Context("reconcileLabels", func() {
 		It("should add labels to the VM", func() {
-			managedLabel := &models.Label{
+			capeManagedLabel := &models.Label{
 				ID:    service.TowerString("managed-label"),
 				Key:   service.TowerString(towerresources.GetVMLabelManaged()),
 				Value: service.TowerString("true"),
@@ -3460,7 +3460,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Key:   service.TowerString(towerresources.GetVMLabelNamespace()),
 				Value: service.TowerString(elfMachine.Namespace),
 			}
-
 			clusterNameLabel := &models.Label{
 				ID:    service.TowerString("cluster-label"),
 				Key:   service.TowerString(towerresources.GetVMLabelClusterName()),
@@ -3471,18 +3470,30 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 			machineContext.VMService = mockVMService
-			mockVMService.EXPECT().UpsertLabel(*managedLabel.Key, *managedLabel.Value).Return(managedLabel, nil)
+
+			unexpectedError := errors.New("unexpected error")
+			setLabelInCache(capeManagedLabel)
 			mockVMService.EXPECT().UpsertLabel(*namespaceLabel.Key, *namespaceLabel.Value).Return(namespaceLabel, nil)
 			mockVMService.EXPECT().UpsertLabel(*clusterNameLabel.Key, *clusterNameLabel.Value).Return(clusterNameLabel, nil)
-			mockVMService.EXPECT().AddLabelsToVM(*vm.ID, gomock.InAnyOrder([]string{*managedLabel.ID, *namespaceLabel.ID, *clusterNameLabel.ID})).Times(1)
-
+			mockVMService.EXPECT().AddLabelsToVM(*vm.ID, gomock.InAnyOrder([]string{*capeManagedLabel.ID, *namespaceLabel.ID, *clusterNameLabel.ID})).Return(nil, unexpectedError)
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err := reconciler.reconcileLabels(machineContext, vm)
+			Expect(ok).To(BeFalse())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal(unexpectedError.Error()))
+			Expect(getLabelFromCache(*capeManagedLabel.Key)).To(BeNil())
+
+			mockVMService.EXPECT().UpsertLabel(*capeManagedLabel.Key, *capeManagedLabel.Value).Return(capeManagedLabel, nil)
+			mockVMService.EXPECT().UpsertLabel(*namespaceLabel.Key, *namespaceLabel.Value).Return(namespaceLabel, nil)
+			mockVMService.EXPECT().UpsertLabel(*clusterNameLabel.Key, *clusterNameLabel.Value).Return(clusterNameLabel, nil)
+			mockVMService.EXPECT().AddLabelsToVM(*vm.ID, gomock.InAnyOrder([]string{*capeManagedLabel.ID, *namespaceLabel.ID, *clusterNameLabel.ID})).Return(nil, nil)
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			ok, err = reconciler.reconcileLabels(machineContext, vm)
 			Expect(ok).To(BeTrue())
 			Expect(err).ToNot(HaveOccurred())
-			Expect(getLabelFromCache(*managedLabel.Key)).To(Equal(managedLabel))
+			Expect(getLabelFromCache(*capeManagedLabel.Key)).To(Equal(capeManagedLabel))
 
-			vm.Labels = []*models.NestedLabel{{ID: managedLabel.ID}}
+			vm.Labels = []*models.NestedLabel{{ID: capeManagedLabel.ID}}
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			ok, err = reconciler.reconcileLabels(machineContext, vm)
 			Expect(ok).To(BeTrue())

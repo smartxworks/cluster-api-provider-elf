@@ -194,9 +194,9 @@ var _ = Describe("TowerCache", func() {
 		}
 
 		Expect(getPGFromCache(*label.Key)).To(BeNil())
-		setLabelCache(label)
+		setLabelInCache(label)
 		Expect(getLabelFromCache(*label.Key)).To(Equal(label))
-		resetMemoryCache()
+		delLabelCache(*label.Key)
 		Expect(getLabelFromCache(*label.Key)).To(BeNil())
 	})
 
