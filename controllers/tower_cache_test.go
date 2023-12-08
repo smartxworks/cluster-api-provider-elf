@@ -186,6 +186,20 @@ var _ = Describe("TowerCache", func() {
 		Expect(getPGFromCache(pgName)).To(BeNil())
 	})
 
+	It("Label Cache", func() {
+		label := &models.Label{
+			ID:    service.TowerString("label-id"),
+			Key:   service.TowerString("label-key"),
+			Value: service.TowerString("label-name"),
+		}
+
+		Expect(getPGFromCache(*label.Key)).To(BeNil())
+		setLabelInCache(label)
+		Expect(getLabelFromCache(*label.Key)).To(Equal(label))
+		delLabelCache(*label.Key)
+		Expect(getLabelFromCache(*label.Key)).To(BeNil())
+	})
+
 	It("GPU Cache", func() {
 		gpuID := "gpu"
 		gpuVMInfo := models.GpuVMInfo{ID: service.TowerString(gpuID)}
