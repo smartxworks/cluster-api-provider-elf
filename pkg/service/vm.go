@@ -947,13 +947,33 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context
 		},
 	}
 
-	if _, err := svr.Session.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams); err != nil {
+	deleteVMPlacementGroupResp, err := svr.Session.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams)
+	if err != nil {
 		return nil, err
 	}
 
 	pgNames := make([]string, len(getVMPlacementGroupsResp.Payload))
 	for i := 0; i < len(getVMPlacementGroupsResp.Payload); i++ {
 		pgNames[i] = *getVMPlacementGroupsResp.Payload[i].Name
+	}
+
+	if len(deleteVMPlacementGroupResp.Payload) == 0 {
+		return pgNames, nil
+	}
+
+	// With consecutive calls to DeleteVMPlacementGroupsByNamePrefix (e.g. a short reconcile interval),
+	// Tower may create duplicate tasks for deleting placement groups.
+	// Wait for the first deletion task to complete or timeout,
+	// can increase the interval between calls to DeleteVMPlacementGroupsByNamePrefix
+	// to reduce the probability of duplicate deletion tasks.
+	taskID := *deleteVMPlacementGroupResp.Payload[0].TaskID
+	withLatestStatusTask, err := svr.WaitTask(ctx, taskID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval)
+	if err != nil {
+		return pgNames, errors.Wrapf(err, "failed to wait for placement groups with name prefix %s deleting task to complete in %s: taskID %s", namePrefix, config.WaitTaskTimeoutForPlacementGroupOperation, taskID)
+	}
+
+	if *withLatestStatusTask.Status == models.TaskStatusFAILED {
+		return pgNames, errors.Errorf("failed to delete placement groups with name prefix %s in task %s", namePrefix, *withLatestStatusTask.ID)
 	}
 
 	return pgNames, nil
