@@ -1,0 +1,68 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: ElfMachine
+metadata:
+  annotations:
+    cluster.x-k8s.io/cloned-from-groupkind: ElfMachineTemplate.infrastructure.cluster.x-k8s.io
+    cluster.x-k8s.io/cloned-from-name: haijian-test1-controlplane
+  creationTimestamp: "2023-12-13T06:59:41Z"
+  finalizers:
+  - elfmachine.infrastructure.cluster.x-k8s.io
+  - elfmachinestaticip.infrastructure.cluster.x-k8s.io
+  generation: 3
+  labels:
+    cluster.x-k8s.io/cluster-name: haijian-test1
+    cluster.x-k8s.io/control-plane: ""
+    cluster.x-k8s.io/control-plane-name: haijian-test1-controlplane
+  name: haijian-test1-controlplane-4vrh9
+  namespace: default
+  ownerReferences:
+  - apiVersion: cluster.x-k8s.io/v1beta1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Machine
+    name: haijian-test1-controlplane-ph756
+    uid: 51a9eb4a-3ed0-49d7-b979-80bcacbeb750
+  resourceVersion: "8047355"
+  uid: db02a6f2-b12c-45d0-845b-39098bbb2021
+spec:
+  cloneMode: FastClone
+  diskGiB: 0
+  ha: true
+  memoryMiB: 12288
+  network:
+    devices:
+    - ipAddrs:
+      - 10.255.160.10
+      netmask: 255.255.0.0
+      networkType: IPV4
+      routes:
+      - gateway: 10.255.0.1
+      vlan: dd1f408f-7715-48c1-a817-13c3568f1d93_4cd00407-63ca-440b-80b7-ceacfccb8d08
+    nameservers:
+    - 10.255.0.2
+  numCPUS: 8
+  osType: LINUX
+  providerID: elf://9027613c-aa65-4065-896f-cbf015990b0a
+  template: sks-managed-rocky-8.8-amd64-k8s-v1.25.15-v1dev2-aptczj-template
+status:
+  addresses:
+  - address: 10.255.160.10
+    type: InternalIP
+  conditions:
+  - lastTransitionTime: "2023-12-13T07:02:35Z"
+    status: "True"
+    type: Ready
+  - lastTransitionTime: "2023-12-13T06:59:41Z"
+    status: "True"
+    type: TowerAvailable
+  - lastTransitionTime: "2023-12-13T07:02:35Z"
+    status: "True"
+    type: VMProvisioned
+  hostServerName: node20-218
+  hostServerRef: clb291e3200fg0958s6r9tf79
+  network:
+  - ipAddrs:
+    - 10.255.160.10
+    macAddr: 52:54:00:83:f9:3c
+  ready: true
+  vmRef: 9027613c-aa65-4065-896f-cbf015990b0a

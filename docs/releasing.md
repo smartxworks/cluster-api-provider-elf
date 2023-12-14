@@ -1,7 +1,7 @@
 # 发布流程
 
 1. 如果发布的是新的 minor 版本，创建一个新的发布分支并推送到 GitHub，否则切换到该分支，例如 `release-0.6`
-2. 设置版本环境变量 `VERSION=v0.x.x`，版本以 v 为前缀，例如 v0.0.6
+2. 设置版本环境变量 `VERSION=v1.4.0-beta.0`，版本以 v 为前缀，例如 v0.0.6
 3. 打标签 `git tag -m $VERSION $VERSION`
 4. 推送标签到 GitHub `git push upstream $VERSION`
 5. 标签推送到 GitHub 后会自动触发 [Github Action](https://github.com/smartxworks/cluster-api-provider-elf) 创建一个[待发布版本](https://github.com/smartxworks/cluster-api-provider-elf/releases)
