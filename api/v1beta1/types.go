@@ -16,6 +16,10 @@ limitations under the License.
 
 package v1beta1
 
+import (
+	corev1 "k8s.io/api/core/v1"
+)
+
 // CloneMode is the type of clone operation used to clone a VM from a template.
 type CloneMode string
 
@@ -137,6 +141,11 @@ type NetworkDeviceSpec struct {
 	// Required when DHCP4 is false.
 	// +optional
 	Routes []NetworkDeviceRouteSpec `json:"routes,omitempty"`
+
+	// AddressesFromPools is a list of IPAddressPools that should be assigned
+	// to IPAddressClaims.
+	// +optional
+	AddressesFromPools []corev1.TypedLocalObjectReference `json:"addressesFromPools,omitempty"`
 }
 
 func (d *NetworkDeviceSpec) HasNetworkType() bool {

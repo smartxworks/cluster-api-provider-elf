@@ -22,6 +22,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	"k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	apiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/errors"
@@ -416,6 +417,13 @@ func (in *NetworkDeviceSpec) DeepCopyInto(out *NetworkDeviceSpec) {
 		in, out := &in.Routes, &out.Routes
 		*out = make([]NetworkDeviceRouteSpec, len(*in))
 		copy(*out, *in)
+	}
+	if in.AddressesFromPools != nil {
+		in, out := &in.AddressesFromPools, &out.AddressesFromPools
+		*out = make([]v1.TypedLocalObjectReference, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 }
 
