@@ -115,7 +115,9 @@ func TestGPUVMInfoCollection(t *testing.T) {
 
 		gpuVMInfo1.UserUsage = models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH)
 		g.Expect(NewGPUVMInfos(gpuVMInfo1).FilterAvailableGPUVMInfos().Len()).To(gomega.Equal(1))
-		gpuVMInfo1.Vms = []*models.GpuVMDetail{{}}
+		gpuVMInfo1.Vms = []*models.GpuVMDetail{{Status: models.NewVMStatus(models.VMStatusSTOPPED)}}
+		g.Expect(NewGPUVMInfos(gpuVMInfo1).FilterAvailableGPUVMInfos().Len()).To(gomega.Equal(1))
+		gpuVMInfo1.Vms = []*models.GpuVMDetail{{Status: models.NewVMStatus(models.VMStatusRUNNING)}}
 		g.Expect(NewGPUVMInfos(gpuVMInfo1).FilterAvailableGPUVMInfos().Len()).To(gomega.Equal(0))
 
 		gpuVMInfo2.UserUsage = models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU)
