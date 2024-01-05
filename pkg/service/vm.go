@@ -757,20 +757,36 @@ func (svr *TowerVMService) UpsertLabel(key, value string) (*models.Label, error)
 // DeleteLabel deletes a label.
 // If strict is false, delete the label directly.
 // If strict is true, delete the label only if no virtual machine references the label.
+//
+// The return value:
+// 1. An empty string indicates that the label does not need to be deleted or has been deleted.
+// 2.A non-empty string indicates the deleted label ID.
 func (svr *TowerVMService) DeleteLabel(key, value string, strict bool) (string, error) {
+	getLabelParams := clientlabel.NewGetLabelsParams()
+	getLabelParams.RequestBody = &models.GetLabelsRequestBody{
+		Where: &models.LabelWhereInput{
+			Key:   TowerString(key),
+			Value: TowerString(value),
+		},
+	}
+	getLabelResp, err := svr.Session.Label.GetLabels(getLabelParams)
+	if err != nil {
+		return "", err
+	}
+	if len(getLabelResp.Payload) == 0 {
+		return "", nil
+	}
+
+	label := getLabelResp.Payload[0]
+	if strict && len(label.Vms) > 0 {
+		return "", nil
+	}
+
 	deleteLabelParams := clientlabel.NewDeleteLabelParams()
 	deleteLabelParams.RequestBody = &models.LabelDeletionParams{
 		Where: &models.LabelWhereInput{
-			AND: []*models.LabelWhereInput{
-				{Key: TowerString(key), Value: TowerString(value)},
-			},
+			ID: label.ID,
 		},
-	}
-	if strict {
-		deleteLabelParams.RequestBody.Where.AND = append(
-			deleteLabelParams.RequestBody.Where.AND,
-			&models.LabelWhereInput{VMNum: TowerInt32(0)},
-		)
 	}
 
 	deleteLabelResp, err := svr.Session.Label.DeleteLabel(deleteLabelParams)
