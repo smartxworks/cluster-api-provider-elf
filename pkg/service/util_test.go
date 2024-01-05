@@ -142,33 +142,33 @@ func TestGetAvailableCountFromGPUVMInfo(t *testing.T) {
 	})
 }
 
-func TestFilterActualAllocatedVMsForGPU(t *testing.T) {
+func TestGetVMsOccupyingGPU(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 
 	t.Run("should filter actual allocated vms", func(t *testing.T) {
 		vms := []*models.GpuVMDetail{}
-		g.Expect(filterActualAllocatedVMsForGPU(vms)).To(gomega.BeEmpty())
+		g.Expect(getVMsOccupyingGPU(vms)).To(gomega.BeEmpty())
 
 		vms = []*models.GpuVMDetail{{Status: models.NewVMStatus(models.VMStatusSTOPPED)}}
-		g.Expect(filterActualAllocatedVMsForGPU(vms)).To(gomega.BeEmpty())
+		g.Expect(getVMsOccupyingGPU(vms)).To(gomega.BeEmpty())
 
 		vms = []*models.GpuVMDetail{{InRecycleBin: TowerBool(true)}}
-		g.Expect(filterActualAllocatedVMsForGPU(vms)).To(gomega.BeEmpty())
+		g.Expect(getVMsOccupyingGPU(vms)).To(gomega.BeEmpty())
 
 		vms = []*models.GpuVMDetail{{Status: models.NewVMStatus(models.VMStatusRUNNING)}}
-		g.Expect(filterActualAllocatedVMsForGPU(vms)).To(gomega.Equal(vms))
+		g.Expect(getVMsOccupyingGPU(vms)).To(gomega.Equal(vms))
 
 		vms = []*models.GpuVMDetail{{Status: models.NewVMStatus(models.VMStatusSUSPENDED)}}
-		g.Expect(filterActualAllocatedVMsForGPU(vms)).To(gomega.Equal(vms))
+		g.Expect(getVMsOccupyingGPU(vms)).To(gomega.Equal(vms))
 
 		vms = []*models.GpuVMDetail{{Status: models.NewVMStatus(models.VMStatusUNKNOWN)}}
-		g.Expect(filterActualAllocatedVMsForGPU(vms)).To(gomega.Equal(vms))
+		g.Expect(getVMsOccupyingGPU(vms)).To(gomega.Equal(vms))
 
 		vms = []*models.GpuVMDetail{{Status: models.NewVMStatus(models.VMStatusDELETED)}}
-		g.Expect(filterActualAllocatedVMsForGPU(vms)).To(gomega.Equal(vms))
+		g.Expect(getVMsOccupyingGPU(vms)).To(gomega.Equal(vms))
 
 		vms = []*models.GpuVMDetail{{Status: models.NewVMStatus(models.VMStatusSTOPPED)}, {Status: models.NewVMStatus(models.VMStatusRUNNING)}}
-		g.Expect(filterActualAllocatedVMsForGPU(vms)).To(gomega.Equal([]*models.GpuVMDetail{{Status: models.NewVMStatus(models.VMStatusRUNNING)}}))
+		g.Expect(getVMsOccupyingGPU(vms)).To(gomega.Equal([]*models.GpuVMDetail{{Status: models.NewVMStatus(models.VMStatusRUNNING)}}))
 	})
 }
 

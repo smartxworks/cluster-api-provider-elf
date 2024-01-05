@@ -211,7 +211,7 @@ func IsPlacementGroupTask(task *models.Task) bool {
 func HasGPUsCanNotBeUsedForVM(gpuVMInfos GPUVMInfos, elfMachine *infrav1.ElfMachine) bool {
 	if elfMachine.RequiresPassThroughGPUDevices() {
 		for gpuID := range gpuVMInfos {
-			vms := filterActualAllocatedVMsForGPU(gpuVMInfos[gpuID].Vms)
+			vms := getVMsOccupyingGPU(gpuVMInfos[gpuID].Vms)
 			if len(vms) > 1 || (len(vms) == 1 && *vms[0].Name != elfMachine.Name) {
 				return true
 			}
@@ -249,7 +249,7 @@ func HasGPUsCanNotBeUsedForVM(gpuVMInfos GPUVMInfos, elfMachine *infrav1.ElfMach
 // GetAvailableCountFromGPUVMInfo returns the number of GPU that can be allocated.
 func GetAvailableCountFromGPUVMInfo(gpuVMInfo *models.GpuVMInfo) int32 {
 	if *gpuVMInfo.UserUsage == models.GpuDeviceUsagePASSTHROUGH {
-		vms := filterActualAllocatedVMsForGPU(gpuVMInfo.Vms)
+		vms := getVMsOccupyingGPU(gpuVMInfo.Vms)
 		if len(vms) > 0 {
 			return 0
 		}
@@ -260,11 +260,8 @@ func GetAvailableCountFromGPUVMInfo(gpuVMInfo *models.GpuVMInfo) int32 {
 	return *gpuVMInfo.AvailableVgpusNum
 }
 
-// filterActualAllocatedVMsForGPU returns the virtual machines in the GPU that actually allocated.
-// There are only two cases that the virtual machine will not consider that the GPU is actually allocated:
-// 1. In the recycle bin.
-// 2. Has been shut down.
-func filterActualAllocatedVMsForGPU(gpuVMs []*models.GpuVMDetail) []*models.GpuVMDetail {
+// getVMsOccupyingGPU finds the virtual machines in the given list which are actually occupying the GPU devices.
+func getVMsOccupyingGPU(gpuVMs []*models.GpuVMDetail) []*models.GpuVMDetail {
 	var vms []*models.GpuVMDetail
 	for i := 0; i < len(gpuVMs); i++ {
 		if (gpuVMs[i].InRecycleBin == nil || !*gpuVMs[i].InRecycleBin) &&
