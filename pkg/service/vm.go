@@ -67,6 +67,7 @@ type VMService interface {
 	GetVlan(id string) (*models.Vlan, error)
 	UpsertLabel(key, value string) (*models.Label, error)
 	DeleteLabel(key, value string, strict bool) (string, error)
+	CleanLabels(keys []string) ([]string, error)
 	AddLabelsToVM(vmID string, labels []string) (*models.Task, error)
 	CreateVMPlacementGroup(name, clusterID string, vmPolicy models.VMVMPolicy) (*models.WithTaskVMPlacementGroup, error)
 	GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error)
@@ -769,7 +770,7 @@ func (svr *TowerVMService) DeleteLabel(key, value string, strict bool) (string, 
 	if strict {
 		deleteLabelParams.RequestBody.Where.AND = append(
 			deleteLabelParams.RequestBody.Where.AND,
-			&models.LabelWhereInput{VMNum: TowerInt32(0)},
+			&models.LabelWhereInput{TotalNum: TowerInt32(0)},
 		)
 	}
 
@@ -783,6 +784,30 @@ func (svr *TowerVMService) DeleteLabel(key, value string, strict bool) (string, 
 	}
 
 	return *deleteLabelResp.Payload[0].Data.ID, nil
+}
+
+// CleanLabels deletes specified unused labels.
+// CleanLabels is used to clean unused labels regularly and should not be called frequently.
+func (svr *TowerVMService) CleanLabels(keys []string) ([]string, error) {
+	deleteLabelParams := clientlabel.NewDeleteLabelParams()
+	deleteLabelParams.RequestBody = &models.LabelDeletionParams{
+		Where: &models.LabelWhereInput{
+			KeyIn:        keys,
+			CreatedAtLte: TowerString(time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339)),
+		},
+	}
+
+	deleteLabelResp, err := svr.Session.Label.DeleteLabel(deleteLabelParams)
+	if err != nil {
+		return nil, err
+	}
+
+	labelIDs := make([]string, len(deleteLabelResp.Payload))
+	for i := 0; i < len(deleteLabelResp.Payload); i++ {
+		labelIDs[i] = *deleteLabelResp.Payload[i].Data.ID
+	}
+
+	return labelIDs, nil
 }
 
 // AddLabelsToVM adds a label to a VM.

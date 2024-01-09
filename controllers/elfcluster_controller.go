@@ -279,6 +279,32 @@ func (r *ElfClusterReconciler) reconcileDeleteLabel(ctx *context.ClusterContext,
 	return nil
 }
 
+// cleanLabels cleans unused labels for Tower every day.
+// If an error is encountered during the cleanup process,
+// it will not be retried and will be started again in the next reconcile.
+func (r *ElfClusterReconciler) cleanLabels(ctx *context.ClusterContext) {
+	// Locking ensures that only one coroutine cleans at the same time
+	if ok := acquireTicketForGCTowerLabels(ctx.ElfCluster.Spec.Tower.Server); ok {
+		defer releaseTicketForForGCTowerLabels(ctx.ElfCluster.Spec.Tower.Server)
+	} else {
+		return
+	}
+
+	ctx.Logger.V(1).Info(fmt.Sprintf("Cleaning labels for Tower %s", ctx.ElfCluster.Spec.Tower.Server))
+
+	keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace(), towerresources.GetVMLabelManaged()}
+	labelIDs, err := ctx.VMService.CleanLabels(keys)
+	if err != nil {
+		ctx.Logger.Error(err, fmt.Sprintf("failed to clean labels for Tower %s", ctx.ElfCluster.Spec.Tower.Server))
+
+		return
+	}
+
+	recordGCTimeForTowerLabels(ctx.ElfCluster.Spec.Tower.Server)
+
+	ctx.Logger.V(1).Info(fmt.Sprintf("Labels of Tower %s are cleaned successfully", ctx.ElfCluster.Spec.Tower.Server), "labelCount", len(labelIDs))
+}
+
 func (r *ElfClusterReconciler) reconcileNormal(ctx *context.ClusterContext) (reconcile.Result, error) { //nolint:unparam
 	ctx.Logger.Info("Reconciling ElfCluster")
 
@@ -297,6 +323,8 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx *context.ClusterContext) (rec
 	if !ctx.Cluster.DeletionTimestamp.IsZero() {
 		return reconcile.Result{}, nil
 	}
+
+	r.cleanLabels(ctx)
 
 	// Wait until the API server is online and accessible.
 	if !r.isAPIServerOnline(ctx) {
