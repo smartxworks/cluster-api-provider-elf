@@ -136,7 +136,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 
 			logBuffer.Reset()
 			removeGPUVMInfosCache(gpuIDs)
-			gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: service.TowerString("id"), Name: service.TowerString("vm")}}
+			gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: service.TowerString("id"), Name: service.TowerString("vm"), Status: models.NewVMStatus(models.VMStatusRUNNING)}}
 			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(nil, nil)
 			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByIDs([]string{*gpuVMInfo.ID}).Return(gpuVMInfos, nil)
 			hostID, gpus, err = reconciler.selectHostAndGPUsForVM(machineContext, "")
@@ -178,7 +178,8 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			gpuVMInfo1.Vms = []*models.GpuVMDetail{}
 			gpuVMInfo1.Host = &models.NestedHost{ID: host.ID}
 			gpuVMInfo2 := fake.NewTowerVGPUVMInfo(3)
-			gpuVMInfo2.Vms = []*models.GpuVMDetail{{VgpuInstanceOnVMNum: service.TowerInt32(1)}}
+			gpuVMInfo2.AvailableVgpusNum = service.TowerInt32(2)
+			gpuVMInfo2.Vms = []*models.GpuVMDetail{{}}
 			gpuVMInfo2.Host = &models.NestedHost{ID: host.ID}
 			gpuVMInfos := service.NewGPUVMInfos(gpuVMInfo1, gpuVMInfo2)
 			requiredVGPUDevice := infrav1.VGPUDeviceSpec{Type: vGPUType, Count: 3}
@@ -311,7 +312,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			host := fake.NewTowerHost()
 			gpuVMInfo := fake.NewTowerGPUVMInfo()
 			gpuVMInfo.Host = &models.NestedHost{ID: host.ID}
-			gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: service.TowerString("id"), Name: service.TowerString("vm")}}
+			gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: service.TowerString("id"), Name: service.TowerString("vm"), Status: models.NewVMStatus(models.VMStatusRUNNING)}}
 			gpuVMInfos := service.NewGPUVMInfos(gpuVMInfo)
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.Host = &models.NestedHost{ID: host.ID}
@@ -331,7 +332,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			Expect(logBuffer.String()).To(ContainSubstring("GPU devices of VM are already in use, so remove and reallocate"))
 
 			removeGPUVMInfosCache([]string{*gpuVMInfo.ID})
-			gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: vm.ID, Name: vm.Name}}
+			gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: vm.ID, Name: vm.Name, Status: models.NewVMStatus(models.VMStatusRUNNING)}}
 			ok, err = reconciler.reconcileGPUDevices(machineContext, vm)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ok).To(BeTrue())
@@ -543,7 +544,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 		Expect(ok).To(BeTrue())
 
 		removeGPUVMInfosCache(gpuIDs)
-		gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: service.TowerString("vm1"), Name: service.TowerString("vm1")}}
+		gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: service.TowerString("vm1"), Name: service.TowerString("vm1"), Status: models.NewVMStatus(models.VMStatusRUNNING)}}
 		mockVMService.EXPECT().GetGPUDevicesAllocationInfoByIDs(gpuIDs).Return(service.NewGPUVMInfos(gpuVMInfo), nil)
 		ok, err = reconciler.checkGPUsCanBeUsedForVM(machineContext, gpuIDs)
 		Expect(err).NotTo(HaveOccurred())

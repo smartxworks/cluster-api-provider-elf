@@ -267,11 +267,6 @@ func GPUVMInfoFilterAnd(filters ...GPUVMInfoFilterFunc) GPUVMInfoFilterFunc {
 // which can allocatable for virtual machines.
 func (s GPUVMInfos) FilterAvailableGPUVMInfos() GPUVMInfos {
 	return s.Filter(func(gpuVMInfo *models.GpuVMInfo) bool {
-		if (*gpuVMInfo.UserUsage == models.GpuDeviceUsagePASSTHROUGH && len(gpuVMInfo.Vms) > 0) ||
-			(*gpuVMInfo.UserUsage == models.GpuDeviceUsageVGPU && *gpuVMInfo.AvailableVgpusNum <= 0) {
-			return false
-		}
-
-		return true
+		return GetAvailableCountFromGPUVMInfo(gpuVMInfo) > 0
 	})
 }

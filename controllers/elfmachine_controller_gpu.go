@@ -94,8 +94,6 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx *context.MachineContex
 		return nil, nil, err
 	}
 
-	service.CalculateAssignedAndAvailableNumForGPUVMInfos(gpuVMInfos)
-
 	// Filter available GPU devices.
 	gpuVMInfos = gpuVMInfos.FilterAvailableGPUVMInfos()
 
@@ -375,8 +373,6 @@ func (r *ElfMachineReconciler) checkGPUsCanBeUsedForVM(ctx *context.MachineConte
 		if err != nil || len(gpuVMInfos) != len(gpuDeviceIDs) {
 			return false, err
 		}
-
-		service.CalculateAssignedAndAvailableNumForGPUVMInfos(gpuVMInfos)
 
 		setGPUVMInfosCache(gpuVMInfos)
 	}
