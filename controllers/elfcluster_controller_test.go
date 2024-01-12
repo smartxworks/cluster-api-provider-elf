@@ -135,7 +135,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			}
 			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 
-			keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace(), towerresources.GetVMLabelManaged()}
+			keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace()}
 			mockVMService.EXPECT().CleanLabels(keys).Return(nil, nil)
 
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
@@ -305,21 +305,22 @@ var _ = Describe("ElfClusterReconciler", func() {
 				VMService:         mockVMService,
 			}
 
+			logBuffer.Reset()
 			unexpectedError := errors.New("unexpected error")
-			keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace(), towerresources.GetVMLabelManaged()}
+			keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace()}
 			mockVMService.EXPECT().CleanLabels(keys).Return(nil, unexpectedError)
 			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
-			reconciler.cleanLabels(clusterContext)
-			Expect(logBuffer.String()).To(ContainSubstring("failed to clean labels for Tower"))
+			reconciler.cleanOrphanLabels(clusterContext)
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Warning: failed to clean orphan labels in Tower %s", elfCluster.Spec.Tower.Server)))
 
 			logBuffer.Reset()
 			mockVMService.EXPECT().CleanLabels(keys).Return(nil, nil)
-			reconciler.cleanLabels(clusterContext)
+			reconciler.cleanOrphanLabels(clusterContext)
 			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Labels of Tower %s are cleaned successfully", elfCluster.Spec.Tower.Server)))
 
 			logBuffer.Reset()
-			reconciler.cleanLabels(clusterContext)
-			Expect(logBuffer.String()).NotTo(ContainSubstring(fmt.Sprintf("Cleaning labels for Tower %s", elfCluster.Spec.Tower.Server)))
+			reconciler.cleanOrphanLabels(clusterContext)
+			Expect(logBuffer.String()).NotTo(ContainSubstring(fmt.Sprintf("Cleaning orphan labels in Tower %s created by CAPE", elfCluster.Spec.Tower.Server)))
 		})
 	})
 })

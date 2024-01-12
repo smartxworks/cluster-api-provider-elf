@@ -156,8 +156,8 @@ func getKeyForGCLabelTime(tower string) string {
 	return fmt.Sprintf("label:gc:time:%s", tower)
 }
 
-// acquireTicketForGCTowerLabels returns whether label gc operation can be performed.
-func acquireTicketForGCTowerLabels(tower string) bool {
+// acquireLockForGCTowerLabels returns whether label gc operation can be performed.
+func acquireLockForGCTowerLabels(tower string) bool {
 	labelOperationLock.Lock()
 	defer labelOperationLock.Unlock()
 
@@ -183,8 +183,8 @@ func acquireTicketForGCTowerLabels(tower string) bool {
 	return true
 }
 
-// releaseTicketForForGCTowerLabels releases the Tower whose labels are being cleared.
-func releaseTicketForForGCTowerLabels(tower string) {
+// releaseLockForForGCTowerLabels releases the Tower whose labels are being cleared.
+func releaseLockForForGCTowerLabels(tower string) {
 	labelOperationLock.Lock()
 	defer labelOperationLock.Unlock()
 

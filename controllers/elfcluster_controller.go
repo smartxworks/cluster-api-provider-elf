@@ -279,23 +279,23 @@ func (r *ElfClusterReconciler) reconcileDeleteLabel(ctx *context.ClusterContext,
 	return nil
 }
 
-// cleanLabels cleans unused labels for Tower every day.
+// cleanOrphanLabels cleans unused labels for Tower every day.
 // If an error is encountered during the cleanup process,
 // it will not be retried and will be started again in the next reconcile.
-func (r *ElfClusterReconciler) cleanLabels(ctx *context.ClusterContext) {
+func (r *ElfClusterReconciler) cleanOrphanLabels(ctx *context.ClusterContext) {
 	// Locking ensures that only one coroutine cleans at the same time
-	if ok := acquireTicketForGCTowerLabels(ctx.ElfCluster.Spec.Tower.Server); ok {
-		defer releaseTicketForForGCTowerLabels(ctx.ElfCluster.Spec.Tower.Server)
+	if ok := acquireLockForGCTowerLabels(ctx.ElfCluster.Spec.Tower.Server); ok {
+		defer releaseLockForForGCTowerLabels(ctx.ElfCluster.Spec.Tower.Server)
 	} else {
 		return
 	}
 
-	ctx.Logger.V(1).Info(fmt.Sprintf("Cleaning labels for Tower %s", ctx.ElfCluster.Spec.Tower.Server))
+	ctx.Logger.V(1).Info(fmt.Sprintf("Cleaning orphan labels in Tower %s created by CAPE", ctx.ElfCluster.Spec.Tower.Server))
 
-	keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace(), towerresources.GetVMLabelManaged()}
+	keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace()}
 	labelIDs, err := ctx.VMService.CleanLabels(keys)
 	if err != nil {
-		ctx.Logger.Error(err, fmt.Sprintf("failed to clean labels for Tower %s", ctx.ElfCluster.Spec.Tower.Server))
+		ctx.Logger.Error(err, fmt.Sprintf("Warning: failed to clean orphan labels in Tower %s", ctx.ElfCluster.Spec.Tower.Server))
 
 		return
 	}
@@ -324,7 +324,7 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx *context.ClusterContext) (rec
 		return reconcile.Result{}, nil
 	}
 
-	r.cleanLabels(ctx)
+	r.cleanOrphanLabels(ctx)
 
 	// Wait until the API server is online and accessible.
 	if !r.isAPIServerOnline(ctx) {
