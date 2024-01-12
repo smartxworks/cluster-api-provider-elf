@@ -135,6 +135,9 @@ var _ = Describe("ElfClusterReconciler", func() {
 			}
 			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
 
+			keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace()}
+			mockVMService.EXPECT().CleanLabels(keys).Return(nil, nil)
+
 			elfClusterKey := capiutil.ObjectKey(elfCluster)
 			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			_, _ = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
@@ -280,6 +283,44 @@ var _ = Describe("ElfClusterReconciler", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring(""))
 			Expect(apierrors.IsNotFound(reconciler.Client.Get(reconciler, elfClusterKey, elfCluster))).To(BeTrue())
+		})
+	})
+
+	Context("CleanLabels", func() {
+		BeforeEach(func() {
+			resetMemoryCache()
+		})
+
+		It("should clean labels for Tower", func() {
+			elfCluster.Spec.ControlPlaneEndpoint.Host = "127.0.0.1"
+			elfCluster.Spec.ControlPlaneEndpoint.Port = 6443
+			// ctrlMgrContext := fake.NewControllerManagerContext(cluster, elfCluster)
+			ctrlContext := newCtrlContexts(elfCluster, cluster)
+			fake.InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
+			clusterContext := &context.ClusterContext{
+				ControllerContext: ctrlContext,
+				Cluster:           cluster,
+				ElfCluster:        elfCluster,
+				Logger:            ctrllog.Log,
+				VMService:         mockVMService,
+			}
+
+			logBuffer.Reset()
+			unexpectedError := errors.New("unexpected error")
+			keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace()}
+			mockVMService.EXPECT().CleanLabels(keys).Return(nil, unexpectedError)
+			reconciler := &ElfClusterReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			reconciler.cleanOrphanLabels(clusterContext)
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Warning: failed to clean orphan labels in Tower %s", elfCluster.Spec.Tower.Server)))
+
+			logBuffer.Reset()
+			mockVMService.EXPECT().CleanLabels(keys).Return(nil, nil)
+			reconciler.cleanOrphanLabels(clusterContext)
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Labels of Tower %s are cleaned successfully", elfCluster.Spec.Tower.Server)))
+
+			logBuffer.Reset()
+			reconciler.cleanOrphanLabels(clusterContext)
+			Expect(logBuffer.String()).NotTo(ContainSubstring(fmt.Sprintf("Cleaning orphan labels in Tower %s created by CAPE", elfCluster.Spec.Tower.Server)))
 		})
 	})
 })

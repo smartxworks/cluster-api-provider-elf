@@ -144,6 +144,61 @@ func getKeyForVMDuplicate(name string) string {
 	return fmt.Sprintf("vm:duplicate:%s", name)
 }
 
+/* Label */
+
+var labelOperationLock sync.Mutex
+
+func getKeyForGCLabel(tower string) string {
+	return fmt.Sprintf("label:gc:%s", tower)
+}
+
+func getKeyForGCLabelTime(tower string) string {
+	return fmt.Sprintf("label:gc:time:%s", tower)
+}
+
+// acquireLockForGCTowerLabels returns whether label gc operation can be performed.
+func acquireLockForGCTowerLabels(tower string) bool {
+	labelOperationLock.Lock()
+	defer labelOperationLock.Unlock()
+
+	if _, found := inMemoryCache.Get(getKeyForGCLabel(tower)); found {
+		return false
+	}
+
+	key := getKeyForGCLabelTime(tower)
+	if val, found := inMemoryCache.Get(key); found {
+		lastGCTime, ok := val.(time.Time)
+		if ok {
+			if time.Now().Before(lastGCTime.Add(24 * time.Hour)) {
+				return false
+			}
+		} else {
+			// Delete unexpected data.
+			inMemoryCache.Delete(key)
+		}
+	}
+
+	inMemoryCache.Set(getKeyForGCLabel(tower), nil, cache.NoExpiration)
+
+	return true
+}
+
+// releaseLockForForGCTowerLabels releases the Tower whose labels are being cleared.
+func releaseLockForForGCTowerLabels(tower string) {
+	labelOperationLock.Lock()
+	defer labelOperationLock.Unlock()
+
+	inMemoryCache.Delete(getKeyForGCLabel(tower))
+}
+
+// recordGCTimeForTowerLabels records the last GC label time of the specified Tower.
+func recordGCTimeForTowerLabels(tower string) {
+	labelOperationLock.Lock()
+	defer labelOperationLock.Unlock()
+
+	inMemoryCache.Set(getKeyForGCLabelTime(tower), time.Now(), cache.NoExpiration)
+}
+
 /* GPU */
 
 type lockedGPUDevice struct {

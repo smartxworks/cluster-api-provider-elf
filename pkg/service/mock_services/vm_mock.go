@@ -83,6 +83,21 @@ func (mr *MockVMServiceMockRecorder) AddVMsToPlacementGroup(placementGroup, vmID
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddVMsToPlacementGroup", reflect.TypeOf((*MockVMService)(nil).AddVMsToPlacementGroup), placementGroup, vmIDs)
 }
 
+// CleanLabels mocks base method.
+func (m *MockVMService) CleanLabels(keys []string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CleanLabels", keys)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CleanLabels indicates an expected call of CleanLabels.
+func (mr *MockVMServiceMockRecorder) CleanLabels(keys interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CleanLabels", reflect.TypeOf((*MockVMService)(nil).CleanLabels), keys)
+}
+
 // Clone mocks base method.
 func (m *MockVMService) Clone(elfCluster *v1beta1.ElfCluster, elfMachine *v1beta1.ElfMachine, bootstrapData, host string, machineGPUDevices []*service.GPUDeviceInfo) (*models.WithTaskVM, error) {
 	m.ctrl.T.Helper()
