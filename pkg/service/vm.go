@@ -794,6 +794,7 @@ func (svr *TowerVMService) CleanLabels(keys []string) ([]string, error) {
 		Where: &models.LabelWhereInput{
 			KeyIn:        keys,
 			CreatedAtLte: TowerString(time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339)),
+			TotalNum:     TowerInt32(0),
 		},
 	}
 
