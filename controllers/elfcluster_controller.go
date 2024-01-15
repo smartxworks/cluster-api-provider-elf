@@ -293,7 +293,7 @@ func (r *ElfClusterReconciler) cleanOrphanLabels(ctx *context.ClusterContext) {
 	ctx.Logger.V(1).Info(fmt.Sprintf("Cleaning orphan labels in Tower %s created by CAPE", ctx.ElfCluster.Spec.Tower.Server))
 
 	keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace()}
-	labelIDs, err := ctx.VMService.CleanLabels(keys)
+	labelIDs, err := ctx.VMService.CleanUnusedLabels(keys)
 	if err != nil {
 		ctx.Logger.Error(err, fmt.Sprintf("Warning: failed to clean orphan labels in Tower %s", ctx.ElfCluster.Spec.Tower.Server))
 

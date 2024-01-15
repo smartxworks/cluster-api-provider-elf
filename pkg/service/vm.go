@@ -67,7 +67,7 @@ type VMService interface {
 	GetVlan(id string) (*models.Vlan, error)
 	UpsertLabel(key, value string) (*models.Label, error)
 	DeleteLabel(key, value string, strict bool) (string, error)
-	CleanLabels(keys []string) ([]string, error)
+	CleanUnusedLabels(keys []string) ([]string, error)
 	AddLabelsToVM(vmID string, labels []string) (*models.Task, error)
 	CreateVMPlacementGroup(name, clusterID string, vmPolicy models.VMVMPolicy) (*models.WithTaskVMPlacementGroup, error)
 	GetVMPlacementGroup(name string) (*models.VMPlacementGroup, error)
@@ -786,14 +786,15 @@ func (svr *TowerVMService) DeleteLabel(key, value string, strict bool) (string, 
 	return *deleteLabelResp.Payload[0].Data.ID, nil
 }
 
-// CleanLabels deletes specified unused labels.
-// CleanLabels is used to clean unused labels regularly and should not be called frequently.
-func (svr *TowerVMService) CleanLabels(keys []string) ([]string, error) {
+// CleanUnusedLabels deletes specified unused labels.
+// CleanUnusedLabels is used to clean unused labels regularly and should not be called frequently.
+func (svr *TowerVMService) CleanUnusedLabels(keys []string) ([]string, error) {
 	deleteLabelParams := clientlabel.NewDeleteLabelParams()
 	deleteLabelParams.RequestBody = &models.LabelDeletionParams{
 		Where: &models.LabelWhereInput{
 			KeyIn:        keys,
 			CreatedAtLte: TowerString(time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339)),
+			TotalNum:     TowerInt32(0),
 		},
 	}
 
