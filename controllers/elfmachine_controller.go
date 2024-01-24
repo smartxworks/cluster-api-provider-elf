@@ -922,6 +922,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx *context.MachineContext, vm *
 
 		if service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) {
 			releaseTicketForCreateVM(ctx.ElfMachine.Name)
+			recordElfClusterStorageInsufficient(ctx, false)
 			recordElfClusterMemoryInsufficient(ctx, false)
 
 			if err := recordPlacementGroupPolicyNotSatisfied(ctx, false); err != nil {
@@ -958,10 +959,6 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx *context.MachineContext
 	case service.IsCloneVMTask(task):
 		releaseTicketForCreateVM(ctx.ElfMachine.Name)
 
-		if service.IsVMDuplicateError(errorMessage) {
-			setVMDuplicate(ctx.ElfMachine.Name)
-		}
-
 		if ctx.ElfMachine.RequiresGPUDevices() {
 			unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 		}
@@ -969,6 +966,17 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx *context.MachineContext
 		if ctx.ElfMachine.RequiresGPUDevices() {
 			unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
 		}
+	}
+
+	switch {
+	case service.IsVMDuplicateError(errorMessage):
+		setVMDuplicate(ctx.ElfMachine.Name)
+	case service.IsStorageInsufficientError(errorMessage):
+		recordElfClusterStorageInsufficient(ctx, true)
+		message := fmt.Sprintf("Insufficient storage detected for the ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
+		ctx.Logger.Info(message)
+
+		return errors.New(message)
 	case service.IsMemoryInsufficientError(errorMessage):
 		recordElfClusterMemoryInsufficient(ctx, true)
 		message := fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", ctx.ElfCluster.Spec.Cluster)
