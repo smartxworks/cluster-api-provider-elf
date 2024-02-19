@@ -34,7 +34,7 @@ var (
 	// WaitTaskTimeoutForPlacementGroupOperation is the timeout for waiting for placement group creating/updating/deleting task to complete.
 	WaitTaskTimeoutForPlacementGroupOperation = 10 * time.Second
 
-	// VMStatusRequeueDuration is the time duration for make sure the virtual machine is powered on,
-	// starting from when the machine's node healthy condition is unknown.
-	VMStatusRequeueDuration = 1 * time.Minute
+	// VMPowerStatusCheckingDuration is the time duration for cheking if the VM is powered off
+	// after the Machine's NodeHealthy condition status is set to Unknown.
+	VMPowerStatusCheckingDuration = 2 * time.Minute
 )
