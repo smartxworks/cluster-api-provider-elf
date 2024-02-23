@@ -150,8 +150,20 @@ func TowerCPUSockets(vCPU, cpuCores int32) *int32 {
 	return &cpuSockets
 }
 
+func GetCPUCores(cpu *models.NestedCPU) int32 {
+	if cpu == nil {
+		return 0
+	}
+
+	return (*cpu.Cores) * (*cpu.Sockets)
+}
+
 func ByteToGiB(bytes int64) int32 {
 	return int32(bytes / 1024 / 1024 / 1024)
+}
+
+func ByteToMiB(bytes int64) int64 {
+	return bytes / 1024 / 1024
 }
 
 func IsVMInRecycleBin(vm *models.VM) bool {
@@ -180,6 +192,22 @@ func GetTowerInt64(ptr *int64) int64 {
 	}
 
 	return *ptr
+}
+
+func IsVMResourcesUpToDate(elfMachine *infrav1.ElfMachine, vm *models.VM) bool {
+	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
+	cpuCores := TowerCPUCores(*vCPU, elfMachine.Spec.NumCoresPerSocket)
+	cpuSockets := TowerCPUSockets(*vCPU, *cpuCores)
+	memory := TowerMemory(elfMachine.Spec.MemoryMiB)
+
+	if *vCPU > *vm.Vcpu ||
+		*cpuCores > *vm.CPU.Cores ||
+		*cpuSockets > *vm.CPU.Sockets ||
+		*memory > *vm.Memory {
+		return false
+	}
+
+	return true
 }
 
 func GetTowerTaskStatus(ptr *models.TaskStatus) string {

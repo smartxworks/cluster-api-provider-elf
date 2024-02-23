@@ -199,6 +199,10 @@ type GPUStatus struct {
 // ResourcesStatus records the resources allocated to the virtual machine.
 type ResourcesStatus struct {
 	Disk int32 `json:"disk,omitempty"`
+	// CPUCores is the total number of CPU cores allocated for the virtual machine.
+	CPUCores int32 `json:"cpu,omitempty"`
+	// Memory is the total number of memory in MiB allocated for the virtual machine.
+	Memory int64 `json:"memory,omitempty"`
 }
 
 //+kubebuilder:object:generate=false

@@ -33,7 +33,11 @@ import (
 // Error messages.
 const (
 	diskCapacityCanOnlyBeGreaterThanZeroMsg = "the disk capacity can only be greater than 0"
-	diskCapacityCanOnlyBeExpanded           = "the disk capacity can only be expanded"
+	diskCapacityCanOnlyBeExpandedMsg        = "the disk capacity can only be expanded"
+	memoryCanOnlyBeExpandedMsg              = "the memory can only be expanded"
+	numCPUsCanOnlyBeExpandedMsg             = "the numCPUs can only be expanded"
+	numCPUsCanOnlyBeExpandedByMultiplesMsg  = "numCPUs can only be expanded by multiples"
+	numCPUsCannotModifiedMsg                = "the numCoresPerSocket cannot be modified"
 )
 
 func (v *ElfMachineTemplateValidator) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -78,7 +82,18 @@ func (v *ElfMachineTemplateValidator) ValidateUpdate(ctx goctx.Context, oldObj, 
 
 	var allErrs field.ErrorList
 	if elfMachineTemplate.Spec.Template.Spec.DiskGiB < oldElfMachineTemplate.Spec.Template.Spec.DiskGiB {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), elfMachineTemplate.Spec.Template.Spec.DiskGiB, diskCapacityCanOnlyBeExpanded))
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), elfMachineTemplate.Spec.Template.Spec.DiskGiB, memoryCanOnlyBeExpandedMsg))
+	}
+
+	if elfMachineTemplate.Spec.Template.Spec.MemoryMiB < oldElfMachineTemplate.Spec.Template.Spec.MemoryMiB {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "memoryMiB"), elfMachineTemplate.Spec.Template.Spec.MemoryMiB, memoryCanOnlyBeExpandedMsg))
+	}
+
+	if elfMachineTemplate.Spec.Template.Spec.NumCPUs < oldElfMachineTemplate.Spec.Template.Spec.NumCPUs {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "numCPUs"), elfMachineTemplate.Spec.Template.Spec.NumCPUs, numCPUsCanOnlyBeExpandedMsg))
+	} else if elfMachineTemplate.Spec.Template.Spec.NumCPUs > oldElfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket &&
+		elfMachineTemplate.Spec.Template.Spec.NumCPUs/oldElfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket != 0 {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "numCoresPerSocket"), elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket, numCPUsCanOnlyBeExpandedByMultiplesMsg))
 	}
 
 	return nil, aggregateObjErrors(elfMachineTemplate.GroupVersionKind().GroupKind(), elfMachineTemplate.Name, allErrs)

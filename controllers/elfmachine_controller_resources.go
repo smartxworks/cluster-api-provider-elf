@@ -34,6 +34,14 @@ import (
 )
 
 func (r *ElfMachineReconciler) reconcileVMResources(ctx *context.MachineContext, vm *models.VM) (bool, error) {
+	if ok, err := r.reconcileVMCPUAndMemory(ctx, vm); err != nil || !ok {
+		return ok, err
+	}
+
+	if ok, err := r.restartKubelet(ctx); err != nil || !ok {
+		return ok, err
+	}
+
 	if ok, err := r.reconcieVMVolume(ctx, vm, infrav1.ResourcesHotUpdatedCondition); err != nil || !ok {
 		return ok, err
 	}
@@ -188,4 +196,111 @@ func (r *ElfMachineReconciler) expandVMRootPartition(ctx *context.MachineContext
 	}
 
 	return true, nil
+}
+
+func (r *ElfMachineReconciler) restartKubelet(ctx *context.MachineContext) (bool, error) {
+	reason := conditions.GetReason(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	if reason == "" {
+		return true, nil
+	} else if reason != infrav1.ExpandingVMResourcesReason &&
+		reason != infrav1.ExpandingVMResourcesFailedReason &&
+		reason != infrav1.RestartingKubeletReason &&
+		reason != infrav1.RestartingKubeletFailedReason {
+		return true, nil
+	}
+
+	if reason != infrav1.RestartingKubeletFailedReason {
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.RestartingKubeletReason, clusterv1.ConditionSeverityInfo, "")
+	}
+
+	kubeClient, err := capiremote.NewClusterClient(ctx, "", ctx.Client, client.ObjectKey{Namespace: ctx.Cluster.Namespace, Name: ctx.Cluster.Name})
+	if err != nil {
+		return false, err
+	}
+
+	agentJob, err := hostagent.GetHostJob(ctx, kubeClient, ctx.ElfMachine.Namespace, hostagent.GetExpandRootPartitionJobName(ctx.ElfMachine))
+	if err != nil && !apierrors.IsNotFound(err) {
+		return false, err
+	}
+
+	if agentJob == nil {
+		agentJob, err = hostagent.RestartMachineKubelet(ctx, kubeClient, ctx.ElfMachine)
+		if err != nil {
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.RestartingKubeletFailedReason, clusterv1.ConditionSeverityInfo, err.Error())
+
+			return false, err
+		}
+
+		ctx.Logger.Info("Waiting for expanding CPU and memory", "hostAgentJob", agentJob.Name)
+
+		return false, nil
+	}
+
+	switch agentJob.Status.Phase {
+	case agentv1.PhaseSucceeded:
+		ctx.Logger.Info("Expand CPU and memory succeeded", "hostAgentJob", agentJob.Name)
+	case agentv1.PhaseFailed:
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingRootPartitionFailedReason, clusterv1.ConditionSeverityWarning, agentJob.Status.FailureMessage)
+		ctx.Logger.Info("Expand CPU and memory failed, will try again after two minutes", "hostAgentJob", agentJob.Name, "failureMessage", agentJob.Status.FailureMessage)
+
+		lastExecutionTime := agentJob.Status.LastExecutionTime
+		if lastExecutionTime == nil {
+			lastExecutionTime = &agentJob.CreationTimestamp
+		}
+		// Two minutes after the job fails, delete the job and try again.
+		if time.Now().After(lastExecutionTime.Add(2 * time.Minute)) {
+			if err := kubeClient.Delete(ctx, agentJob); err != nil {
+				return false, errors.Wrapf(err, "failed to delete expand CPU and memory job %s/%s for retry", agentJob.Namespace, agentJob.Name)
+			}
+		}
+
+		return false, nil
+	default:
+		ctx.Logger.Info("Waiting for expanding CPU and memory job done", "hostAgentJob", agentJob.Name, "jobStatus", agentJob.Status.Phase)
+
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// reconcileVMCPUAndMemory ensures that the vm CPU and memory are as expected.
+func (r *ElfMachineReconciler) reconcileVMCPUAndMemory(ctx *context.MachineContext, vm *models.VM) (bool, error) {
+	ctx.ElfMachine.Status.Resources.CPUCores = service.GetCPUCores(vm.CPU)
+	ctx.ElfMachine.Status.Resources.Memory = service.ByteToMiB(*vm.Memory)
+
+	if !(*service.TowerVCPU(ctx.ElfMachine.Spec.NumCPUs) > ctx.ElfMachine.Status.Resources.CPUCores ||
+		ctx.ElfMachine.Spec.MemoryMiB > ctx.ElfMachine.Status.Resources.Memory) {
+		return true, nil
+	}
+
+	reason := conditions.GetReason(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	if reason == "" ||
+		(reason != infrav1.ExpandingVMResourcesReason && reason != infrav1.ExpandingVMResourcesFailedReason) {
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
+
+		// Save the condition first, and then expand the resources capacity.
+		// This prevents the resources expansion from succeeding but failing to save the
+		// condition, causing ElfMachine to not record the condition.
+		return false, nil
+	}
+
+	if ok := acquireTicketForUpdatingVM(ctx.ElfMachine.Name); !ok {
+		ctx.Logger.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip updating VM %s CPU and memory", ctx.ElfMachine.Status.VMRef))
+
+		return false, nil
+	}
+
+	withTaskVM, err := ctx.VMService.UpdateVM(vm, ctx.ElfMachine)
+	if err != nil {
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+
+		return false, errors.Wrapf(err, "failed to trigger update CPU and memory for VM %s", ctx)
+	}
+
+	ctx.ElfMachine.SetTask(*withTaskVM.TaskID)
+
+	ctx.Logger.Info("Waiting for the VM to be updated CPU and memory", "vmRef", ctx.ElfMachine.Status.VMRef, "taskRef", ctx.ElfMachine.Status.TaskRef)
+
+	return false, nil
 }

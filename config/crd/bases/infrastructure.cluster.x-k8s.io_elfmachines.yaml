@@ -406,8 +406,18 @@ spec:
               resources:
                 description: Resources records the resources allocated for the machine.
                 properties:
+                  cpu:
+                    description: CPUCores is the total number of CPU cores allocated
+                      for the virtual machine.
+                    format: int32
+                    type: integer
                   disk:
                     format: int32
+                    type: integer
+                  memory:
+                    description: Memory is the total number of memory in MiB allocated
+                      for the virtual machine.
+                    format: int64
                     type: integer
                 type: object
               taskRef:

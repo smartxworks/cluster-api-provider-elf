@@ -247,7 +247,9 @@ func (m *ElfMachine) IsFailed() bool {
 
 // IsResourcesUpToDate returns whether the machine's resources are as expected.
 func (m *ElfMachine) IsResourcesUpToDate() bool {
-	return m.Spec.DiskGiB == m.Status.Resources.Disk
+	return m.Spec.DiskGiB == m.Status.Resources.Disk &&
+		m.Spec.MemoryMiB == m.Status.Resources.Memory &&
+		m.Spec.NumCPUs == m.Status.Resources.CPUCores
 }
 
 func (m *ElfMachine) SetVMDisconnectionTimestamp(timestamp *metav1.Time) {

@@ -74,7 +74,7 @@ func (v *ElfMachineValidator) ValidateUpdate(ctx goctx.Context, oldObj, newObj r
 	elfMachineTemplateName := annotationsutil.GetTemplateClonedFromName(elfMachine)
 	if elfMachineTemplateName == "" {
 		if elfMachine.Spec.DiskGiB < oldElfMachine.Spec.DiskGiB {
-			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "diskGiB"), elfMachine.Spec.DiskGiB, diskCapacityCanOnlyBeExpanded))
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "diskGiB"), elfMachine.Spec.DiskGiB, diskCapacityCanOnlyBeExpandedMsg))
 		}
 
 		return nil, aggregateObjErrors(elfMachine.GroupVersionKind().GroupKind(), elfMachine.Name, allErrs)
@@ -93,6 +93,12 @@ func (v *ElfMachineValidator) ValidateUpdate(ctx goctx.Context, oldObj, newObj r
 
 	if elfMachine.Spec.DiskGiB != elfMachineTemplate.Spec.Template.Spec.DiskGiB {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "diskGiB"), elfMachine.Spec.DiskGiB, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplateName)))
+	}
+	if elfMachine.Spec.MemoryMiB != elfMachineTemplate.Spec.Template.Spec.MemoryMiB {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "memoryMiB"), elfMachine.Spec.MemoryMiB, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplateName)))
+	}
+	if elfMachine.Spec.NumCPUs != elfMachineTemplate.Spec.Template.Spec.NumCPUs {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "numCPUs"), elfMachine.Spec.NumCPUs, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplateName)))
 	}
 
 	return nil, aggregateObjErrors(elfMachine.GroupVersionKind().GroupKind(), elfMachine.Name, allErrs)

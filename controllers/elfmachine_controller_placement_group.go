@@ -43,7 +43,6 @@ import (
 	kcputil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/kcp"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 	typesutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/types"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/version"
 )
 
 // reconcilePlacementGroup makes sure that the placement group exist.
@@ -382,11 +381,12 @@ func (r *ElfMachineReconciler) getPlacementGroup(ctx *context.MachineContext, pl
 //
 //nolint:gocyclo
 func (r *ElfMachineReconciler) joinPlacementGroup(ctx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
-	if !version.IsCompatibleWithPlacementGroup(ctx.ElfMachine) {
-		ctx.Logger.V(1).Info(fmt.Sprintf("The capeVersion of ElfMachine is lower than %s, skip adding VM to the placement group", version.CAPEVersion1_2_0), "capeVersion", version.GetCAPEVersion(ctx.ElfMachine))
+	return true, nil
+	// if !version.IsCompatibleWithPlacementGroup(ctx.ElfMachine) {
+	// 	ctx.Logger.V(1).Info(fmt.Sprintf("The capeVersion of ElfMachine is lower than %s, skip adding VM to the placement group", version.CAPEVersion1_2_0), "capeVersion", version.GetCAPEVersion(ctx.ElfMachine))
 
-		return true, nil
-	}
+	// 	return true, nil
+	// }
 
 	defer func() {
 		if reterr != nil {

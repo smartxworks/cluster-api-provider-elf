@@ -166,7 +166,20 @@ func IsUpdatingElfMachineResources(elfMachine *infrav1.ElfMachine) bool {
 }
 
 func NeedUpdateElfMachineResources(elfMachineTemplate *infrav1.ElfMachineTemplate, elfMachine *infrav1.ElfMachine) bool {
+	if elfMachineTemplate.Spec.Template.Spec.NumCPUs > elfMachine.Spec.NumCPUs ||
+		elfMachineTemplate.Spec.Template.Spec.MemoryMiB > elfMachine.Spec.MemoryMiB {
+		return true
+	}
+
 	return elfMachineTemplate.Spec.Template.Spec.DiskGiB > elfMachine.Spec.DiskGiB
+}
+
+func IsElfMachineResourcesUpToDate(elfMachineTemplate *infrav1.ElfMachineTemplate, elfMachine *infrav1.ElfMachine) bool {
+	if IsUpdatingElfMachineResources(elfMachine) || NeedUpdateElfMachineResources(elfMachineTemplate, elfMachine) {
+		return false
+	}
+
+	return true
 }
 
 // SelectFirstNElfMachines returns the specified first N elfMachines.
