@@ -25,6 +25,7 @@ import (
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
@@ -112,6 +113,20 @@ func GetNodeGroupName(machine *clusterv1.Machine) string {
 	clusterName := labelsutil.GetClusterNameLabelLabel(machine)
 
 	return strings.ReplaceAll(nodeGroupName, fmt.Sprintf("%s-", clusterName), "")
+}
+
+// IsNodeHealthyConditionUnknown returns whether the node's healthy condition is unknown.
+func IsNodeHealthyConditionUnknown(machine *clusterv1.Machine) bool {
+	if conditions.IsUnknown(machine, clusterv1.MachineNodeHealthyCondition) &&
+		conditions.GetReason(machine, clusterv1.MachineNodeHealthyCondition) == clusterv1.NodeConditionsFailedReason {
+		return true
+	}
+
+	return false
+}
+
+func IsMachineFailed(machine *clusterv1.Machine) bool {
+	return machine.Status.FailureReason != nil || machine.Status.FailureMessage != nil
 }
 
 func ConvertProviderIDToUUID(providerID *string) string {

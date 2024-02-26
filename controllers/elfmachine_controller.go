@@ -112,7 +112,7 @@ func AddMachineControllerToManager(ctx *context.ControllerManagerContext, mgr ct
 }
 
 // Reconcile ensures the back-end state reflects the Kubernetes resource state intent.
-func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (result ctrl.Result, reterr error) {
 	// Get the ElfMachine resource for this request.
 	var elfMachine infrav1.ElfMachine
 	if err := r.Client.Get(r, req.NamespacedName, &elfMachine); err != nil {
@@ -222,6 +222,22 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 			}
 
 			machineContext.Logger.Error(err, "patch failed", "elfMachine", machineContext.String())
+		}
+
+		// If the node's healthy condition is unknown, the virtual machine may
+		// have been shut down through Tower or directly on the virtual machine.
+		// We need to try to reconcile to ensure that the virtual machine is powered on.
+		if err == nil && result.IsZero() &&
+			!machineutil.IsMachineFailed(machineContext.Machine) &&
+			machineContext.Machine.DeletionTimestamp.IsZero() &&
+			machineContext.ElfMachine.DeletionTimestamp.IsZero() &&
+			machineutil.IsNodeHealthyConditionUnknown(machineContext.Machine) {
+			lastTransitionTime := conditions.GetLastTransitionTime(machineContext.Machine, clusterv1.MachineNodeHealthyCondition)
+			if lastTransitionTime != nil && time.Now().Before(lastTransitionTime.Add(config.VMPowerStatusCheckingDuration)) {
+				result.RequeueAfter = config.DefaultRequeueTimeout
+
+				machineContext.Logger.Info(fmt.Sprintf("The node's healthy condition is unknown, virtual machine may have been shut down, will reconcile after %s", result.RequeueAfter), "nodeConditionUnknownTime", lastTransitionTime)
+			}
 		}
 	}()
 

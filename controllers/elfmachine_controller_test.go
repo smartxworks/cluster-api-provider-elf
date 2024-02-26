@@ -229,6 +229,79 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(reconciler.Client.Get(reconciler, elfMachineKey, elfMachine)).To(Succeed())
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForBootstrapDataReason}})
 		})
+
+		It("should requeue when node's healthy condition is unknown", func() {
+			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(machine, infrav1.MachineFinalizer)
+			cluster.Status.InfrastructureReady = false
+
+			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			elfMachineKey := capiutil.ObjectKey(elfMachine)
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			logBuffer.Reset()
+			message := "The node's healthy condition is unknown, virtual machine may have been shut down, will reconcile"
+			conditions.MarkUnknown(machine, clusterv1.MachineNodeHealthyCondition, clusterv1.NodeConditionsFailedReason, "test")
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
+			Expect(logBuffer.String()).To(ContainSubstring(message))
+
+			machine.Status.Conditions[0].LastTransitionTime = metav1.NewTime(time.Now().Add(-config.VMPowerStatusCheckingDuration))
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			conditions.MarkUnknown(machine, clusterv1.MachineNodeHealthyCondition, clusterv1.NodeConditionsFailedReason, "test")
+			machine.Status.FailureMessage = pointer.String("error")
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			conditions.MarkUnknown(machine, clusterv1.MachineNodeHealthyCondition, clusterv1.NodeConditionsFailedReason, "test")
+			machine.Status.FailureMessage = nil
+			machine.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(nil, errors.New(service.VMNotFound))
+			machine.DeletionTimestamp = nil
+			elfMachine.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
+			ctrlutil.AddFinalizer(elfMachine, "no-gc")
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			machine.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
+			ctrlutil.AddFinalizer(machine, "no-gc")
+			elfMachine.DeletionTimestamp = nil
+			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
+			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+		})
 	})
 
 	Context("Reconcile ElfMachine VM", func() {
