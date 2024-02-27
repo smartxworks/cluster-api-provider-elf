@@ -34,8 +34,10 @@ import (
 )
 
 const (
-	clusterKey        = "clusterID"
-	placementGroupKey = "getPlacementGroupName"
+	clusterKey                    = "clusterID"
+	clusterInsufficientMemoryKey  = "clusterInsufficientMemory"
+	clusterInsufficientStorageKey = "clusterInsufficientStorage"
+	placementGroupKey             = "getPlacementGroupName"
 )
 
 var _ = Describe("TowerCache", func() {
@@ -44,7 +46,7 @@ var _ = Describe("TowerCache", func() {
 	})
 
 	It("should set memoryInsufficient/policyNotSatisfied", func() {
-		for _, name := range []string{clusterKey, placementGroupKey} {
+		for _, name := range []string{clusterInsufficientMemoryKey, clusterInsufficientStorageKey, placementGroupKey} {
 			resetMemoryCache()
 			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 			elfCluster.Spec.Cluster = name
@@ -59,19 +61,19 @@ var _ = Describe("TowerCache", func() {
 			_, found := inMemoryCache.Get(key)
 			Expect(found).To(BeFalse())
 
-			recordIsUnmet(machineContext, name, true)
+			recordOrClearError(machineContext, name, true)
 			_, found = inMemoryCache.Get(key)
 			Expect(found).To(BeTrue())
 			resource := getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
 
-			recordIsUnmet(machineContext, name, true)
+			recordOrClearError(machineContext, name, true)
 			lastDetected := resource.LastDetected
 			resource = getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
 			Expect(resource.LastDetected.After(lastDetected)).To(BeTrue())
 
-			recordIsUnmet(machineContext, name, false)
+			recordOrClearError(machineContext, name, false)
 			resource = getClusterResource(key)
 			Expect(resource).To(BeNil())
 
@@ -79,17 +81,17 @@ var _ = Describe("TowerCache", func() {
 			_, found = inMemoryCache.Get(key)
 			Expect(found).To(BeFalse())
 
-			recordIsUnmet(machineContext, name, false)
+			recordOrClearError(machineContext, name, false)
 			resource = getClusterResource(key)
 			_, found = inMemoryCache.Get(key)
 			Expect(found).To(BeFalse())
 			Expect(resource).To(BeNil())
 
-			recordIsUnmet(machineContext, name, false)
+			recordOrClearError(machineContext, name, false)
 			resource = getClusterResource(key)
 			Expect(resource).To(BeNil())
 
-			recordIsUnmet(machineContext, name, true)
+			recordOrClearError(machineContext, name, true)
 			_, found = inMemoryCache.Get(key)
 			Expect(found).To(BeTrue())
 			resource = getClusterResource(key)
@@ -98,7 +100,7 @@ var _ = Describe("TowerCache", func() {
 	})
 
 	It("should return whether need to detect", func() {
-		for _, name := range []string{clusterKey, placementGroupKey} {
+		for _, name := range []string{clusterInsufficientMemoryKey, clusterInsufficientStorageKey, placementGroupKey} {
 			resetMemoryCache()
 			elfCluster, cluster, elfMachine, machine, secret := fake.NewClusterAndMachineObjects()
 			elfCluster.Spec.Cluster = name
@@ -116,12 +118,12 @@ var _ = Describe("TowerCache", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 
-			recordIsUnmet(machineContext, name, false)
+			recordOrClearError(machineContext, name, false)
 			ok, err = canRetryVMOperation(machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 
-			recordIsUnmet(machineContext, name, true)
+			recordOrClearError(machineContext, name, true)
 			ok, err = canRetryVMOperation(machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
@@ -154,7 +156,8 @@ var _ = Describe("TowerCache", func() {
 		Expect(err).ShouldNot(HaveOccurred())
 		expectConditions(elfMachine, []conditionAssertion{})
 
-		recordIsUnmet(machineContext, clusterKey, true)
+		elfCluster.Spec.Cluster = clusterInsufficientMemoryKey
+		recordOrClearError(machineContext, clusterInsufficientMemoryKey, true)
 		ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
@@ -162,7 +165,16 @@ var _ = Describe("TowerCache", func() {
 		expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForELFClusterWithSufficientMemoryReason}})
 
 		resetMemoryCache()
-		recordIsUnmet(machineContext, placementGroupKey, true)
+		elfCluster.Spec.Cluster = clusterInsufficientStorageKey
+		recordOrClearError(machineContext, clusterInsufficientStorageKey, true)
+		ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
+		Expect(ok).To(BeTrue())
+		Expect(msg).To(ContainSubstring("Insufficient storage detected for the ELF cluster clusterInsufficientStorage"))
+		Expect(err).ShouldNot(HaveOccurred())
+		expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForELFClusterWithSufficientStorageReason}})
+
+		resetMemoryCache()
+		recordOrClearError(machineContext, placementGroupKey, true)
 		ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(ContainSubstring("Not satisfy policy detected for the placement group"))
@@ -220,8 +232,10 @@ func removeGPUVMInfosCache(gpuIDs []string) {
 }
 
 func getKey(ctx *context.MachineContext, name string) string {
-	if name == clusterKey {
+	if name == clusterInsufficientMemoryKey {
 		return getKeyForInsufficientMemoryError(name)
+	} else if name == clusterInsufficientStorageKey {
+		return getKeyForInsufficientStorageError(name)
 	}
 
 	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
@@ -230,13 +244,16 @@ func getKey(ctx *context.MachineContext, name string) string {
 	return getKeyForDuplicatePlacementGroupError(placementGroupName)
 }
 
-func recordIsUnmet(ctx *context.MachineContext, key string, isUnmet bool) {
-	if strings.Contains(key, clusterKey) {
-		recordElfClusterMemoryInsufficient(ctx, isUnmet)
+func recordOrClearError(ctx *context.MachineContext, key string, record bool) {
+	if strings.Contains(key, clusterInsufficientMemoryKey) {
+		recordElfClusterMemoryInsufficient(ctx, record)
+		return
+	} else if strings.Contains(key, clusterInsufficientStorageKey) {
+		recordElfClusterStorageInsufficient(ctx, record)
 		return
 	}
 
-	Expect(recordPlacementGroupPolicyNotSatisfied(ctx, isUnmet)).ShouldNot(HaveOccurred())
+	Expect(recordPlacementGroupPolicyNotSatisfied(ctx, record)).ShouldNot(HaveOccurred())
 }
 
 func expireELFScheduleVMError(ctx *context.MachineContext, name string) {
