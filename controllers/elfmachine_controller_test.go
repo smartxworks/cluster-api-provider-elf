@@ -258,7 +258,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.CloningFailedReason}})
 		})
 
-		It("should create a new VM if the VM does not exist", func() {
+		It("should create a new VM if not exists", func() {
 			resetMemoryCache()
 			vm := fake.NewTowerVM()
 			vm.Name = &elfMachine.Name
