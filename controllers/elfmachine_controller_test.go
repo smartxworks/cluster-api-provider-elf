@@ -258,7 +258,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.CloningFailedReason}})
 		})
 
-		It("should create a new VM if none exists", func() {
+		It("should create a new VM if the VM does not exist", func() {
 			resetMemoryCache()
 			vm := fake.NewTowerVM()
 			vm.Name = &elfMachine.Name
@@ -271,7 +271,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 			machineContext.VMService = mockVMService
-			recordIsUnmet(machineContext, clusterInsufficientStorageKey, true)
+			recordOrClearError(machineContext, clusterInsufficientStorageKey, true)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
@@ -286,7 +286,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ctrlContext = newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 			machineContext = newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
-			recordIsUnmet(machineContext, clusterInsufficientMemoryKey, true)
+			recordOrClearError(machineContext, clusterInsufficientMemoryKey, true)
 			reconciler = &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
@@ -845,7 +845,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				fake.InitOwnerReferences(ctrlContext, elfCluster, cluster, elfMachine, machine)
 				machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, mockVMService)
 				machineContext.VMService = mockVMService
-				recordIsUnmet(machineContext, clusterInsufficientMemoryKey, true)
+				recordOrClearError(machineContext, clusterInsufficientMemoryKey, true)
 				reconciler := &ElfMachineReconciler{ControllerContext: ctrlContext, NewVMService: mockNewVMService}
 				err := reconciler.powerOnVM(machineContext, vm)
 				Expect(err).NotTo(HaveOccurred())

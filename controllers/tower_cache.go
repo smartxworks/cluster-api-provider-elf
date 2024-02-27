@@ -51,7 +51,7 @@ type clusterResource struct {
 // Includes these scenarios:
 // 1. ELF cluster has insufficient memory.
 // 2. ELF cluster has insufficient storage.
-// 3. Placement group not satisfy policy.
+// 3. Cannot satisfy the PlacementGroup policy.
 func isELFScheduleVMErrorRecorded(ctx *context.MachineContext) (bool, string, error) {
 	lock.Lock()
 	defer lock.Unlock()
