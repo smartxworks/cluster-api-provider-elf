@@ -198,6 +198,13 @@ func main() {
 			}).SetupWebhookWithManager(mgr); err != nil {
 				return err
 			}
+
+			if err := (&webhooks.ElfMachineTemplateMutation{
+				Client: mgr.GetClient(),
+				Logger: mgr.GetLogger().WithName("ElfMachineTemplateMutation"),
+			}).SetupWebhookWithManager(mgr); err != nil {
+				return err
+			}
 		}
 
 		if err := controllers.AddClusterControllerToManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: elfClusterConcurrency}); err != nil {

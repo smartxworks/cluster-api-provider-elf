@@ -138,6 +138,13 @@ func NewTestEnvironment() *TestEnvironment {
 			return err
 		}
 
+		if err := (&webhooks.ElfMachineTemplateMutation{
+			Client: mgr.GetClient(),
+			Logger: mgr.GetLogger().WithName("ElfMachineTemplateMutation"),
+		}).SetupWebhookWithManager(mgr); err != nil {
+			return err
+		}
+
 		return nil
 	}
 
