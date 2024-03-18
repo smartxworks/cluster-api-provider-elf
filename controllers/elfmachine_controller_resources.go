@@ -50,6 +50,10 @@ func (r *ElfMachineReconciler) reconcileVMResources(ctx *context.MachineContext,
 		return false, nil
 	}
 
+	if ok, err := r.reconcieVMNetworkDevices(ctx, vm); err != nil || !ok {
+		return ok, err
+	}
+
 	if ok, err := r.reconcieVMVolume(ctx, vm, infrav1.ResourcesHotUpdatedCondition); err != nil || !ok {
 		return ok, err
 	}
@@ -71,6 +75,124 @@ func (r *ElfMachineReconciler) reconcileVMResources(ctx *context.MachineContext,
 	}
 
 	return true, nil
+}
+
+func (r *ElfMachineReconciler) reconcieVMNetworkDevices(ctx *context.MachineContext, vm *models.VM) (bool, error) {
+	vmNics, err := ctx.VMService.GetVMNics(*vm.ID)
+	if err != nil {
+		return false, err
+	}
+
+	devices := ctx.ElfMachine.Spec.Network.Devices
+	if len(devices) > len(vmNics) {
+		return false, r.addVMNetworkDevices(ctx, vm, vmNics)
+	}
+
+	reason := conditions.GetReason(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	if reason == "" {
+		return true, nil
+	} else if reason != infrav1.AddingVMNetworkDeviceReason &&
+		reason != infrav1.AddingVMNetworkDeviceFailedReason &&
+		reason != infrav1.WaitingForNetworkAddressesReason {
+		return true, nil
+	}
+
+	isWaitingForNetworkAddresses := false
+	for i := 0; i < len(devices); i++ {
+		if devices[i].NetworkType == infrav1.NetworkTypeNone {
+			continue
+		}
+
+		if service.GetTowerString(vmNics[i].IPAddress) == "" {
+			isWaitingForNetworkAddresses = true
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityInfo, "")
+		}
+	}
+
+	var networkStatus []infrav1.NetworkStatus
+	ipToMachineAddressMap := make(map[string]clusterv1.MachineAddress)
+	for i := 0; i < len(vmNics); i++ {
+		nic := vmNics[i]
+		ip := service.GetTowerString(nic.IPAddress)
+
+		// Add to Status.Network even if IP is empty.
+		networkStatus = append(networkStatus, infrav1.NetworkStatus{
+			IPAddrs: []string{ip},
+			MACAddr: service.GetTowerString(nic.MacAddress),
+		})
+
+		if ip == "" {
+			continue
+		}
+
+		ipToMachineAddressMap[ip] = clusterv1.MachineAddress{
+			Type:    clusterv1.MachineInternalIP,
+			Address: ip,
+		}
+	}
+	ctx.ElfMachine.Status.Network = networkStatus
+
+	addresses := make([]clusterv1.MachineAddress, 0, len(ipToMachineAddressMap))
+	for _, machineAddress := range ipToMachineAddressMap {
+		addresses = append(addresses, machineAddress)
+	}
+	ctx.ElfMachine.Status.Addresses = addresses
+
+	if isWaitingForNetworkAddresses {
+		ctx.Logger.V(1).Info("VM network is not ready yet", "nicStatus", ctx.ElfMachine.Status.Network)
+
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (r *ElfMachineReconciler) addVMNetworkDevices(ctx *context.MachineContext, vm *models.VM, vmNics []*models.VMNic) error {
+	reason := conditions.GetReason(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	if reason == "" ||
+		(reason != infrav1.AddingVMNetworkDeviceReason && reason != infrav1.AddingVMNetworkDeviceFailedReason) {
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceReason, clusterv1.ConditionSeverityInfo, "")
+		return nil
+	}
+
+	var newNics []*models.VMNicParams
+	devices := ctx.ElfMachine.Spec.Network.Devices
+	for i := len(vmNics); i < len(devices); i++ {
+		device := devices[i]
+
+		vlan, err := ctx.VMService.GetVlan(device.Vlan)
+		if err != nil {
+			return err
+		}
+
+		nic := &models.VMNicParams{
+			Model:         models.NewVMNicModel(models.VMNicModelVIRTIO),
+			Enabled:       service.TowerBool(true),
+			Mirror:        service.TowerBool(false),
+			ConnectVlanID: vlan.ID,
+			MacAddress:    service.TowerString(device.MACAddr),
+			SubnetMask:    service.TowerString(device.Netmask),
+		}
+
+		if len(device.IPAddrs) > 0 {
+			nic.IPAddress = service.TowerString(device.IPAddrs[0])
+		}
+
+		newNics = append(newNics, nic)
+	}
+
+	withTaskVM, err := ctx.VMService.AddVMNics(*vm.ID, newNics)
+	if err != nil {
+		conditions.MarkFalse(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceReason, clusterv1.ConditionSeverityWarning, err.Error())
+
+		return errors.Wrapf(err, "failed to trigger add new nic to vm")
+	}
+
+	ctx.ElfMachine.SetTask(*withTaskVM.TaskID)
+
+	ctx.Logger.Info("Waiting for the vm to be added new nic", "taskRef", ctx.ElfMachine.Status.TaskRef)
+
+	return nil
 }
 
 // reconcieVMVolume ensures that the vm disk size is as expected.

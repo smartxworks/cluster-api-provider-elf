@@ -505,6 +505,11 @@ func markElfMachinesToBeUpdatedResources(ctx *context.MachineTemplateContext, el
 		// Ensure resources are up to date.
 		orignalDiskGiB := elfMachine.Spec.DiskGiB
 		elfMachine.Spec.DiskGiB = elfMachineTemplate.Spec.Template.Spec.DiskGiB
+		if len(elfMachineTemplate.Spec.Template.Spec.Network.Devices) > len(elfMachine.Spec.Network.Devices) {
+			for i := len(elfMachine.Spec.Network.Devices); i < len(elfMachineTemplate.Spec.Template.Spec.Network.Devices); i++ {
+				elfMachine.Spec.Network.Devices = append(elfMachine.Spec.Network.Devices, elfMachineTemplate.Spec.Template.Spec.Network.Devices[i])
+			}
+		}
 		conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, "")
 
 		ctx.Logger.Info(fmt.Sprintf("Resources of ElfMachine is not up to date, marking for updating resources(disk: %d -> %d)", orignalDiskGiB, elfMachine.Spec.DiskGiB), "elfMachine", elfMachine.Name)
@@ -534,6 +539,11 @@ func markElfMachinesResourcesNotUpToDate(ctx *context.MachineTemplateContext, el
 		// Ensure resources are up to date.
 		orignalDiskGiB := elfMachine.Spec.DiskGiB
 		elfMachine.Spec.DiskGiB = elfMachineTemplate.Spec.Template.Spec.DiskGiB
+		if len(elfMachineTemplate.Spec.Template.Spec.Network.Devices) > len(elfMachine.Spec.Network.Devices) {
+			for i := len(elfMachine.Spec.Network.Devices); i < len(elfMachineTemplate.Spec.Template.Spec.Network.Devices); i++ {
+				elfMachine.Spec.Network.Devices = append(elfMachine.Spec.Network.Devices, elfMachineTemplate.Spec.Template.Spec.Network.Devices[i])
+			}
+		}
 		conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, anotherMachineHotUpdateInProgressMessage)
 
 		ctx.Logger.Info(fmt.Sprintf("Resources of ElfMachine is not up to date, marking for resources not up to date and waiting for hot updating resources(disk: %d -> %d)", orignalDiskGiB, elfMachine.Spec.DiskGiB), "elfMachine", elfMachine.Name)
