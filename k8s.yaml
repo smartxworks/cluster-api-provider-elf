@@ -1,0 +1,257 @@
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  labels:
+    cluster.x-k8s.io/cluster-name: capi-demo
+  name: capi-demo
+  namespace: default
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+      - 172.16.0.0/16
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: KubeadmControlPlane
+    name: capi-demo-control-plane
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: ElfCluster
+    name: capi-demo
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: ElfCluster
+metadata:
+  name: capi-demo
+  namespace: default
+spec:
+  cluster: dd1f408f-7715-48c1-a817-13c3568f1d93
+  controlPlaneEndpoint:
+    host: 10.255.160.7
+    port: 6443
+  tower:
+    authMode: LOCAL
+    password: K5yt3hcjtUE4Teqe
+    server: 192.168.27.134
+    skipTLSVerify: true
+    username: system-service
+  vmGracefulShutdown: false
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: ElfMachineTemplate
+metadata:
+  name: capi-demo-control-plane
+  namespace: default
+spec:
+  template:
+    spec:
+      cloneMode: FastClone
+      diskGiB: 0
+      ha: true
+      memoryMiB: 8192
+      network:
+        devices:
+        - networkType: IPV4_DHCP
+          vlan: dd1f408f-7715-48c1-a817-13c3568f1d93_4cd00407-63ca-440b-80b7-ceacfccb8d08
+        nameservers: []
+      numCPUS: 6
+      osType: LINUX
+      template: sks-rocky-8.8-amd64-ens4-k8s-v1.25.15-template-v3growpart01-20240117073358
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlane
+metadata:
+  name: capi-demo-control-plane
+  namespace: default
+spec:
+  kubeadmConfigSpec:
+    clusterConfiguration:
+      apiServer:
+        extraArgs: null
+      clusterName: capi-demo
+      controllerManager:
+        extraArgs: null
+      imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
+    files:
+    - content: |
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          creationTimestamp: null
+          name: kube-vip
+          namespace: kube-system
+        spec:
+          containers:
+          - args:
+            - manager
+            env:
+            - name: cp_enable
+              value: "true"
+            - name: vip_interface
+              value: "ens4"
+            - name: address
+              value: 10.255.160.7
+            - name: port
+              value: "6443"
+            - name: vip_arp
+              value: "true"
+            - name: vip_leaderelection
+              value: "true"
+            - name: vip_leaseduration
+              value: "5"
+            - name: vip_renewdeadline
+              value: "3"
+            - name: vip_retryperiod
+              value: "1"
+            image: ghcr.io/kube-vip/kube-vip:v0.5.12
+            imagePullPolicy: IfNotPresent
+            name: kube-vip
+            resources: {}
+            securityContext:
+              capabilities:
+                add:
+                - NET_ADMIN
+                - NET_RAW
+            volumeMounts:
+            - mountPath: /etc/kubernetes/admin.conf
+              name: kubeconfig
+            - mountPath: /etc/localtime
+              name: localtime
+              readOnly: true
+          hostAliases:
+          - hostnames:
+            - kubernetes
+            ip: 127.0.0.1
+          hostNetwork: true
+          volumes:
+          - hostPath:
+              path: /etc/kubernetes/admin.conf
+              type: FileOrCreate
+            name: kubeconfig
+          - hostPath:
+              path: /etc/localtime
+              type: ""
+            name: localtime
+        status: {}
+      owner: root:root
+      path: /etc/kubernetes/manifests/kube-vip.yaml
+    format: cloud-config
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs: null
+        name: '{{ ds.meta_data.hostname }}'
+    preKubeadmCommands:
+    - hostname "{{ ds.meta_data.hostname }}"
+    - echo "::1         ipv6-localhost ipv6-loopback" >/etc/hosts
+    - echo "127.0.0.1   localhost" >>/etc/hosts
+    - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
+    - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
+    useExperimentalRetryJoin: true
+    users:
+    - lockPassword: false
+      name: smartx
+      passwd: $6$b4Vlngih$uoz//JsxFTc2zSkmatB2mMkIdtQZODBUDV/zvm58DlwfDMUyG8Lf6ebqZ749ZU7zD.IItWIth3Iqc.oe5jqJB/
+      sshAuthorizedKeys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG05SWM1VyU8lwLjvFVx/crv1IXc10am3bMU1LokWCgz
+        fedora
+      sudo: ALL=(ALL) NOPASSWD:ALL
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: ElfMachineTemplate
+      name: capi-demo-control-plane
+      namespace: default
+    metadata: {}
+  replicas: 1
+  rolloutStrategy:
+    rollingUpdate:
+      maxSurge: 1
+    type: RollingUpdate
+  version: v1.25.15
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: KubeadmConfigTemplate
+metadata:
+  name: capi-demo-md-0
+  namespace: default
+spec:
+  template:
+    spec:
+      clusterConfiguration:
+        clusterName: capi-demo
+        imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
+      format: cloud-config
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs: null
+          name: '{{ ds.meta_data.hostname }}'
+      preKubeadmCommands:
+      - hostname "{{ ds.meta_data.hostname }}"
+      - echo "::1         ipv6-localhost ipv6-loopback" >/etc/hosts
+      - echo "127.0.0.1   localhost" >>/etc/hosts
+      - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
+      - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
+      users:
+      - lockPassword: false
+        name: smartx
+        passwd: $6$b4Vlngih$uoz//JsxFTc2zSkmatB2mMkIdtQZODBUDV/zvm58DlwfDMUyG8Lf6ebqZ749ZU7zD.IItWIth3Iqc.oe5jqJB/
+        sshAuthorizedKeys:
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG05SWM1VyU8lwLjvFVx/crv1IXc10am3bMU1LokWCgz
+          fedora
+        sudo: ALL=(ALL) NOPASSWD:ALL
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: ElfMachineTemplate
+metadata:
+  name: capi-demo-worker
+  namespace: default
+spec:
+  template:
+    spec:
+      cloneMode: FastClone
+      diskGiB: 0
+      ha: true
+      memoryMiB: 8192
+      network:
+        devices:
+        - networkType: IPV4_DHCP
+          vlan: dd1f408f-7715-48c1-a817-13c3568f1d93_4cd00407-63ca-440b-80b7-ceacfccb8d08
+        nameservers: []
+      numCPUS: 6
+      osType: LINUX
+      template: sks-rocky-8.8-amd64-ens4-k8s-v1.25.15-template-v3growpart01-20240117073358
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  labels:
+    cluster.x-k8s.io/cluster-name: capi-demo
+  name: capi-demo-md-0
+  namespace: default
+spec:
+  clusterName: capi-demo
+  minReadySeconds: 0
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 1
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: capi-demo
+      cluster.x-k8s.io/deployment-name: capi-demo-md-0
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: capi-demo
+        cluster.x-k8s.io/deployment-name: capi-demo-md-0
+    spec:
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: KubeadmConfigTemplate
+          name: capi-demo-md-0
+      clusterName: capi-demo
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: ElfMachineTemplate
+        name: capi-demo-worker
+      version: v1.25.15

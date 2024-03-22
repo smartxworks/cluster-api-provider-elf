@@ -1,0 +1,57 @@
+相关资源
+CAPI: https://cluster-api.sigs.k8s.io
+CAPE: https://github.com/smartxworks/cluster-api-provider-elf
+
+1. 环境准备
+1.1 SMTX OS 集群（虚拟化服务）+ Tower (SMTX OS 可视化管理）
+1.2 部署了 k8s (管控集群) 的虚拟机
+    clusterctl@v1.5.2
+    CAPI@v1.5.2,
+    CAPE@v1.3.2 (CAPI Infrastructure Provider, 管理基于 SMTX OS 的 k8s 集群所需的基础设施资源)
+
+2. 创建 CAPI 集群资源对象
+
+export NAMESPACE=default # CAPE 集群对象所在的 namespace
+export CLUSTER_NAME=capi-demo # 集群的名称
+export KUBERNETES_VERSION=v1.25.15 # 集群的 K8s 版本
+export CONTROL_PLANE_MACHINE_COUNT=1 # Control Plane 节点数量
+export CONTROL_PLANE_MACHINE_NUM_CPUS=6
+export CONTROL_PLANE_MACHINE_MEMORY_MB=8192
+export WORKER_MACHINE_COUNT=1 # Worker 节点数量
+export WORKER_MACHINE_NUM_CPUS=6
+export WORKER_MACHINE_MEMORY_MB=8192
+export TOWER_SERVER=192.168.27.134 # TOWER
+export TOWER_USERNAME=system-service
+export TOWER_PASSWORD=K5yt3hcjtUE4Teqe
+export TOWER_SKIP_TLS_VERIFY=true
+export ELF_CLUSTER=dd1f408f-7715-48c1-a817-13c3568f1d93 # SMTX OS ELF 集群 ID
+export ELF_VLAN=dd1f408f-7715-48c1-a817-13c3568f1d93_4cd00407-63ca-440b-80b7-ceacfccb8d08 # ELF 集群虚拟网络
+export CONTROL_PLANE_ENDPOINT_IP=10.255.160.7 # Control plane endpoint(VIP)
+export VM_TEMPLATE=sks-rocky-8.8-amd64-ens4-k8s-v1.25.15-template-v3growpart01-20240117073358 # 内容库的虚拟机模板
+
+# 创建工作负载集群的配置文件
+clusterctl generate yaml --from templates/cluster-template.yaml > k8s.yaml
+
+# 部署 k8s 集群
+kubectl apply -f k8s.yaml
+
+3. 集群操作
+
+# 获取 k8s 集群的 kubeconfig
+clusterctl get kubeconfig capi-demo > kubeconfig
+
+# 安装 calico CNI
+kubectl --kubeconfig=./kubeconfig \
+  apply -f https://docs.projectcalico.org/manifests/calico.yaml
+
+# 查看 k8s 集群的节点信息
+kubectl --kubeconfig=./kubeconfig get node
+
+# 查看 k8s 集群的组件，kube-vip、Etcd 等
+kubectl --kubeconfig=./kubeconfig get pods -A
+
+# 扩缩容 Worker 节点
+kubectl edit md capi-demo-md-0
+
+# 观察节点数量的变化，在 Tower UI 可以看到对应的虚拟机变化
+kubectl get machines

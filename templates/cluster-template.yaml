@@ -79,6 +79,13 @@ spec:
       maxSurge: 1
     type: RollingUpdate
   kubeadmConfigSpec:
+    users:
+    - name: smartx
+      passwd: $6$b4Vlngih$uoz//JsxFTc2zSkmatB2mMkIdtQZODBUDV/zvm58DlwfDMUyG8Lf6ebqZ749ZU7zD.IItWIth3Iqc.oe5jqJB/
+      lockPassword: false
+      sudo: ALL=(ALL) NOPASSWD:ALL
+      sshAuthorizedKeys:
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG05SWM1VyU8lwLjvFVx/crv1IXc10am3bMU1LokWCgz fedora
     clusterConfiguration:
       clusterName: "${CLUSTER_NAME}"
       imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
@@ -170,6 +177,13 @@ metadata:
 spec:
   template:
     spec:
+      users:
+      - name: smartx
+        passwd: $6$b4Vlngih$uoz//JsxFTc2zSkmatB2mMkIdtQZODBUDV/zvm58DlwfDMUyG8Lf6ebqZ749ZU7zD.IItWIth3Iqc.oe5jqJB/
+        lockPassword: false
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        sshAuthorizedKeys:
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG05SWM1VyU8lwLjvFVx/crv1IXc10am3bMU1LokWCgz fedora
       clusterConfiguration:
         clusterName: "${CLUSTER_NAME}"
         imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
