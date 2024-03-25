@@ -338,6 +338,21 @@ func (mr *MockVMServiceMockRecorder) GetTask(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTask", reflect.TypeOf((*MockVMService)(nil).GetTask), id)
 }
 
+// GetVMDisks mocks base method.
+func (m *MockVMService) GetVMDisks(vmDiskIDs []string) ([]*models.VMDisk, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVMDisks", vmDiskIDs)
+	ret0, _ := ret[0].([]*models.VMDisk)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetVMDisks indicates an expected call of GetVMDisks.
+func (mr *MockVMServiceMockRecorder) GetVMDisks(vmDiskIDs interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMDisks", reflect.TypeOf((*MockVMService)(nil).GetVMDisks), vmDiskIDs)
+}
+
 // GetVMGPUAllocationInfo mocks base method.
 func (m *MockVMService) GetVMGPUAllocationInfo(id string) (*models.VMGpuInfo, error) {
 	m.ctrl.T.Helper()
@@ -396,6 +411,21 @@ func (m *MockVMService) GetVMTemplate(template string) (*models.ContentLibraryVM
 func (mr *MockVMServiceMockRecorder) GetVMTemplate(template interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMTemplate", reflect.TypeOf((*MockVMService)(nil).GetVMTemplate), template)
+}
+
+// GetVMVolume mocks base method.
+func (m *MockVMService) GetVMVolume(vmVolumeID string) (*models.VMVolume, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetVMVolume", vmVolumeID)
+	ret0, _ := ret[0].(*models.VMVolume)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetVMVolume indicates an expected call of GetVMVolume.
+func (mr *MockVMServiceMockRecorder) GetVMVolume(vmVolumeID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVMVolume", reflect.TypeOf((*MockVMService)(nil).GetVMVolume), vmVolumeID)
 }
 
 // GetVlan mocks base method.
@@ -471,6 +501,21 @@ func (m *MockVMService) RemoveGPUDevices(id string, gpus []*models.VMGpuOperatio
 func (mr *MockVMServiceMockRecorder) RemoveGPUDevices(id, gpus interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveGPUDevices", reflect.TypeOf((*MockVMService)(nil).RemoveGPUDevices), id, gpus)
+}
+
+// ResizeVMVolume mocks base method.
+func (m *MockVMService) ResizeVMVolume(vmVolumeID string, size int64) (*models.WithTaskVMVolume, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResizeVMVolume", vmVolumeID, size)
+	ret0, _ := ret[0].(*models.WithTaskVMVolume)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResizeVMVolume indicates an expected call of ResizeVMVolume.
+func (mr *MockVMServiceMockRecorder) ResizeVMVolume(vmVolumeID, size interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResizeVMVolume", reflect.TypeOf((*MockVMService)(nil).ResizeVMVolume), vmVolumeID, size)
 }
 
 // ShutDown mocks base method.

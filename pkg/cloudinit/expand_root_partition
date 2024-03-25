@@ -1,0 +1,29 @@
+runcmd:
+  - |
+    ostype=$(cat /etc/os-release | grep "^ID=" | cut -d "=" -f 2)
+    rootpath="/dev/mapper/rl-root"
+    if [[ $ostype == '"openEuler"' ]]; then
+      rootpath="/dev/mapper/openeuler-root"
+    fi
+  - |
+    result=$(growpart /dev/vda 2)
+    if [[ $? == 0 ]]; then
+      echo "$result"
+    elif [[ $result == NOCHANGE* ]]; then
+      echo "$result"
+    else
+      echo "$result"
+      exit 1
+    fi
+  - "pvresize /dev/vda2"
+  - |
+    result=$(lvextend -l+100%FREE -n $rootpath 2>&1)
+    if [[ $? == 0 ]]; then
+      echo "$result"
+    elif [[ $result == *'matches existing size'* ]]; then
+      echo "$result"
+    else
+      echo "$result"
+      exit 1
+    fi
+  - "resize2fs $rootpath"

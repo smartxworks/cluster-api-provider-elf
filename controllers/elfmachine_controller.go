@@ -48,6 +48,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/cloudinit"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	capeerrors "github.com/smartxworks/cluster-api-provider-elf/pkg/errors"
@@ -211,6 +212,7 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (r
 		conditions.SetSummary(machineContext.ElfMachine,
 			conditions.WithConditions(
 				infrav1.VMProvisionedCondition,
+				infrav1.ResourcesHotUpdatedCondition,
 				infrav1.TowerAvailableCondition,
 			),
 		)
@@ -530,6 +532,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		if bootstrapData == "" {
 			return nil, false, errors.New("bootstrapData is empty")
 		}
+		bootstrapData = cloudinit.JoinExpandRootPartitionCommandsToCloudinit(bootstrapData)
 
 		if ok, message, err := isELFScheduleVMErrorRecorded(ctx); err != nil {
 			return nil, false, err
@@ -662,6 +665,10 @@ func (r *ElfMachineReconciler) reconcileVM(ctx *context.MachineContext) (*models
 		return vm, false, err
 	}
 
+	if ok, err := r.reconcileVMResources(ctx, vm); err != nil || !ok {
+		return vm, false, err
+	}
+
 	return vm, true, nil
 }
 
@@ -747,6 +754,17 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx *context.MachineContext, vm
 			ctx.Logger.Info("The VM configuration has been modified, and the VM is stopped, just restore the VM configuration to expected values", "vmRef", ctx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
 
 			return false, r.updateVM(ctx, vm)
+		}
+
+		// Before the virtual machine is started for the first time, if the
+		// current disk capacity of the virtual machine is smaller than expected,
+		// expand the disk capacity first and then start it. cloud-init will
+		// add the new disk capacity to root.
+		if !(conditions.Has(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition) &&
+			conditions.IsFalse(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)) {
+			if ok, err := r.reconcieVMVolume(ctx, vm, infrav1.VMProvisionedCondition); err != nil || !ok {
+				return ok, err
+			}
 		}
 
 		return false, r.powerOnVM(ctx, vm)
@@ -975,8 +993,17 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx *context.MachineContext
 	case service.IsCloneVMTask(task):
 		releaseTicketForCreateVM(ctx.ElfMachine.Name)
 
+		if service.IsVMDuplicateError(errorMessage) {
+			setVMDuplicate(ctx.ElfMachine.Name)
+		}
+
 		if ctx.ElfMachine.RequiresGPUDevices() {
 			unlockGPUDevicesLockedByVM(ctx.ElfCluster.Spec.Cluster, ctx.ElfMachine.Name)
+		}
+	case service.IsUpdateVMDiskTask(task, ctx.ElfMachine.Name):
+		reason := conditions.GetReason(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+		if reason == infrav1.ExpandingVMDiskReason || reason == infrav1.ExpandingVMDiskFailedReason {
+			conditions.MarkFalse(ctx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskFailedReason, clusterv1.ConditionSeverityInfo, errorMessage)
 		}
 	case service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task) || service.IsVMColdMigrationTask(task):
 		if ctx.ElfMachine.RequiresGPUDevices() {

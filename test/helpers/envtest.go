@@ -131,6 +131,16 @@ func NewTestEnvironment() *TestEnvironment {
 		KubeConfig: env.Config,
 	}
 	managerOpts.AddToManager = func(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
+		if err := (&webhooks.ElfMachineTemplateValidator{}).SetupWebhookWithManager(mgr); err != nil {
+			return err
+		}
+
+		if err := (&webhooks.ElfMachineValidator{
+			Client: mgr.GetClient(),
+		}).SetupWebhookWithManager(mgr); err != nil {
+			return err
+		}
+
 		if err := (&webhooks.ElfMachineMutation{
 			Client: mgr.GetClient(),
 			Logger: mgr.GetLogger().WithName("ElfMachineMutation"),

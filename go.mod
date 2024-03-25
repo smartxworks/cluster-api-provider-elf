@@ -11,6 +11,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/smartxworks/cloudtower-go-sdk/v2 v2.13.1-0.20231116110941-d411454388af
+	github.com/smartxworks/host-config-agent-api v0.0.0-20240313035517-ee5958751f54
 	golang.org/x/mod v0.12.0
 	k8s.io/api v0.27.2
 	k8s.io/apiextensions-apiserver v0.27.2
@@ -21,7 +22,7 @@ require (
 	k8s.io/utils v0.0.0-20230209194617-a36077c30491
 	sigs.k8s.io/cluster-api v1.5.2
 	sigs.k8s.io/cluster-api/test v1.5.2
-	sigs.k8s.io/controller-runtime v0.15.1
+	sigs.k8s.io/controller-runtime v0.15.2
 )
 
 require (

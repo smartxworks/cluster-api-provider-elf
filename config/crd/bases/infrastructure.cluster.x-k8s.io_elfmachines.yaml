@@ -403,6 +403,13 @@ spec:
               ready:
                 description: Ready is true when the provider resource is ready.
                 type: boolean
+              resources:
+                description: Resources records the resources allocated for the machine.
+                properties:
+                  disk:
+                    format: int32
+                    type: integer
+                type: object
               taskRef:
                 description: TaskRef is a managed object reference to a Task related
                   to the machine. This value is set automatically at runtime and should

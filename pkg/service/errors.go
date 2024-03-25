@@ -27,6 +27,7 @@ const (
 	HostNotFound              = "HOST_NOT_FOUND"
 	VMTemplateNotFound        = "VM_TEMPLATE_NOT_FOUND"
 	VMNotFound                = "VM_NOT_FOUND"
+	VMVolumeNotFound          = "VM_VOLUME_NOT_FOUND"
 	VMGPUInfoNotFound         = "VM_GPU_INFO_NOT_FOUND"
 	VMDuplicate               = "VM_DUPLICATE"
 	TaskNotFound              = "TASK_NOT_FOUND"
@@ -60,6 +61,10 @@ func IsVMDuplicateError(message string) bool {
 
 func IsShutDownTimeout(message string) bool {
 	return strings.Contains(message, "JOB_VM_SHUTDOWN_TIMEOUT")
+}
+
+func IsVMVolumeNotFound(err error) bool {
+	return strings.Contains(err.Error(), VMVolumeNotFound)
 }
 
 func IsGPUAssignFailed(message string) bool {
