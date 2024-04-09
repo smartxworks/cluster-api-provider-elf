@@ -21,6 +21,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -48,7 +49,7 @@ type ControllerManagerContext struct {
 
 	// WatchNamespaces are the namespaces the controllers watches for changes. If
 	// no value is specified then all namespaces are watched.
-	WatchNamespaces []string
+	WatchNamespaces map[string]cache.Config
 
 	// Client is the controller manager's client.
 	Client client.Client

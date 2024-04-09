@@ -17,6 +17,8 @@ limitations under the License.
 package manager
 
 import (
+	"os"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -35,8 +37,8 @@ type AddToManagerFunc func(*context.ControllerManagerContext, ctrlmgr.Manager) e
 type Options struct {
 	ctrlmgr.Options
 
-	// LeaderElectionNamespace is the namespace in which the pod running the
-	// controller maintains a leader election lock
+	// PodNamespace is the namespace in which the pod running the controller
+	// maintains a leader election lock.
 	//
 	// Defaults to the eponymous constant in this package.
 	PodNamespace string
@@ -74,5 +76,11 @@ func (o *Options) defaults() {
 
 	if o.Scheme == nil {
 		o.Scheme = runtime.NewScheme()
+	}
+
+	if ns, ok := os.LookupEnv("POD_NAMESPACE"); ok {
+		o.PodNamespace = ns
+	} else {
+		o.PodNamespace = DefaultPodNamespace
 	}
 }

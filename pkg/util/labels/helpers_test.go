@@ -17,7 +17,7 @@ limitations under the License.
 package labels
 
 import (
-	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/onsi/gomega"
@@ -67,7 +67,7 @@ func TestConvertToLabelValue(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			labelValue := ConvertToLabelValue(tc.str)
 			g.Expect(labelValue).To(gomega.Equal(tc.labelValue))
 		})

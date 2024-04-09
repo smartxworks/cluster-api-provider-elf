@@ -104,9 +104,9 @@ linters-settings:
       - pkg: github.com/smartxworks/cluster-api-provider-elf/api/v1beta1
         alias: infrav1
   staticcheck:
-    go: "1.20"
+    go: "1.21"
   stylecheck:
-    go: "1.20"
+    go: "1.21"
 issues:
   max-same-issues: 0
   max-issues-per-linter: 0
@@ -169,7 +169,7 @@ issues:
 
 run:
   timeout: 10m
-  go: "1.20"
+  go: "1.21"
   skip-files:
   - "zz_generated.*\\.go$"
   allow-parallel-runners: true
