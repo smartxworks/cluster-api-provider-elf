@@ -38,6 +38,18 @@ spec:
         env:
         - name: TOWER_RESOURCE_PREFIX
           value: cape
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
         ports:
         - containerPort: 9440
           name: healthz

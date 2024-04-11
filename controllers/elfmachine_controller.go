@@ -60,6 +60,8 @@ import (
 	typesutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/types"
 )
 
+const failedToUpsertLabelMsg = "failed to upsert label"
+
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines/finalizers,verbs=update
@@ -1216,7 +1218,7 @@ func (r *ElfMachineReconciler) reconcileLabels(ctx *context.MachineContext, vm *
 		var err error
 		capeManagedLabel, err = ctx.VMService.UpsertLabel(capeManagedLabelKey, "true")
 		if err != nil {
-			return false, errors.Wrapf(err, "failed to upsert label "+towerresources.GetVMLabelManaged())
+			return false, errors.Wrapf(err, "%s %s", failedToUpsertLabelMsg, towerresources.GetVMLabelManaged())
 		}
 
 		setLabelInCache(capeManagedLabel)
@@ -1232,18 +1234,18 @@ func (r *ElfMachineReconciler) reconcileLabels(ctx *context.MachineContext, vm *
 
 	namespaceLabel, err := ctx.VMService.UpsertLabel(towerresources.GetVMLabelNamespace(), ctx.ElfMachine.Namespace)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to upsert label "+towerresources.GetVMLabelNamespace())
+		return false, errors.Wrapf(err, "%s %s", failedToUpsertLabelMsg, towerresources.GetVMLabelNamespace())
 	}
 	clusterNameLabel, err := ctx.VMService.UpsertLabel(towerresources.GetVMLabelClusterName(), ctx.ElfCluster.Name)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to upsert label "+towerresources.GetVMLabelClusterName())
+		return false, errors.Wrapf(err, "%s %s", failedToUpsertLabelMsg, towerresources.GetVMLabelClusterName())
 	}
 
 	var vipLabel *models.Label
 	if machineutil.IsControlPlaneMachine(ctx.ElfMachine) {
 		vipLabel, err = ctx.VMService.UpsertLabel(towerresources.GetVMLabelVIP(), ctx.ElfCluster.Spec.ControlPlaneEndpoint.Host)
 		if err != nil {
-			return false, errors.Wrapf(err, "failed to upsert label "+towerresources.GetVMLabelVIP())
+			return false, errors.Wrapf(err, "%s %s", failedToUpsertLabelMsg, towerresources.GetVMLabelVIP())
 		}
 	}
 
