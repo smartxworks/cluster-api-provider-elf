@@ -17,9 +17,6 @@ limitations under the License.
 package context
 
 import (
-	"context"
-
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,11 +24,7 @@ import (
 
 // ControllerManagerContext is the context of the controller that owns the
 // controllers.
-//
-//nolint:containedctx
 type ControllerManagerContext struct {
-	context.Context
-
 	// Namespace is the namespace in which the resource is located responsible
 	// for running the controller manager.
 	Namespace string
@@ -53,9 +46,6 @@ type ControllerManagerContext struct {
 
 	// Client is the controller manager's client.
 	Client client.Client
-
-	// Logger is the controller manager's logger.
-	Logger logr.Logger
 
 	// Scheme is the controller manager's API scheme.
 	Scheme *runtime.Scheme

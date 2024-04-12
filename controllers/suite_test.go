@@ -32,15 +32,13 @@ import (
 	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/manager"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
-	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 	"github.com/smartxworks/cluster-api-provider-elf/test/helpers"
 )
 
@@ -50,6 +48,7 @@ const (
 
 var (
 	testEnv *helpers.TestEnvironment
+	ctx     = ctrl.SetupSignalHandler()
 )
 
 func TestControllers(t *testing.T) {
@@ -85,14 +84,14 @@ func setup() {
 	utilruntime.Must(infrav1.AddToScheme(cgscheme.Scheme))
 	utilruntime.Must(clusterv1.AddToScheme(cgscheme.Scheme))
 
-	testEnv = helpers.NewTestEnvironment()
+	testEnv = helpers.NewTestEnvironment(ctx)
 
 	// Set kubeconfig.
 	os.Setenv("KUBECONFIG", testEnv.Kubeconfig)
 
 	go func() {
 		fmt.Println("Starting the manager")
-		if err := testEnv.StartManager(testEnv.GetContext()); err != nil {
+		if err := testEnv.StartManager(ctx); err != nil {
 			panic(fmt.Sprintf("failed to start the envtest manager: %v", err))
 		}
 	}()
@@ -104,16 +103,16 @@ func setup() {
 			Name: manager.DefaultPodNamespace,
 		},
 	}
-	if err := testEnv.CreateAndWait(testEnv.GetContext(), ns); err != nil {
+	if err := testEnv.CreateAndWait(ctx, ns); err != nil {
 		panic("unable to create controller namespace")
 	}
 
 	controllerOpts := controller.Options{MaxConcurrentReconciles: 10}
 
-	if err := AddClusterControllerToManager(testEnv.GetContext(), testEnv.Manager, controllerOpts); err != nil {
+	if err := AddClusterControllerToManager(ctx, testEnv.GetControllerManagerContext(), testEnv.Manager, controllerOpts); err != nil {
 		panic(fmt.Sprintf("unable to setup ElfCluster controller: %v", err))
 	}
-	if err := AddMachineControllerToManager(testEnv.GetContext(), testEnv.Manager, controllerOpts); err != nil {
+	if err := AddMachineControllerToManager(ctx, testEnv.GetControllerManagerContext(), testEnv.Manager, controllerOpts); err != nil {
 		panic(fmt.Sprintf("unable to setup ElfMachine controller: %v", err))
 	}
 }
@@ -124,28 +123,16 @@ func teardown() {
 	}
 }
 
-func newCtrlContexts(objs ...client.Object) *context.ControllerContext {
-	ctrlMgrContext := fake.NewControllerManagerContext(objs...)
-	ctrlContext := &context.ControllerContext{
-		ControllerManagerContext: ctrlMgrContext,
-		Logger:                   ctrllog.Log,
-	}
-
-	return ctrlContext
-}
-
-func newMachineContext(ctrlCtx *context.ControllerContext,
+func newMachineContext(
 	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
 	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine,
 	vmService service.VMService) *context.MachineContext {
 	return &context.MachineContext{
-		ControllerContext: ctrlCtx,
-		Cluster:           cluster,
-		ElfCluster:        elfCluster,
-		Machine:           machine,
-		ElfMachine:        elfMachine,
-		Logger:            ctrlCtx.Logger,
-		VMService:         vmService,
+		Cluster:    cluster,
+		ElfCluster: elfCluster,
+		Machine:    machine,
+		ElfMachine: elfMachine,
+		VMService:  vmService,
 	}
 }
 

@@ -17,6 +17,7 @@ limitations under the License.
 package manager
 
 import (
+	goctx "context"
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,14 +32,14 @@ import (
 // AddToManagerFunc is a function that can be optionally specified with
 // the manager's Options in order to explicitly decide what controllers and
 // webhooks to add to the manager.
-type AddToManagerFunc func(*context.ControllerManagerContext, ctrlmgr.Manager) error
+type AddToManagerFunc func(goctx.Context, *context.ControllerManagerContext, ctrlmgr.Manager) error
 
 // Options describes the options used to create a new CAPE manager.
 type Options struct {
 	ctrlmgr.Options
 
-	// PodNamespace is the namespace in which the pod running the controller
-	// maintains a leader election lock.
+	// LeaderElectionNamespace is the namespace in which the pod running the
+	// controller maintains a leader election lock
 	//
 	// Defaults to the eponymous constant in this package.
 	PodNamespace string

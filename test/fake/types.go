@@ -17,6 +17,8 @@ limitations under the License.
 package fake
 
 import (
+	goctx "context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -173,34 +175,34 @@ func NewMD() *clusterv1.MachineDeployment {
 	}
 }
 
-func InitClusterOwnerReferences(ctrlContext *context.ControllerContext,
+func InitClusterOwnerReferences(ctx goctx.Context, ctrlMgrCtx *context.ControllerManagerContext,
 	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster) {
 	By("setting the OwnerRef on the ElfCluster")
-	ph, err := patch.NewHelper(elfCluster, ctrlContext.Client)
+	ph, err := patch.NewHelper(elfCluster, ctrlMgrCtx.Client)
 	Expect(err).ShouldNot(HaveOccurred())
 	elfCluster.OwnerReferences = append(elfCluster.OwnerReferences, metav1.OwnerReference{Kind: ClusterKind, APIVersion: clusterv1.GroupVersion.String(), Name: cluster.Name, UID: "blah"})
-	Expect(ph.Patch(ctrlContext, elfCluster, patch.WithStatusObservedGeneration{})).ShouldNot(HaveOccurred())
+	Expect(ph.Patch(ctx, elfCluster, patch.WithStatusObservedGeneration{})).ShouldNot(HaveOccurred())
 }
 
-func InitMachineOwnerReferences(ctrlContext *context.ControllerContext,
+func InitMachineOwnerReferences(ctx goctx.Context, ctrlMgrCtx *context.ControllerManagerContext,
 	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine) {
 	By("setting the OwnerRef on the ElfMachine")
-	ph, err := patch.NewHelper(elfMachine, ctrlContext.Client)
+	ph, err := patch.NewHelper(elfMachine, ctrlMgrCtx.Client)
 	Expect(err).ShouldNot(HaveOccurred())
 	elfMachine.OwnerReferences = append(elfMachine.OwnerReferences, metav1.OwnerReference{Kind: MachineKind, APIVersion: clusterv1.GroupVersion.String(), Name: machine.Name, UID: "blah"})
-	Expect(ph.Patch(ctrlContext, elfMachine, patch.WithStatusObservedGeneration{})).ShouldNot(HaveOccurred())
+	Expect(ph.Patch(ctx, elfMachine, patch.WithStatusObservedGeneration{})).ShouldNot(HaveOccurred())
 }
 
 func InitOwnerReferences(
-	ctrlContext *context.ControllerContext,
+	ctx goctx.Context, ctrlMgrCtx *context.ControllerManagerContext,
 	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
 	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine) {
 	if elfCluster != nil {
-		InitClusterOwnerReferences(ctrlContext, elfCluster, cluster)
+		InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
 	}
 
 	if elfMachine != nil {
-		InitMachineOwnerReferences(ctrlContext, elfMachine, machine)
+		InitMachineOwnerReferences(ctx, ctrlMgrCtx, elfMachine, machine)
 	}
 }
 

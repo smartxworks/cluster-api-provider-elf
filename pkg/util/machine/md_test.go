@@ -17,6 +17,7 @@ limitations under the License.
 package machine
 
 import (
+	goctx "context"
 	"testing"
 
 	"github.com/onsi/gomega"
@@ -26,14 +27,15 @@ import (
 
 func TestGetMDByMachine(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
+	ctx := goctx.TODO()
 	elfCluster, cluster := fake.NewClusterObjects()
 	_, machine := fake.NewMachineObjects(elfCluster, cluster)
 	machineDeployment := fake.NewMD()
 	fake.ToWorkerMachine(machine, machineDeployment)
-	ctx := fake.NewControllerManagerContext(machineDeployment)
+	ctrlMgrCtx := fake.NewControllerManagerContext(machineDeployment)
 
 	t.Run("should return md", func(t *testing.T) {
-		md, err := GetMDByMachine(ctx, ctx.Client, machine)
+		md, err := GetMDByMachine(ctx, ctrlMgrCtx.Client, machine)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(md.Name).To(gomega.Equal(machineDeployment.Name))
 	})
