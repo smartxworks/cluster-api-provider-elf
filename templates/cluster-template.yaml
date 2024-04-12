@@ -98,6 +98,39 @@ spec:
       - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
       - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
       - /etc/kube-vip-prepare.sh
+      #! If you need to expand the system disk capacity (based on the capacity of
+      #! the virtual machine template disk) when creating a node virtual machine,
+      #! you need to set the following commands. CAPE will add new disk capacity
+      #! to the system disk through Tower API. These commands will add the new
+      #! capacity of the system disk to the root partition.
+      #! - |
+      #!   ostype=$(cat /etc/os-release | grep "^ID=" | cut -d "=" -f 2)
+      #!   rootpath="/dev/mapper/rl-root"
+      #!   if [[ $ostype == '"openEuler"' ]]; then
+      #!     rootpath="/dev/mapper/openeuler-root"
+      #!   fi
+      #! - |
+      #!   result=$(growpart /dev/vda 2)
+      #!   if [[ $? == 0 ]]; then
+      #!     echo "$result"
+      #!   elif [[ $result == NOCHANGE* ]]; then
+      #!     echo "$result"
+      #!   else
+      #!     echo "$result"
+      #!     exit 1
+      #!   fi
+      #! - "pvresize /dev/vda2"
+      #! - |
+      #!   result=$(lvextend -l+100%FREE -n $rootpath 2>&1)
+      #!   if [[ $? == 0 ]]; then
+      #!     echo "$result"
+      #!   elif [[ $result == *'matches existing size'* ]]; then
+      #!     echo "$result"
+      #!   else
+      #!     echo "$result"
+      #!     exit 1
+      #!   fi
+      #! - "resize2fs $rootpath"
     useExperimentalRetryJoin: true
     files:
     - content: |
@@ -247,6 +280,39 @@ spec:
         - echo "127.0.0.1   localhost" >>/etc/hosts
         - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
         - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
+      #! If you need to expand the system disk capacity (based on the capacity of
+      #! the virtual machine template disk) when creating a node virtual machine,
+      #! you need to set the following commands. CAPE will add new disk capacity
+      #! to the system disk through Tower API. These commands will add the new
+      #! capacity of the system disk to the root partition.
+      #! - |
+      #!   ostype=$(cat /etc/os-release | grep "^ID=" | cut -d "=" -f 2)
+      #!   rootpath="/dev/mapper/rl-root"
+      #!   if [[ $ostype == '"openEuler"' ]]; then
+      #!     rootpath="/dev/mapper/openeuler-root"
+      #!   fi
+      #! - |
+      #!   result=$(growpart /dev/vda 2)
+      #!   if [[ $? == 0 ]]; then
+      #!     echo "$result"
+      #!   elif [[ $result == NOCHANGE* ]]; then
+      #!     echo "$result"
+      #!   else
+      #!     echo "$result"
+      #!     exit 1
+      #!   fi
+      #! - "pvresize /dev/vda2"
+      #! - |
+      #!   result=$(lvextend -l+100%FREE -n $rootpath 2>&1)
+      #!   if [[ $? == 0 ]]; then
+      #!     echo "$result"
+      #!   elif [[ $result == *'matches existing size'* ]]; then
+      #!     echo "$result"
+      #!   else
+      #!     echo "$result"
+      #!     exit 1
+      #!   fi
+      #! - "resize2fs $rootpath"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: ElfMachineTemplate

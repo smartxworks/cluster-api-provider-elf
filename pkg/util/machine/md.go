@@ -19,6 +19,7 @@ package machine
 import (
 	goctx "context"
 
+	"github.com/pkg/errors"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,4 +34,43 @@ func GetMDByMachine(ctx goctx.Context, ctrlClient client.Client, machine *cluste
 	}
 
 	return &md, nil
+}
+
+func GetMDsForCluster(
+	ctx goctx.Context,
+	ctrlClient client.Client,
+	namespace, clusterName string) ([]*clusterv1.MachineDeployment, error) {
+	var mdList clusterv1.MachineDeploymentList
+	labels := map[string]string{clusterv1.ClusterNameLabel: clusterName}
+
+	if err := ctrlClient.List(
+		ctx, &mdList,
+		client.InNamespace(namespace),
+		client.MatchingLabels(labels)); err != nil {
+		return nil, err
+	}
+
+	mds := make([]*clusterv1.MachineDeployment, len(mdList.Items))
+	for i := range mdList.Items {
+		mds[i] = &mdList.Items[i]
+	}
+
+	return mds, nil
+}
+
+// GetMachineSetsForDeployment returns a list of MachineSets associated with a MachineDeployment.
+func GetMachineSetsForDeployment(ctx goctx.Context, ctrlClient client.Client, mdNamespace, mdName string) ([]*clusterv1.MachineSet, error) {
+	// List MachineSets based on the MachineDeployment label.
+	msList := &clusterv1.MachineSetList{}
+	if err := ctrlClient.List(ctx, msList,
+		client.InNamespace(mdNamespace), client.MatchingLabels{clusterv1.MachineDeploymentNameLabel: mdName}); err != nil {
+		return nil, errors.Wrapf(err, "failed to list MachineSets for MachineDeployment/%s", mdName)
+	}
+
+	// Copy the MachineSets to an array of MachineSet pointers, to avoid MachineSet copying later.
+	res := make([]*clusterv1.MachineSet, 0, len(msList.Items))
+	for i := range msList.Items {
+		res = append(res, &msList.Items[i])
+	}
+	return res, nil
 }

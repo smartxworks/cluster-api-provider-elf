@@ -31,8 +31,10 @@ import (
 	clienttask "github.com/smartxworks/cloudtower-go-sdk/v2/client/task"
 	clientvlan "github.com/smartxworks/cloudtower-go-sdk/v2/client/vlan"
 	clientvm "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm"
+	clientvmdisk "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_disk"
 	clientvmnic "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_nic"
 	clientvmplacementgroup "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_placement_group"
+	clientvmvolume "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_volume"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -58,6 +60,9 @@ type VMService interface {
 	FindByIDs(ids []string) ([]*models.VM, error)
 	FindVMsByName(name string) ([]*models.VM, error)
 	GetVMNics(vmID string) ([]*models.VMNic, error)
+	GetVMDisks(vmDiskIDs []string) ([]*models.VMDisk, error)
+	GetVMVolume(vmVolumeID string) (*models.VMVolume, error)
+	ResizeVMVolume(vmVolumeID string, size int64) (*models.WithTaskVMVolume, error)
 	GetVMTemplate(template string) (*models.ContentLibraryVMTemplate, error)
 	GetTask(id string) (*models.Task, error)
 	WaitTask(ctx goctx.Context, id string, timeout, interval time.Duration) (*models.Task, error)
@@ -118,6 +123,56 @@ func (svr *TowerVMService) UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachin
 	return updateVMResp.Payload[0], nil
 }
 
+func (svr *TowerVMService) GetVMDisks(vmDiskIDs []string) ([]*models.VMDisk, error) {
+	getVMDisksParams := clientvmdisk.NewGetVMDisksParams()
+	getVMDisksParams.RequestBody = &models.GetVMDisksRequestBody{
+		Where:   &models.VMDiskWhereInput{IDIn: vmDiskIDs},
+		OrderBy: models.NewVMDiskOrderByInput(models.VMDiskOrderByInputBootASC),
+	}
+
+	getVMDisksResp, err := svr.Session.VMDisk.GetVMDisks(getVMDisksParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return getVMDisksResp.Payload, nil
+}
+
+func (svr *TowerVMService) GetVMVolume(volumeID string) (*models.VMVolume, error) {
+	getVMVolumesParams := clientvmvolume.NewGetVMVolumesParams()
+	getVMVolumesParams.RequestBody = &models.GetVMVolumesRequestBody{
+		Where: &models.VMVolumeWhereInput{ID: TowerString(volumeID)},
+	}
+
+	getVMVolumesResp, err := svr.Session.VMVolume.GetVMVolumes(getVMVolumesParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(getVMVolumesResp.Payload) == 0 {
+		return nil, errors.New(VMVolumeNotFound)
+	}
+
+	return getVMVolumesResp.Payload[0], nil
+}
+
+// ResizeVMVolume resizes the virtual machine volume to the specified size.
+// Can only increase the volume size, not reduce it.
+func (svr *TowerVMService) ResizeVMVolume(vmVolumeID string, size int64) (*models.WithTaskVMVolume, error) {
+	updateVMVolumeParams := clientvmvolume.NewUpdateVMVolumeParams()
+	updateVMVolumeParams.RequestBody = &models.UpdateVMVolumeParams{
+		Data:  &models.UpdateVMVolumeParamsData{Size: TowerInt64(size)},
+		Where: &models.VMVolumeWhereInput{ID: TowerString(vmVolumeID)},
+	}
+
+	updateVMVolumeResp, err := svr.Session.VMVolume.UpdateVMVolume(updateVMVolumeParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return updateVMVolumeResp.Payload[0], nil
+}
+
 // Clone kicks off a clone operation on Elf to create a new virtual machine using VM template.
 func (svr *TowerVMService) Clone(
 	elfCluster *infrav1.ElfCluster, elfMachine *infrav1.ElfMachine, bootstrapData,
@@ -148,21 +203,6 @@ func (svr *TowerVMService) Clone(
 	// HA cannot be enabled on a virtual machine with GPU/vGPU devices.
 	if len(gpuDevices) > 0 {
 		ha = TowerBool(false)
-	}
-
-	var mountDisks []*models.MountNewCreateDisksParams
-	if elfMachine.Spec.DiskGiB > 0 {
-		storagePolicy := models.VMVolumeElfStoragePolicyTypeREPLICA2THINPROVISION
-		bus := models.BusVIRTIO
-		mountDisks = append(mountDisks, &models.MountNewCreateDisksParams{
-			Boot: TowerInt32(0),
-			Bus:  &bus,
-			VMVolume: &models.MountNewCreateDisksParamsVMVolume{
-				ElfStoragePolicy: &storagePolicy,
-				Name:             TowerString(config.VMDiskName),
-				Size:             TowerDisk(elfMachine.Spec.DiskGiB),
-			},
-		})
 	}
 
 	nics := make([]*models.VMNicParams, 0, len(elfMachine.Spec.Network.Devices))
@@ -269,11 +309,7 @@ func (svr *TowerVMService) Clone(
 		TemplateID:  template.ID,
 		GuestOsType: models.NewVMGuestsOperationSystem(models.VMGuestsOperationSystem(elfMachine.Spec.OSType)),
 		VMNics:      nics,
-		DiskOperate: &models.VMDiskOperate{
-			NewDisks: &models.VMDiskParams{
-				MountNewCreateDisks: mountDisks,
-			},
-		},
+		DiskOperate: &models.VMDiskOperate{},
 		CloudInit: &models.TemplateCloudInit{
 			Hostname:    TowerString(elfMachine.Name),
 			UserData:    TowerString(bootstrapData),

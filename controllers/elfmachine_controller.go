@@ -208,6 +208,7 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (r
 		conditions.SetSummary(machineCtx.ElfMachine,
 			conditions.WithConditions(
 				infrav1.VMProvisionedCondition,
+				infrav1.ResourcesHotUpdatedCondition,
 				infrav1.TowerAvailableCondition,
 			),
 		)
@@ -664,6 +665,10 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 		return vm, false, err
 	}
 
+	if ok, err := r.reconcileVMResources(ctx, machineCtx, vm); err != nil || !ok {
+		return vm, false, err
+	}
+
 	return vm, true, nil
 }
 
@@ -753,6 +758,17 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx goctx.Context, machineCtx *
 			log.Info("The VM configuration has been modified, and the VM is stopped, just restore the VM configuration to expected values", "vmRef", machineCtx.ElfMachine.Status.VMRef, "updatedVMRestrictedFields", updatedVMRestrictedFields)
 
 			return false, r.updateVM(ctx, machineCtx, vm)
+		}
+
+		// Before the virtual machine is started for the first time, if the
+		// current disk capacity of the virtual machine is smaller than expected,
+		// expand the disk capacity first and then start it. cloud-init will
+		// add the new disk capacity to root.
+		if !(conditions.Has(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition) &&
+			conditions.IsFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)) {
+			if ok, err := r.reconcieVMVolume(ctx, machineCtx, vm, infrav1.VMProvisionedCondition); err != nil || !ok {
+				return ok, err
+			}
 		}
 
 		return false, r.powerOnVM(ctx, machineCtx, vm)
@@ -993,8 +1009,17 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx goctx.Context, machineC
 	case service.IsCloneVMTask(task):
 		releaseTicketForCreateVM(machineCtx.ElfMachine.Name)
 
+		if service.IsVMDuplicateError(errorMessage) {
+			setVMDuplicate(machineCtx.ElfMachine.Name)
+		}
+
 		if machineCtx.ElfMachine.RequiresGPUDevices() {
 			unlockGPUDevicesLockedByVM(machineCtx.ElfCluster.Spec.Cluster, machineCtx.ElfMachine.Name)
+		}
+	case service.IsUpdateVMDiskTask(task, machineCtx.ElfMachine.Name):
+		reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+		if reason == infrav1.ExpandingVMDiskReason || reason == infrav1.ExpandingVMDiskFailedReason {
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskFailedReason, clusterv1.ConditionSeverityInfo, errorMessage)
 		}
 	case service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task) || service.IsVMColdMigrationTask(task):
 		if machineCtx.ElfMachine.RequiresGPUDevices() {

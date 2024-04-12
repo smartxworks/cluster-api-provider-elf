@@ -20,6 +20,7 @@ import (
 	goctx "context"
 
 	"github.com/pkg/errors"
+	agentv1 "github.com/smartxworks/host-config-agent-api/api/v1alpha1"
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
@@ -48,6 +49,7 @@ func New(ctx goctx.Context, opts Options) (Manager, error) {
 	_ = infrav1.AddToScheme(opts.Scheme)
 	_ = bootstrapv1.AddToScheme(opts.Scheme)
 	_ = controlplanev1.AddToScheme(opts.Scheme)
+	_ = agentv1.AddToScheme(opts.Scheme)
 	// +kubebuilder:scaffold:scheme
 
 	// Build the controller manager.

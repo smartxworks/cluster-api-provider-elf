@@ -299,3 +299,20 @@ func TestParseOwnerFromCreatedByAnnotation(t *testing.T) {
 		g.Expect(parseOwnerFromCreatedByAnnotation("root@d8dc20fc-e197-41da-83b6-c903c88663fd@")).To(gomega.Equal("root@d8dc20fc-e197-41da-83b6-c903c88663fd@"))
 	})
 }
+
+func TestGetVMSystemDisk(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	disk10 := &models.VMDisk{Boot: TowerInt32(1), ID: TowerString("10")}
+	disk11 := &models.VMDisk{Boot: TowerInt32(1), ID: TowerString("11")}
+	disk20 := &models.VMDisk{Boot: TowerInt32(2), ID: TowerString("20")}
+
+	t.Run("GetVMSystemDisk", func(t *testing.T) {
+		g.Expect(GetVMSystemDisk(nil)).To(gomega.BeNil())
+		g.Expect(GetVMSystemDisk([]*models.VMDisk{disk10})).To(gomega.Equal(disk10))
+		g.Expect(GetVMSystemDisk([]*models.VMDisk{disk10, disk11})).To(gomega.Equal(disk10))
+		g.Expect(GetVMSystemDisk([]*models.VMDisk{disk11, disk10})).To(gomega.Equal(disk11))
+		g.Expect(GetVMSystemDisk([]*models.VMDisk{disk20, disk10})).To(gomega.Equal(disk10))
+		g.Expect(GetVMSystemDisk([]*models.VMDisk{disk20, disk11, disk10})).To(gomega.Equal(disk11))
+	})
+}

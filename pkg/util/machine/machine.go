@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -89,6 +90,47 @@ func GetControlPlaneElfMachinesInCluster(ctx goctx.Context, ctrlClient client.Cl
 	return machines, nil
 }
 
+func GetElfMachinesForMD(
+	ctx goctx.Context,
+	ctrlClient client.Client,
+	cluster *clusterv1.Cluster,
+	md *clusterv1.MachineDeployment) ([]*infrav1.ElfMachine, error) {
+	elfMachineList := &infrav1.ElfMachineList{}
+	labels := map[string]string{
+		clusterv1.ClusterNameLabel:           cluster.Name,
+		clusterv1.MachineDeploymentNameLabel: md.Name,
+	}
+	if err := ctrlClient.List(ctx, elfMachineList, client.InNamespace(md.Namespace), client.MatchingLabels(labels)); err != nil {
+		return nil, err
+	}
+
+	elfMachines := make([]*infrav1.ElfMachine, len(elfMachineList.Items))
+	for i := range elfMachineList.Items {
+		elfMachines[i] = &elfMachineList.Items[i]
+	}
+
+	return elfMachines, nil
+}
+
+func GetControlPlaneMachinesForCluster(ctx goctx.Context, ctrlClient client.Client, cluster *clusterv1.Cluster) ([]*clusterv1.Machine, error) {
+	ms := &clusterv1.MachineList{}
+	labels := map[string]string{
+		clusterv1.ClusterNameLabel:         cluster.Name,
+		clusterv1.MachineControlPlaneLabel: "",
+	}
+
+	if err := ctrlClient.List(ctx, ms, client.InNamespace(cluster.Namespace), client.MatchingLabels(labels)); err != nil {
+		return nil, err
+	}
+
+	machines := make([]*clusterv1.Machine, len(ms.Items))
+	for i := range ms.Items {
+		machines[i] = &ms.Items[i]
+	}
+
+	return machines, nil
+}
+
 // IsControlPlaneMachine returns true if the provided resource is
 // a member of the control plane.
 func IsControlPlaneMachine(machine metav1.Object) bool {
@@ -127,6 +169,40 @@ func IsNodeHealthyConditionUnknown(machine *clusterv1.Machine) bool {
 
 func IsMachineFailed(machine *clusterv1.Machine) bool {
 	return machine.Status.FailureReason != nil || machine.Status.FailureMessage != nil
+}
+
+func IsUpdatingElfMachineResources(elfMachine *infrav1.ElfMachine) bool {
+	condition := conditions.Get(elfMachine, infrav1.ResourcesHotUpdatedCondition)
+	if condition != nil &&
+		condition.Status == corev1.ConditionFalse {
+		if condition.Reason == infrav1.WaitingForResourcesHotUpdateReason && condition.Message != "" {
+			return false
+		}
+
+		return true
+	}
+
+	return false
+}
+
+func IsResourcesUpToDate(elfMachineTemplate *infrav1.ElfMachineTemplate, elfMachine *infrav1.ElfMachine) bool {
+	return elfMachineTemplate.Spec.Template.Spec.DiskGiB <= elfMachine.Spec.DiskGiB
+}
+
+func NeedUpdateElfMachineResources(elfMachineTemplate *infrav1.ElfMachineTemplate, elfMachine *infrav1.ElfMachine) bool {
+	if !IsResourcesUpToDate(elfMachineTemplate, elfMachine) {
+		return true
+	}
+
+	condition := conditions.Get(elfMachine, infrav1.ResourcesHotUpdatedCondition)
+	if condition != nil &&
+		condition.Status == corev1.ConditionFalse {
+		if condition.Reason == infrav1.WaitingForResourcesHotUpdateReason && condition.Message != "" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func ConvertProviderIDToUUID(providerID *string) string {
