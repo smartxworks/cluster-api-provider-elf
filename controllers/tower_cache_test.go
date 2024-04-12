@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	goctx "context"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	corev1 "k8s.io/api/core/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
@@ -54,26 +56,26 @@ var _ = Describe("TowerCache", func() {
 			md.Name = name
 			fake.ToWorkerMachine(machine, md)
 			fake.ToWorkerMachine(elfMachine, md)
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
-			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
-			key := getKey(machineContext, name)
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineCtx := newMachineContext(elfCluster, cluster, elfMachine, machine, nil)
+			key := getKey(ctx, machineCtx, ctrlMgrCtx.Client, name)
 
 			_, found := inMemoryCache.Get(key)
 			Expect(found).To(BeFalse())
 
-			recordOrClearError(machineContext, name, true)
+			recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, name, true)
 			_, found = inMemoryCache.Get(key)
 			Expect(found).To(BeTrue())
 			resource := getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
 
-			recordOrClearError(machineContext, name, true)
+			recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, name, true)
 			lastDetected := resource.LastDetected
 			resource = getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
 			Expect(resource.LastDetected.After(lastDetected)).To(BeTrue())
 
-			recordOrClearError(machineContext, name, false)
+			recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, name, false)
 			resource = getClusterResource(key)
 			Expect(resource).To(BeNil())
 
@@ -81,17 +83,17 @@ var _ = Describe("TowerCache", func() {
 			_, found = inMemoryCache.Get(key)
 			Expect(found).To(BeFalse())
 
-			recordOrClearError(machineContext, name, false)
+			recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, name, false)
 			resource = getClusterResource(key)
 			_, found = inMemoryCache.Get(key)
 			Expect(found).To(BeFalse())
 			Expect(resource).To(BeNil())
 
-			recordOrClearError(machineContext, name, false)
+			recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, name, false)
 			resource = getClusterResource(key)
 			Expect(resource).To(BeNil())
 
-			recordOrClearError(machineContext, name, true)
+			recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, name, true)
 			_, found = inMemoryCache.Get(key)
 			Expect(found).To(BeTrue())
 			resource = getClusterResource(key)
@@ -108,32 +110,32 @@ var _ = Describe("TowerCache", func() {
 			md.Name = name
 			fake.ToWorkerMachine(machine, md)
 			fake.ToWorkerMachine(elfMachine, md)
-			ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
-			machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
-			key := getKey(machineContext, name)
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineCtx := newMachineContext(elfCluster, cluster, elfMachine, machine, nil)
+			key := getKey(ctx, machineCtx, ctrlMgrCtx.Client, name)
 
 			_, found := inMemoryCache.Get(key)
 			Expect(found).To(BeFalse())
-			ok, err := canRetryVMOperation(machineContext)
+			ok, err := canRetryVMOperation(ctx, machineCtx, ctrlMgrCtx.Client)
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 
-			recordOrClearError(machineContext, name, false)
-			ok, err = canRetryVMOperation(machineContext)
+			recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, name, false)
+			ok, err = canRetryVMOperation(ctx, machineCtx, ctrlMgrCtx.Client)
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 
-			recordOrClearError(machineContext, name, true)
-			ok, err = canRetryVMOperation(machineContext)
+			recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, name, true)
+			ok, err = canRetryVMOperation(ctx, machineCtx, ctrlMgrCtx.Client)
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 
-			expireELFScheduleVMError(machineContext, name)
-			ok, err = canRetryVMOperation(machineContext)
+			expireELFScheduleVMError(ctx, machineCtx, ctrlMgrCtx.Client, name)
+			ok, err = canRetryVMOperation(ctx, machineCtx, ctrlMgrCtx.Client)
 			Expect(ok).To(BeTrue())
 			Expect(err).ShouldNot(HaveOccurred())
 
-			ok, err = canRetryVMOperation(machineContext)
+			ok, err = canRetryVMOperation(ctx, machineCtx, ctrlMgrCtx.Client)
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 		}
@@ -147,18 +149,18 @@ var _ = Describe("TowerCache", func() {
 		md.Name = placementGroupKey
 		fake.ToWorkerMachine(machine, md)
 		fake.ToWorkerMachine(elfMachine, md)
-		ctrlContext := newCtrlContexts(elfCluster, cluster, elfMachine, machine, secret, md)
-		machineContext := newMachineContext(ctrlContext, elfCluster, cluster, elfMachine, machine, nil)
+		ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
+		machineCtx := newMachineContext(elfCluster, cluster, elfMachine, machine, nil)
 
-		ok, msg, err := isELFScheduleVMErrorRecorded(machineContext)
+		ok, msg, err := isELFScheduleVMErrorRecorded(ctx, machineCtx, ctrlMgrCtx.Client)
 		Expect(ok).To(BeFalse())
 		Expect(msg).To(Equal(""))
 		Expect(err).ShouldNot(HaveOccurred())
 		expectConditions(elfMachine, []conditionAssertion{})
 
 		elfCluster.Spec.Cluster = clusterInsufficientMemoryKey
-		recordOrClearError(machineContext, clusterInsufficientMemoryKey, true)
-		ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
+		recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, clusterInsufficientMemoryKey, true)
+		ok, msg, err = isELFScheduleVMErrorRecorded(ctx, machineCtx, ctrlMgrCtx.Client)
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
 		Expect(err).ShouldNot(HaveOccurred())
@@ -166,16 +168,16 @@ var _ = Describe("TowerCache", func() {
 
 		resetMemoryCache()
 		elfCluster.Spec.Cluster = clusterInsufficientStorageKey
-		recordOrClearError(machineContext, clusterInsufficientStorageKey, true)
-		ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
+		recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, clusterInsufficientStorageKey, true)
+		ok, msg, err = isELFScheduleVMErrorRecorded(ctx, machineCtx, ctrlMgrCtx.Client)
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(ContainSubstring("Insufficient storage detected for the ELF cluster clusterInsufficientStorage"))
 		Expect(err).ShouldNot(HaveOccurred())
 		expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForELFClusterWithSufficientStorageReason}})
 
 		resetMemoryCache()
-		recordOrClearError(machineContext, placementGroupKey, true)
-		ok, msg, err = isELFScheduleVMErrorRecorded(machineContext)
+		recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, placementGroupKey, true)
+		ok, msg, err = isELFScheduleVMErrorRecorded(ctx, machineCtx, ctrlMgrCtx.Client)
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(ContainSubstring("Not satisfy policy detected for the placement group"))
 		Expect(err).ShouldNot(HaveOccurred())
@@ -231,33 +233,33 @@ func removeGPUVMInfosCache(gpuIDs []string) {
 	}
 }
 
-func getKey(ctx *context.MachineContext, name string) string {
+func getKey(ctx goctx.Context, machineCtx *context.MachineContext, ctrlClient client.Client, name string) string {
 	if name == clusterInsufficientMemoryKey {
 		return getKeyForInsufficientMemoryError(name)
 	} else if name == clusterInsufficientStorageKey {
 		return getKeyForInsufficientStorageError(name)
 	}
 
-	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctx.Client, ctx.Machine, ctx.Cluster)
+	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctrlClient, machineCtx.Machine, machineCtx.Cluster)
 	Expect(err).ShouldNot(HaveOccurred())
 
 	return getKeyForDuplicatePlacementGroupError(placementGroupName)
 }
 
-func recordOrClearError(ctx *context.MachineContext, key string, record bool) {
+func recordOrClearError(ctx goctx.Context, machineCtx *context.MachineContext, ctrlClient client.Client, key string, record bool) {
 	if strings.Contains(key, clusterInsufficientMemoryKey) {
-		recordElfClusterMemoryInsufficient(ctx, record)
+		recordElfClusterMemoryInsufficient(machineCtx, record)
 		return
 	} else if strings.Contains(key, clusterInsufficientStorageKey) {
-		recordElfClusterStorageInsufficient(ctx, record)
+		recordElfClusterStorageInsufficient(machineCtx, record)
 		return
 	}
 
-	Expect(recordPlacementGroupPolicyNotSatisfied(ctx, record)).ShouldNot(HaveOccurred())
+	Expect(recordPlacementGroupPolicyNotSatisfied(ctx, machineCtx, ctrlClient, record)).ShouldNot(HaveOccurred())
 }
 
-func expireELFScheduleVMError(ctx *context.MachineContext, name string) {
-	key := getKey(ctx, name)
+func expireELFScheduleVMError(ctx goctx.Context, machineCtx *context.MachineContext, ctrlClient client.Client, name string) {
+	key := getKey(ctx, machineCtx, ctrlClient, name)
 	resource := getClusterResource(key)
 	resource.LastDetected = resource.LastDetected.Add(-resourceSilenceTime)
 	resource.LastRetried = resource.LastRetried.Add(-resourceSilenceTime)

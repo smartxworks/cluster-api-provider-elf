@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	goctx "context"
 	"flag"
 	"fmt"
 	"os"
@@ -36,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
-	ctrlsig "sigs.k8s.io/controller-runtime/pkg/manager/signals"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/smartxworks/cluster-api-provider-elf/controllers"
@@ -195,7 +195,7 @@ func main() {
 	managerOpts.RetryPeriod = &leaderElectionRetryPeriod
 
 	// Create a function that adds all of the controllers and webhooks to the manager.
-	addToManager := func(ctx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
+	addToManager := func(ctx goctx.Context, ctrlMgrCtx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
 		if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 			if err := (&webhooks.ElfMachineMutation{
 				Client: mgr.GetClient(),
@@ -212,11 +212,11 @@ func main() {
 			}
 		}
 
-		if err := controllers.AddClusterControllerToManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: elfClusterConcurrency}); err != nil {
+		if err := controllers.AddClusterControllerToManager(ctx, ctrlMgrCtx, mgr, controller.Options{MaxConcurrentReconciles: elfClusterConcurrency}); err != nil {
 			return err
 		}
 
-		if err := controllers.AddMachineControllerToManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: elfMachineConcurrency}); err != nil {
+		if err := controllers.AddMachineControllerToManager(ctx, ctrlMgrCtx, mgr, controller.Options{MaxConcurrentReconciles: elfMachineConcurrency}); err != nil {
 			return err
 		}
 
@@ -234,7 +234,9 @@ func main() {
 	managerOpts.Metrics = capiflags.GetDiagnosticsOptions(diagnosticsOptions)
 
 	setupLog.Info("creating controller manager", "capeVersion", version.CAPEVersion(), "version", version.Get().String())
-	mgr, err := manager.New(managerOpts)
+	// Set up the context that's going to be used in controllers and for the manager.
+	ctx := ctrl.SetupSignalHandler()
+	mgr, err := manager.New(ctx, managerOpts)
 	if err != nil {
 		setupLog.Error(err, "problem creating controller manager")
 		os.Exit(1)
@@ -242,9 +244,8 @@ func main() {
 
 	setupChecks(mgr)
 
-	sigHandler := ctrlsig.SetupSignalHandler()
 	setupLog.Info("starting controller manager")
-	if err := mgr.Start(sigHandler); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running controller manager")
 		os.Exit(1)
 	}

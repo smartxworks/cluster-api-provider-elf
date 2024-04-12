@@ -17,15 +17,12 @@ limitations under the License.
 package fake
 
 import (
-	goctx "context"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
@@ -64,9 +61,8 @@ func NewControllerManagerContext(initObjects ...client.Object) *context.Controll
 	).WithObjects(initObjects...).Build()
 
 	return &context.ControllerManagerContext{
-		Context:                 goctx.Background(),
-		Client:                  clientWithObjects,
-		Logger:                  ctrllog.Log.WithName(ControllerManagerName),
+		Client: clientWithObjects,
+		// Logger:                  ctrllog.Log.WithName(ControllerManagerName),
 		Scheme:                  scheme,
 		Namespace:               ControllerManagerNamespace,
 		Name:                    ControllerManagerName,

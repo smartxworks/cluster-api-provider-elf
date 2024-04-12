@@ -35,11 +35,11 @@ type Manager interface {
 	ctrl.Manager
 
 	// GetContext returns the controller manager's context.
-	GetContext() *context.ControllerManagerContext
+	GetControllerManagerContext() *context.ControllerManagerContext
 }
 
 // New returns a new CAPE controller manager.
-func New(opts Options) (Manager, error) {
+func New(ctx goctx.Context, opts Options) (Manager, error) {
 	// Ensure the default options are set.
 	opts.defaults()
 
@@ -57,37 +57,35 @@ func New(opts Options) (Manager, error) {
 	}
 
 	// Build the controller manager context.
-	controllerManagerContext := &context.ControllerManagerContext{
-		Context:                 goctx.Background(),
+	ctrlMgrCtx := &context.ControllerManagerContext{
 		WatchNamespaces:         opts.Cache.DefaultNamespaces,
 		Namespace:               opts.PodNamespace,
 		Name:                    opts.PodName,
 		LeaderElectionID:        opts.LeaderElectionID,
 		LeaderElectionNamespace: opts.LeaderElectionNamespace,
 		Client:                  mgr.GetClient(),
-		Logger:                  opts.Logger,
 		Scheme:                  opts.Scheme,
 		WatchFilterValue:        opts.WatchFilterValue,
 	}
 
 	// Add the requested items to the manager.
-	if err := opts.AddToManager(controllerManagerContext, mgr); err != nil {
+	if err := opts.AddToManager(ctx, ctrlMgrCtx, mgr); err != nil {
 		return nil, errors.Wrap(err, "failed to add resources to the manager")
 	}
 
 	// +kubebuilder:scaffold:builder
 
 	return &manager{
-		Manager: mgr,
-		ctx:     controllerManagerContext,
+		Manager:    mgr,
+		ctrlMgrCtx: ctrlMgrCtx,
 	}, nil
 }
 
 type manager struct {
 	ctrl.Manager
-	ctx *context.ControllerManagerContext
+	ctrlMgrCtx *context.ControllerManagerContext
 }
 
-func (m *manager) GetContext() *context.ControllerManagerContext {
-	return m.ctx
+func (m *manager) GetControllerManagerContext() *context.ControllerManagerContext {
+	return m.ctrlMgrCtx
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package context
 
 import (
+	goctx "context"
 	"fmt"
 
 	"github.com/go-logr/logr"
@@ -29,7 +30,6 @@ import (
 
 // ClusterContext is a Go context used with a ElfCluster.
 type ClusterContext struct {
-	*ControllerContext
 	Cluster     *clusterv1.Cluster
 	ElfCluster  *infrav1.ElfCluster
 	PatchHelper *patch.Helper
@@ -43,6 +43,6 @@ func (r *ClusterContext) String() string {
 }
 
 // Patch updates the object and its status on the API server.
-func (r *ClusterContext) Patch() error {
-	return r.PatchHelper.Patch(r, r.ElfCluster)
+func (r *ClusterContext) Patch(ctx goctx.Context) error {
+	return r.PatchHelper.Patch(ctx, r.ElfCluster)
 }
