@@ -42,7 +42,6 @@ import (
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	kcputil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/kcp"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 	mdutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/md"
@@ -55,7 +54,6 @@ const (
 // ElfMachineTemplateReconciler reconciles a ElfMachineTemplate object.
 type ElfMachineTemplateReconciler struct {
 	*context.ControllerManagerContext
-	NewVMService service.NewVMServiceFunc
 }
 
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachinetemplates,verbs=get;list;watch;create;update;patch;delete
@@ -71,7 +69,6 @@ func AddMachineTemplateControllerToManager(ctx goctx.Context, ctrlMgrCtx *contex
 
 	reconciler := &ElfMachineTemplateReconciler{
 		ControllerManagerContext: ctrlMgrCtx,
-		NewVMService:             service.NewVMService,
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
@@ -139,15 +136,6 @@ func (r *ElfMachineTemplateReconciler) Reconcile(ctx goctx.Context, req ctrl.Req
 		ElfMachineTemplate: &elfMachineTemplate,
 	}
 
-	if elfMachineTemplate.ObjectMeta.DeletionTimestamp.IsZero() || !elfCluster.HasForceDeleteCluster() {
-		vmService, err := r.NewVMService(ctx, elfCluster.GetTower(), log)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
-		emtCtx.VMService = vmService
-	}
-
 	// Handle deleted machines
 	if !elfMachineTemplate.ObjectMeta.DeletionTimestamp.IsZero() {
 		return ctrl.Result{}, nil
@@ -207,6 +195,8 @@ func (r *ElfMachineTemplateReconciler) reconcileCPResources(ctx goctx.Context, e
 	if err != nil {
 		return false, err
 	} else if len(updatingResourcesElfMachines) == 0 && len(needUpdatedResourcesElfMachines) == 0 {
+		log.V(4).Info(fmt.Sprintf("ElfMachines resources of kcp %s are up to date", klog.KObj(&kcp)))
+
 		return true, nil
 	}
 
@@ -367,11 +357,13 @@ func (r *ElfMachineTemplateReconciler) reconcileWorkerResourcesForMD(ctx goctx.C
 	if err != nil {
 		return false, err
 	} else if len(updatingResourcesElfMachines) == 0 && len(needUpdatedResourcesElfMachines) == 0 {
+		log.V(4).Info(fmt.Sprintf("ElfMachines resources of md %s are up to date", klog.KObj(md)))
+
 		return true, nil
 	}
 
 	maxSurge := getMaxSurge(md)
-	if maxSurge == len(updatingResourcesElfMachines) {
+	if maxSurge <= len(updatingResourcesElfMachines) {
 		log.V(1).Info("Waiting for worker ElfMachines to be updated resources", "md", md.Name, "updatingCount", len(updatingResourcesElfMachines), "needUpdatedCount", len(needUpdatedResourcesElfMachines), "maxSurge", maxSurge)
 
 		if err := r.markElfMachinesResourcesNotUpToDate(ctx, emtCtx.ElfMachineTemplate, needUpdatedResourcesElfMachines); err != nil {
@@ -438,7 +430,7 @@ func (r *ElfMachineTemplateReconciler) preflightChecksForWorker(ctx goctx.Contex
 	// update resources to avoid updating too many machines at the same time.
 	// If an exception occurs during the resource update process, all machines will
 	// not be affected.
-	if maxSurge := getMaxSurge(md); len(updatingResourcesElfMachines) >= getMaxSurge(md) {
+	if maxSurge := getMaxSurge(md); len(updatingResourcesElfMachines) >= maxSurge {
 		log.V(1).Info("Waiting for worker ElfMachines to be updated resources", "md", md.Name, "maxSurge", maxSurge, "updatingCount", len(updatingResourcesElfMachines))
 
 		return false

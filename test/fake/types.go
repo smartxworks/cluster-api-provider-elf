@@ -232,3 +232,27 @@ func ToWorkerMachine(machine metav1.Object, md *clusterv1.MachineDeployment) {
 
 	machine.SetLabels(labels)
 }
+
+func NewElfMachineTemplate() *infrav1.ElfMachineTemplate {
+	return &infrav1.ElfMachineTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      names.SimpleNameGenerator.GenerateName("elfMachineTemplate-"),
+			Namespace: Namespace,
+		},
+		Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					DiskGiB: 10,
+				},
+			},
+		},
+	}
+}
+
+func SetElfMachineTemplateForElfMachine(elfMachine *infrav1.ElfMachine, emt *infrav1.ElfMachineTemplate) {
+	if elfMachine.Annotations == nil {
+		elfMachine.Annotations = make(map[string]string)
+	}
+	elfMachine.Annotations[clusterv1.TemplateClonedFromNameAnnotation] = emt.Name
+	elfMachine.Spec = *emt.Spec.Template.Spec.DeepCopy()
+}

@@ -187,14 +187,14 @@ func (r *ElfMachineReconciler) expandVMRootPartition(ctx goctx.Context, machineC
 		log.Info("Expand root partition to root succeeded", "hostAgentJob", agentJob.Name)
 	case agentv1.PhaseFailed:
 		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingRootPartitionFailedReason, clusterv1.ConditionSeverityWarning, agentJob.Status.FailureMessage)
-		log.Info("Expand root partition failed, will try again after two minutes", "hostAgentJob", agentJob.Name, "failureMessage", agentJob.Status.FailureMessage)
+		log.Info("Expand root partition failed, will try again after three minutes", "hostAgentJob", agentJob.Name, "failureMessage", agentJob.Status.FailureMessage)
 
 		lastExecutionTime := agentJob.Status.LastExecutionTime
 		if lastExecutionTime == nil {
 			lastExecutionTime = &agentJob.CreationTimestamp
 		}
-		// Two minutes after the job fails, delete the job and try again.
-		if time.Now().After(lastExecutionTime.Add(2 * time.Minute)) {
+		// Three minutes after the job fails, delete the job and try again.
+		if time.Now().After(lastExecutionTime.Add(3 * time.Minute)) {
 			if err := kubeClient.Delete(ctx, agentJob); err != nil {
 				return false, errors.Wrapf(err, "failed to delete expand root partition job %s/%s for retry", agentJob.Namespace, agentJob.Name)
 			}

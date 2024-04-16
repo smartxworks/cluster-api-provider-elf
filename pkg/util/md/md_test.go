@@ -1,10 +1,12 @@
 package md
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -155,6 +157,98 @@ func TestResolveFenceposts(t *testing.T) {
 			}
 			g.Expect(surge).To(Equal(test.expectSurge))
 			g.Expect(unavail).To(Equal(test.expectUnavailable))
+		})
+	}
+}
+
+func TestMaxSurge(t *testing.T) {
+	maxSurge := intstr.FromInt(1)
+	maxUnavailable := intstr.FromInt(1)
+	tests := []struct {
+		strategy    *clusterv1.MachineDeploymentStrategy
+		expectSurge int32
+	}{
+		{
+			strategy: &clusterv1.MachineDeploymentStrategy{
+				Type: clusterv1.OnDeleteMachineDeploymentStrategyType,
+			},
+			expectSurge: 0,
+		},
+		{
+			strategy: &clusterv1.MachineDeploymentStrategy{
+				Type: clusterv1.RollingUpdateMachineDeploymentStrategyType,
+				RollingUpdate: &clusterv1.MachineRollingUpdateDeployment{
+					MaxSurge:       &maxSurge,
+					MaxUnavailable: &maxUnavailable,
+				},
+			},
+			expectSurge: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("maxSurge=%d", tc.expectSurge), func(t *testing.T) {
+			g := NewWithT(t)
+
+			deployment := clusterv1.MachineDeployment{
+				Spec: clusterv1.MachineDeploymentSpec{
+					Replicas: pointer.Int32(1),
+					Strategy: tc.strategy,
+				},
+			}
+			surge := MaxSurge(deployment)
+			g.Expect(surge).To(Equal(tc.expectSurge))
+		})
+	}
+}
+
+func TestIsMDInRollingUpdate(t *testing.T) {
+	tests := []struct {
+		specReplicas    int32
+		statusReplicas  int32
+		updatedReplicas int32
+		isUpdated       bool
+	}{
+		{
+			specReplicas:    1,
+			statusReplicas:  1,
+			updatedReplicas: 1,
+			isUpdated:       false,
+		},
+		{
+			specReplicas:    3,
+			statusReplicas:  3,
+			updatedReplicas: 3,
+			isUpdated:       false,
+		},
+		{
+			specReplicas:    3,
+			statusReplicas:  3,
+			updatedReplicas: 2,
+			isUpdated:       true,
+		},
+		{
+			specReplicas:    3,
+			statusReplicas:  3,
+			updatedReplicas: 1,
+			isUpdated:       true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%v", tc), func(t *testing.T) {
+			g := NewWithT(t)
+
+			deployment := clusterv1.MachineDeployment{
+				Spec: clusterv1.MachineDeploymentSpec{
+					Replicas: pointer.Int32(tc.specReplicas),
+				},
+				Status: clusterv1.MachineDeploymentStatus{
+					Replicas:        tc.statusReplicas,
+					UpdatedReplicas: tc.updatedReplicas,
+				},
+			}
+			g.Expect(IsMDInRollingUpdate(&deployment)).To(Equal(tc.isUpdated))
 		})
 	}
 }

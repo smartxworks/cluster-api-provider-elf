@@ -764,8 +764,8 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx goctx.Context, machineCtx *
 		// current disk capacity of the virtual machine is smaller than expected,
 		// expand the disk capacity first and then start it. cloud-init will
 		// add the new disk capacity to root.
-		if !(conditions.Has(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition) &&
-			conditions.IsFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)) {
+		if machineCtx.ElfMachine.GetVMFirstBootTimestamp() == nil &&
+			!machineCtx.ElfMachine.IsHotUpdating() {
 			if ok, err := r.reconcieVMVolume(ctx, machineCtx, vm, infrav1.VMProvisionedCondition); err != nil || !ok {
 				return ok, err
 			}
@@ -975,6 +975,11 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx goctx.Context, machineCtx *co
 
 			if err := recordPlacementGroupPolicyNotSatisfied(ctx, machineCtx, r.Client, false); err != nil {
 				return true, err
+			}
+
+			if machineCtx.ElfMachine.GetVMFirstBootTimestamp() == nil {
+				now := metav1.Now()
+				machineCtx.ElfMachine.SetVMFirstBootTimestamp(&now)
 			}
 		}
 	default:

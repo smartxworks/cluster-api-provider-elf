@@ -98,6 +98,8 @@ func init() {
 	if capiPath := getFilePathToCAPICRDs(root); capiPath != "" {
 		crdPaths = append(crdPaths, capiPath)
 	}
+
+	crdPaths = append(crdPaths, filepath.Join(root, "test", "config", "host-agent"))
 }
 
 // TestEnvironment encapsulates a Kubernetes local test environment.

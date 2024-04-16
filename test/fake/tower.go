@@ -175,3 +175,26 @@ func NewTowerVGPUVMInfo(vGPUCount int32) *models.GpuVMInfo {
 		Model:             pointer.String(""),
 	}
 }
+
+func NewVMVolume(elfMachine *infrav1.ElfMachine) *models.VMVolume {
+	return &models.VMVolume{
+		ID:   pointer.String(ID()),
+		Name: pointer.String(ID()),
+		Size: service.TowerDisk(elfMachine.Spec.DiskGiB),
+	}
+}
+
+func NewWithTaskVMVolume(vmVolume *models.VMVolume, task *models.Task) *models.WithTaskVMVolume {
+	return &models.WithTaskVMVolume{
+		Data:   vmVolume,
+		TaskID: task.ID,
+	}
+}
+
+func NewVMDisk(vmVolume *models.VMVolume) *models.VMDisk {
+	return &models.VMDisk{
+		ID:       pointer.String(ID()),
+		Boot:     pointer.Int32(0),
+		VMVolume: &models.NestedVMVolume{ID: vmVolume.ID},
+	}
+}

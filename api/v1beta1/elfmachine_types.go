@@ -38,6 +38,9 @@ const (
 
 	// VMDisconnectionTimestampAnnotation is the annotation identifying the VM of ElfMachine disconnection time.
 	VMDisconnectionTimestampAnnotation = "cape.infrastructure.cluster.x-k8s.io/vm-disconnection-timestamp"
+
+	// VMFirstBootTimestampAnnotation is the annotation identifying the VM of ElfMachine first power on time.
+	VMFirstBootTimestampAnnotation = "cape.infrastructure.cluster.x-k8s.io/vm-first-boot-timestamp"
 )
 
 // ElfMachineSpec defines the desired state of ElfMachine.
@@ -246,17 +249,14 @@ func (m *ElfMachine) IsFailed() bool {
 	return m.Status.FailureReason != nil || m.Status.FailureMessage != nil
 }
 
-// IsResourcesUpToDate returns whether the machine's resources are as expected.
-func (m *ElfMachine) IsResourcesUpToDate() bool {
-	if m.Status.Resources.Disk > 0 &&
-		m.Spec.DiskGiB > m.Status.Resources.Disk {
-		return false
-	} else if conditions.Has(m, ResourcesHotUpdatedCondition) &&
+// IsHotUpdating returns whether the machine is being hot updated.
+func (m *ElfMachine) IsHotUpdating() bool {
+	if conditions.Has(m, ResourcesHotUpdatedCondition) &&
 		conditions.IsFalse(m, ResourcesHotUpdatedCondition) {
-		return false
+		return true
 	}
 
-	return true
+	return false
 }
 
 func (m *ElfMachine) SetVMDisconnectionTimestamp(timestamp *metav1.Time) {
@@ -331,6 +331,35 @@ func (m *ElfMachine) GetVMDisconnectionTimestamp() *metav1.Time {
 		disconnectionTimestamp := metav1.NewTime(timestamp)
 
 		return &disconnectionTimestamp
+	}
+
+	return nil
+}
+
+func (m *ElfMachine) SetVMFirstBootTimestamp(timestamp *metav1.Time) {
+	annotations := m.GetAnnotations()
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	m.Annotations[VMFirstBootTimestampAnnotation] = timestamp.Format(time.RFC3339)
+	m.SetAnnotations(annotations)
+}
+
+func (m *ElfMachine) GetVMFirstBootTimestamp() *metav1.Time {
+	if m.Annotations == nil {
+		return nil
+	}
+
+	if _, ok := m.Annotations[VMFirstBootTimestampAnnotation]; ok {
+		timestampAnnotation := m.Annotations[VMFirstBootTimestampAnnotation]
+		timestamp, err := time.Parse(time.RFC3339, timestampAnnotation)
+		if err != nil {
+			return nil
+		}
+
+		firstBootTimestamp := metav1.NewTime(timestamp)
+
+		return &firstBootTimestamp
 	}
 
 	return nil
