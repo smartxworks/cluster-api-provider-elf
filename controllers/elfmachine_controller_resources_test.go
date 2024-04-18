@@ -134,6 +134,21 @@ var _ = Describe("ElfMachineReconciler", func() {
 	})
 
 	Context("reconcieVMVolume", func() {
+		It("should not reconcile when disk size is 0", func() {
+			elfMachine.Spec.DiskGiB = 0
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			vmVolume := fake.NewVMVolume(elfMachine)
+			vmDisk := fake.NewVMDisk(vmVolume)
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			vm.VMDisks = []*models.NestedVMDisk{{ID: vmDisk.ID}}
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcieVMVolume(ctx, machineContext, vm, infrav1.VMProvisionedCondition)
+			Expect(ok).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		It("should not expand the disk when size is up to date", func() {
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)

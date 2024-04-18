@@ -32,8 +32,8 @@ import (
 
 // Error messages.
 const (
-	diskCapacityCanOnlyBeGreaterThanZeroMsg = "the disk capacity can only be greater than 0"
-	diskCapacityCanOnlyBeExpanded           = "the disk capacity can only be expanded"
+	diskCapacityCannotLessThanZeroMsg = "the disk capacity can only greater than or equal to 0"
+	diskCapacityCanOnlyBeExpanded     = "the disk capacity can only be expanded"
 )
 
 func (v *ElfMachineTemplateValidator) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -58,8 +58,8 @@ func (v *ElfMachineTemplateValidator) ValidateCreate(ctx goctx.Context, obj runt
 	}
 
 	var allErrs field.ErrorList
-	if elfMachineTemplate.Spec.Template.Spec.DiskGiB <= 0 {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), elfMachineTemplate.Spec.Template.Spec.DiskGiB, diskCapacityCanOnlyBeGreaterThanZeroMsg))
+	if elfMachineTemplate.Spec.Template.Spec.DiskGiB < 0 {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), elfMachineTemplate.Spec.Template.Spec.DiskGiB, diskCapacityCannotLessThanZeroMsg))
 	}
 
 	return nil, aggregateObjErrors(elfMachineTemplate.GroupVersionKind().GroupKind(), elfMachineTemplate.Name, allErrs)

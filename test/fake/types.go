@@ -48,6 +48,9 @@ const (
 
 	// ElfMachineKind is the fake elf machine kind.
 	ElfMachineKind = "ElfMachine"
+
+	// DiskGiB is the default disk size.
+	DiskGiB = 60
 )
 
 func NewClusterObjects() (*infrav1.ElfCluster, *clusterv1.Cluster) {
@@ -117,6 +120,7 @@ func NewElfMachine(elfCluster *infrav1.ElfCluster) *infrav1.ElfMachine {
 			NumCPUs:           1,
 			NumCoresPerSocket: 1,
 			MemoryMiB:         1,
+			DiskGiB:           DiskGiB,
 			Network: infrav1.NetworkSpec{
 				Devices: []infrav1.NetworkDeviceSpec{
 					{
@@ -242,7 +246,7 @@ func NewElfMachineTemplate() *infrav1.ElfMachineTemplate {
 		Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 10,
+					DiskGiB: DiskGiB,
 				},
 			},
 		},

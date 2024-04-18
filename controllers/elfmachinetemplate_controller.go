@@ -120,7 +120,7 @@ func (r *ElfMachineTemplateReconciler) Reconcile(ctx goctx.Context, req ctrl.Req
 		Name:      cluster.Spec.InfrastructureRef.Name,
 	}, &elfCluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("ElfMachine Waiting for ElfCluster")
+			log.Info("ElfMachineTemplate Waiting for ElfCluster")
 			return reconcile.Result{}, nil
 		}
 
@@ -142,10 +142,6 @@ func (r *ElfMachineTemplateReconciler) Reconcile(ctx goctx.Context, req ctrl.Req
 	}
 
 	// Handle non-deleted machines
-	return r.reconcileNormal(ctx, emtCtx)
-}
-
-func (r *ElfMachineTemplateReconciler) reconcileNormal(ctx goctx.Context, emtCtx *context.MachineTemplateContext) (reconcile.Result, error) {
 	return r.reconcileMachineResources(ctx, emtCtx)
 }
 
@@ -153,6 +149,12 @@ func (r *ElfMachineTemplateReconciler) reconcileNormal(ctx goctx.Context, emtCtx
 // virtual machines are the same as expected by ElfMachine.
 // TODO: CPU and memory will be supported in the future.
 func (r *ElfMachineTemplateReconciler) reconcileMachineResources(ctx goctx.Context, emtCtx *context.MachineTemplateContext) (reconcile.Result, error) {
+	// The disk size is 0, it means the disk size is the same as the virtual machine template.
+	// So if the capacity is 0, it means that the disk size has not changed and returns directly.
+	if emtCtx.ElfMachineTemplate.Spec.Template.Spec.DiskGiB == 0 {
+		return reconcile.Result{}, nil
+	}
+
 	if ok, err := r.reconcileCPResources(ctx, emtCtx); err != nil {
 		return reconcile.Result{}, err
 	} else if !ok {
@@ -363,31 +365,9 @@ func (r *ElfMachineTemplateReconciler) reconcileWorkerResourcesForMD(ctx goctx.C
 	}
 
 	maxSurge := getMaxSurge(md)
-	if maxSurge <= len(updatingResourcesElfMachines) {
-		log.V(1).Info("Waiting for worker ElfMachines to be updated resources", "md", md.Name, "updatingCount", len(updatingResourcesElfMachines), "needUpdatedCount", len(needUpdatedResourcesElfMachines), "maxSurge", maxSurge)
-
-		if err := r.markElfMachinesResourcesNotUpToDate(ctx, emtCtx.ElfMachineTemplate, needUpdatedResourcesElfMachines); err != nil {
-			return false, err
-		}
-
-		return false, nil
-	}
-
 	checksPassed := r.preflightChecksForWorker(ctx, md, updatingResourcesElfMachines)
 
-	var toBeUpdatedElfMachines []*infrav1.ElfMachine
-	if checksPassed {
-		toBeUpdatedCount := maxSurge - len(updatingResourcesElfMachines)
-		if toBeUpdatedCount > 0 {
-			if toBeUpdatedCount >= len(needUpdatedResourcesElfMachines) {
-				toBeUpdatedElfMachines = needUpdatedResourcesElfMachines
-				needUpdatedResourcesElfMachines = nil
-			} else {
-				toBeUpdatedElfMachines = needUpdatedResourcesElfMachines[:toBeUpdatedCount]
-				needUpdatedResourcesElfMachines = needUpdatedResourcesElfMachines[toBeUpdatedCount:]
-			}
-		}
-	}
+	toBeUpdatedElfMachines, needUpdatedResourcesElfMachines := selectToBeUpdatedAndNeedUpdatedElfMachines(checksPassed, maxSurge, updatingResourcesElfMachines, needUpdatedResourcesElfMachines)
 
 	if err := r.markElfMachinesResourcesNotUpToDate(ctx, emtCtx.ElfMachineTemplate, needUpdatedResourcesElfMachines); err != nil {
 		return false, err
@@ -411,6 +391,31 @@ func getMaxSurge(md *clusterv1.MachineDeployment) int {
 	return int(maxSurge)
 }
 
+func selectToBeUpdatedAndNeedUpdatedElfMachines(
+	checksPassed bool, maxSurge int,
+	updatingResourcesElfMachines, needUpdatedResourcesElfMachines []*infrav1.ElfMachine,
+) ([]*infrav1.ElfMachine, []*infrav1.ElfMachine) {
+	var toBeUpdatedElfMachines, needUpdatedElfMachines []*infrav1.ElfMachine
+	if checksPassed {
+		toBeUpdatedCount := maxSurge - len(updatingResourcesElfMachines)
+		if toBeUpdatedCount > 0 {
+			if toBeUpdatedCount >= len(needUpdatedResourcesElfMachines) {
+				toBeUpdatedElfMachines = needUpdatedResourcesElfMachines
+				needUpdatedElfMachines = nil
+			} else {
+				toBeUpdatedElfMachines = needUpdatedResourcesElfMachines[:toBeUpdatedCount]
+				needUpdatedElfMachines = needUpdatedResourcesElfMachines[toBeUpdatedCount:]
+			}
+		} else {
+			needUpdatedElfMachines = needUpdatedResourcesElfMachines
+		}
+	} else {
+		needUpdatedElfMachines = needUpdatedResourcesElfMachines
+	}
+
+	return toBeUpdatedElfMachines, needUpdatedElfMachines
+}
+
 // preflightChecksForWorker checks if the worker is stable before proceeding with a updating resources operation,
 // where stable means that:
 // - MD not in rolling update.
@@ -431,7 +436,7 @@ func (r *ElfMachineTemplateReconciler) preflightChecksForWorker(ctx goctx.Contex
 	// If an exception occurs during the resource update process, all machines will
 	// not be affected.
 	if maxSurge := getMaxSurge(md); len(updatingResourcesElfMachines) >= maxSurge {
-		log.V(1).Info("Waiting for worker ElfMachines to be updated resources", "md", md.Name, "maxSurge", maxSurge, "updatingCount", len(updatingResourcesElfMachines))
+		log.V(1).Info("Hot updated worker ElfMachine has reached the max number of concurrencies, so waiting for worker ElfMachines to be updated resources", "md", md.Name, "maxSurge", maxSurge, "updatingCount", len(updatingResourcesElfMachines))
 
 		return false
 	}

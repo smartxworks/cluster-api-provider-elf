@@ -33,7 +33,19 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 
 	var tests []testCaseEMT
 	tests = append(tests, testCaseEMT{
-		Name: "disk capacity cannot be equal to 0",
+		Name: "disk capacity cannot be less than 0",
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					DiskGiB: -1,
+				},
+			},
+		}},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), -1, diskCapacityCannotLessThanZeroMsg),
+		},
+	}, testCaseEMT{
+		Name: "disk capacity can be 0",
 		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
@@ -41,9 +53,17 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 				},
 			},
 		}},
-		Errs: field.ErrorList{
-			field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), 0, diskCapacityCanOnlyBeGreaterThanZeroMsg),
-		},
+		Errs: nil,
+	}, testCaseEMT{
+		Name: "disk capacity can > 0",
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					DiskGiB: 100,
+				},
+			},
+		}},
+		Errs: nil,
 	})
 
 	validator := &ElfMachineTemplateValidator{}

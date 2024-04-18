@@ -81,6 +81,49 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("ElfMachines resources of kcp %s are up to date", klog.KObj(kcp))))
 			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("ElfMachines resources of md %s are up to date", klog.KObj(md))))
+
+			emt.Spec.Template.Spec.DiskGiB = 0
+			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, emt, kcp, md)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			emtKey = capiutil.ObjectKey(emt)
+			reconciler = &ElfMachineTemplateReconciler{ControllerManagerContext: ctrlMgrCtx}
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: emtKey})
+			Expect(result).To(BeZero())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("ElfMachines resources of kcp %s are up to date", klog.KObj(kcp))))
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("ElfMachines resources of md %s are up to date", klog.KObj(md))))
+		})
+
+		It("should not error and not requeue the request without elfmachinetemplate", func() {
+			emt := fake.NewElfMachineTemplate()
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
+			reconciler := &ElfMachineTemplateReconciler{ControllerManagerContext: ctrlMgrCtx}
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: capiutil.ObjectKey(emt)})
+			Expect(result).To(BeZero())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("ElfMachineTemplate not found, won't reconcile"))
+
+			emt.OwnerReferences = append(emt.OwnerReferences, metav1.OwnerReference{Kind: fake.ClusterKind, APIVersion: clusterv1.GroupVersion.String(), Name: cluster.Name, UID: "blah"})
+			ctrlMgrCtx = fake.NewControllerManagerContext(cluster, elfMachine, machine, secret, emt)
+			reconciler = &ElfMachineTemplateReconciler{ControllerManagerContext: ctrlMgrCtx}
+			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: capiutil.ObjectKey(emt)})
+			Expect(result).To(BeZero())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("ElfMachineTemplate Waiting for ElfCluster"))
+		})
+
+		It("should not error and not requeue the request when Cluster is paused", func() {
+			emt := fake.NewElfMachineTemplate()
+			emt.OwnerReferences = append(emt.OwnerReferences, metav1.OwnerReference{Kind: fake.ClusterKind, APIVersion: clusterv1.GroupVersion.String(), Name: cluster.Name, UID: "blah"})
+			cluster.Spec.Paused = true
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, emt)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			emtKey := capiutil.ObjectKey(emt)
+			reconciler := &ElfMachineTemplateReconciler{ControllerManagerContext: ctrlMgrCtx}
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: emtKey})
+			Expect(result).To(BeZero())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("ElfMachineTemplate linked to a cluster that is paused"))
 		})
 	})
 
@@ -89,6 +132,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			emt := fake.NewElfMachineTemplate()
 			md := fake.NewMD()
 			md.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
+			md.Spec.Replicas = pointer.Int32(3)
 			md.Spec.Template = clusterv1.MachineTemplateSpec{
 				Spec: clusterv1.MachineSpec{
 					InfrastructureRef: corev1.ObjectReference{Namespace: emt.Namespace, Name: emt.Name},
@@ -124,6 +168,41 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			Expect(logBuffer.String()).NotTo(ContainSubstring("Resources of ElfMachine is not up to date, marking for resources not up to date and waiting for hot updating resources"))
 			Expect(logBuffer.String()).To(ContainSubstring("Resources of ElfMachine is not up to date, marking for updating resources"))
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for worker ElfMachines to be updated resources"))
+
+			// logBuffer.Reset()
+			// elfMachine.Spec.DiskGiB -= 1
+			// updatingElfMachine, updatingMachine := fake.NewMachineObjects(elfCluster, cluster)
+			// fake.ToWorkerMachine(updatingElfMachine, md)
+			// fake.ToWorkerMachine(updatingMachine, md)
+			// fake.SetElfMachineTemplateForElfMachine(updatingElfMachine, emt)
+			// ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, updatingElfMachine, updatingMachine)
+			// fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			// fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, updatingElfMachine, updatingMachine)
+			// mtCtx = newMachineTemplateContext(elfCluster, cluster, emt)
+			// reconciler = &ElfMachineTemplateReconciler{ControllerManagerContext: ctrlMgrCtx}
+			// ok, err = reconciler.reconcileWorkerResources(ctx, mtCtx)
+			// Expect(logBuffer.String()).To(ContainSubstring("Resources of ElfMachine is not up to date, marking for updating resources"))
+		})
+
+		It("selectToBeUpdatedAndNeedUpdatedElfMachines", func() {
+			elfMachine1, _ := fake.NewMachineObjects(elfCluster, cluster)
+			elfMachine2, _ := fake.NewMachineObjects(elfCluster, cluster)
+
+			toBeUpdated, needUpdated := selectToBeUpdatedAndNeedUpdatedElfMachines(false, 1, []*infrav1.ElfMachine{}, []*infrav1.ElfMachine{elfMachine1, elfMachine2})
+			Expect(toBeUpdated).To(BeEmpty())
+			Expect(needUpdated).To(Equal([]*infrav1.ElfMachine{elfMachine1, elfMachine2}))
+
+			toBeUpdated, needUpdated = selectToBeUpdatedAndNeedUpdatedElfMachines(true, 1, []*infrav1.ElfMachine{elfMachine1}, []*infrav1.ElfMachine{elfMachine2})
+			Expect(toBeUpdated).To(BeEmpty())
+			Expect(needUpdated).To(Equal([]*infrav1.ElfMachine{elfMachine2}))
+
+			toBeUpdated, needUpdated = selectToBeUpdatedAndNeedUpdatedElfMachines(true, 2, []*infrav1.ElfMachine{elfMachine1}, []*infrav1.ElfMachine{elfMachine2})
+			Expect(toBeUpdated).To(Equal([]*infrav1.ElfMachine{elfMachine2}))
+			Expect(needUpdated).To(BeEmpty())
+
+			toBeUpdated, needUpdated = selectToBeUpdatedAndNeedUpdatedElfMachines(true, 1, []*infrav1.ElfMachine{}, []*infrav1.ElfMachine{elfMachine1, elfMachine2})
+			Expect(toBeUpdated).To(Equal([]*infrav1.ElfMachine{elfMachine1}))
+			Expect(needUpdated).To(Equal([]*infrav1.ElfMachine{elfMachine2}))
 		})
 	})
 
@@ -135,6 +214,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 				InfrastructureRef: corev1.ObjectReference{Namespace: emt.Namespace, Name: "notfoud"},
 			}
 			cluster.Spec.ControlPlaneRef = &corev1.ObjectReference{Namespace: kcp.Namespace, Name: kcp.Name}
+			elfMachine.Spec.DiskGiB -= 1
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kcp)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			mtCtx := newMachineTemplateContext(elfCluster, cluster, emt)
@@ -177,6 +257,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			kcp.Status.UpdatedReplicas = 2
 			fake.ToControlPlaneMachine(elfMachine, kcp)
 			fake.ToControlPlaneMachine(machine, kcp)
+			elfMachine.Spec.DiskGiB -= 1
 			machine.Status.NodeRef = &corev1.ObjectReference{}
 			conditions.MarkTrue(machine, controlplanev1.MachineAPIServerPodHealthyCondition)
 			conditions.MarkTrue(machine, controlplanev1.MachineControllerManagerPodHealthyCondition)
@@ -320,7 +401,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			reconciler := &ElfMachineTemplateReconciler{ControllerManagerContext: ctrlMgrCtx}
 			ok := reconciler.preflightChecksForWorker(ctx, md, []*infrav1.ElfMachine{elfMachine})
 			Expect(ok).To(BeFalse())
-			Expect(logBuffer.String()).To(ContainSubstring("Waiting for worker ElfMachines to be updated resources"))
+			Expect(logBuffer.String()).To(ContainSubstring("Hot updated worker ElfMachine has reached the max number of concurrencies, so waiting for worker ElfMachines to be updated resources"))
 
 			logBuffer.Reset()
 			md.Status.UnavailableReplicas = 3

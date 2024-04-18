@@ -3403,6 +3403,24 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, _ = acquireTicketForCreateVM(elfMachine.Name, true)
 			Expect(ok).To(BeFalse())
 
+			// Edit VM disk
+			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
+			task.Description = service.TowerString(fmt.Sprintf("Edit VM %s disk", *vm.Name))
+			task.ErrorMessage = service.TowerString(service.VMDuplicateError)
+			elfMachine.Status.TaskRef = *task.ID
+			ok, err = reconciler.reconcileVMTask(ctx, machineContext, nil)
+			Expect(ok).Should(BeTrue())
+			Expect(err).ShouldNot(HaveOccurred())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
+
+			elfMachine.Status.TaskRef = *task.ID
+			elfMachine.Status.Conditions = nil
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
+			ok, err = reconciler.reconcileVMTask(ctx, machineContext, nil)
+			Expect(ok).Should(BeTrue())
+			Expect(err).ShouldNot(HaveOccurred())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingVMDiskFailedReason}})
+
 			// GPU
 			gpuDeviceInfo := &service.GPUDeviceInfo{ID: "gpu", AllocatedCount: 0, AvailableCount: 1}
 			gpuDeviceInfos := []*service.GPUDeviceInfo{gpuDeviceInfo}

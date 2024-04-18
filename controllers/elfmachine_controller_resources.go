@@ -74,6 +74,11 @@ func (r *ElfMachineReconciler) reconcileVMResources(ctx goctx.Context, machineCt
 //
 // The conditionType param: VMProvisionedCondition/ResourcesHotUpdatedCondition.
 func (r *ElfMachineReconciler) reconcieVMVolume(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM, conditionType clusterv1.ConditionType) (bool, error) {
+	// If the capacity is 0, it means that the disk size has not changed and returns directly.
+	if machineCtx.ElfMachine.Spec.DiskGiB == 0 {
+		return true, nil
+	}
+
 	log := ctrl.LoggerFrom(ctx)
 
 	vmDiskIDs := make([]string, len(vm.VMDisks))
@@ -97,10 +102,10 @@ func (r *ElfMachineReconciler) reconcieVMVolume(ctx goctx.Context, machineCtx *c
 	diskSize := service.ByteToGiB(*vmVolume.Size)
 	machineCtx.ElfMachine.Status.Resources.Disk = diskSize
 
-	if machineCtx.ElfMachine.Spec.DiskGiB < diskSize {
-		log.V(3).Info(fmt.Sprintf("Current disk capacity is larger than expected, skipping expand vm volume %s/%s", *vmVolume.ID, *vmVolume.Name), "currentSize", diskSize, "expectedSize", machineCtx.ElfMachine.Spec.DiskGiB)
-	} else if machineCtx.ElfMachine.Spec.DiskGiB > diskSize {
+	if machineCtx.ElfMachine.Spec.DiskGiB > diskSize {
 		return false, r.resizeVMVolume(ctx, machineCtx, vmVolume, *service.TowerDisk(machineCtx.ElfMachine.Spec.DiskGiB), conditionType)
+	} else if machineCtx.ElfMachine.Spec.DiskGiB < diskSize {
+		log.V(3).Info(fmt.Sprintf("Current disk capacity is larger than expected, skipping expand vm volume %s/%s", *vmVolume.ID, *vmVolume.Name), "currentSize", diskSize, "expectedSize", machineCtx.ElfMachine.Spec.DiskGiB)
 	}
 
 	return true, nil

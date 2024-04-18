@@ -968,6 +968,12 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx goctx.Context, machineCtx *co
 			unlockGPUDevicesLockedByVM(machineCtx.ElfCluster.Spec.Cluster, machineCtx.ElfMachine.Name)
 		}
 
+		if service.IsPowerOnVMTask(task) &&
+			machineCtx.ElfMachine.GetVMFirstBootTimestamp() == nil {
+			now := metav1.Now()
+			machineCtx.ElfMachine.SetVMFirstBootTimestamp(&now)
+		}
+
 		if service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) {
 			releaseTicketForCreateVM(machineCtx.ElfMachine.Name)
 			recordElfClusterStorageInsufficient(machineCtx, false)
@@ -975,11 +981,6 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx goctx.Context, machineCtx *co
 
 			if err := recordPlacementGroupPolicyNotSatisfied(ctx, machineCtx, r.Client, false); err != nil {
 				return true, err
-			}
-
-			if machineCtx.ElfMachine.GetVMFirstBootTimestamp() == nil {
-				now := metav1.Now()
-				machineCtx.ElfMachine.SetVMFirstBootTimestamp(&now)
 			}
 		}
 	default:
