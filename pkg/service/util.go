@@ -110,6 +110,10 @@ func TowerInt32(v int) *int32 {
 	return &val
 }
 
+func TowerInt64(v int64) *int64 {
+	return &v
+}
+
 func TowerFloat64(v int) *float64 {
 	val := float64(v)
 
@@ -144,6 +148,10 @@ func TowerCPUSockets(vCPU, cpuCores int32) *int32 {
 	cpuSockets := vCPU / cpuCores
 
 	return &cpuSockets
+}
+
+func ByteToGiB(bytes int64) int32 {
+	return int32(bytes / 1024 / 1024 / 1024)
 }
 
 func IsVMInRecycleBin(vm *models.VM) bool {
@@ -194,6 +202,10 @@ func IsUpdateVMTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "Edit VM")
 }
 
+func IsUpdateVMDiskTask(task *models.Task, vmName string) bool {
+	return GetTowerString(task.Description) == fmt.Sprintf("Edit VM %s disk", vmName)
+}
+
 func IsVMColdMigrationTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "performing a cold migration")
 }
@@ -204,6 +216,12 @@ func IsVMMigrationTask(task *models.Task) bool {
 
 func IsPlacementGroupTask(task *models.Task) bool {
 	return strings.Contains(GetTowerString(task.Description), "VM placement group") // Update VM placement group
+}
+
+// IsTowerResourcePerformingAnOperation returns whether the Tower resource is being operated on.
+// Before operating on Tower resources, call this function first to avoid Tower resource lock conflicts.
+func IsTowerResourcePerformingAnOperation(entityAsyncStatus *models.EntityAsyncStatus) bool {
+	return entityAsyncStatus != nil
 }
 
 // HasGPUsCanNotBeUsedForVM returns whether the specified GPUs contains GPU
@@ -299,4 +317,22 @@ func parseOwnerFromCreatedByAnnotation(createdBy string) string {
 
 	// last `@` replaced with `_`.
 	return fmt.Sprintf("%s_%s", username, authConfigID)
+}
+
+// GetVMSystemDisk selects and returns the system disk from the disks mounted on
+// the virtual machine.
+// By default, the disk with the smallest boot value is the system disk.
+func GetVMSystemDisk(disks []*models.VMDisk) *models.VMDisk {
+	if len(disks) == 0 {
+		return nil
+	}
+
+	systemDisk := disks[0]
+	for i := 0; i < len(disks); i++ {
+		if *disks[i].Boot < *systemDisk.Boot {
+			systemDisk = disks[i]
+		}
+	}
+
+	return systemDisk
 }

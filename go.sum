@@ -517,6 +517,8 @@ github.com/sirupsen/logrus v1.9.0 h1:trlNQbNUG3OdDrDil03MCb1H2o9nJ1x4/5LYw7byDE0
 github.com/sirupsen/logrus v1.9.0/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVsIT4qYEQ=
 github.com/smartxworks/cloudtower-go-sdk/v2 v2.13.1-0.20231116110941-d411454388af h1:rV7FO8PZAzurE2zLEtXVrcKZkF544w98rXjvv2bDaqI=
 github.com/smartxworks/cloudtower-go-sdk/v2 v2.13.1-0.20231116110941-d411454388af/go.mod h1:X6R9+L438SMnLJXykSCV3fJ+AZul0hlyjITsZgrSRtM=
+github.com/smartxworks/host-config-agent-api v0.0.0-20240410021405-be1517a07889 h1:kXlP3d9BEE6q31cR3qAehK0BKNVuCZ6jT2t+Jf5Gwrs=
+github.com/smartxworks/host-config-agent-api v0.0.0-20240410021405-be1517a07889/go.mod h1:oexROTOhF0Ium/iTwRbwXwZy+eGkzYE5a5qe3HvvKug=
 github.com/soheilhy/cmux v0.1.5 h1:jjzc5WVemNEDTLwv9tlmemhC73tI08BNOIGwBOo10Js=
 github.com/soheilhy/cmux v0.1.5/go.mod h1:T7TcVDs9LWfQgPlPsdngu6I6QIoyIFZDDC6sNE1GqG0=
 github.com/sourcegraph/conc v0.3.0 h1:OQTbbt6P72L20UqAkXXuLOj79LfEanQ+YQFNpLA9ySo=

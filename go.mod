@@ -11,6 +11,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/smartxworks/cloudtower-go-sdk/v2 v2.13.1-0.20231116110941-d411454388af
+	github.com/smartxworks/host-config-agent-api v0.0.0-20240410021405-be1517a07889
 	golang.org/x/mod v0.13.0
 	k8s.io/api v0.28.4
 	k8s.io/apiextensions-apiserver v0.28.4

@@ -17,6 +17,7 @@ limitations under the License.
 package fake
 
 import (
+	agentv1 "github.com/smartxworks/host-config-agent-api/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -54,6 +55,7 @@ func NewControllerManagerContext(initObjects ...client.Object) *context.Controll
 	_ = clusterv1.AddToScheme(scheme)
 	_ = controlplanev1.AddToScheme(scheme)
 	_ = infrav1.AddToScheme(scheme)
+	_ = agentv1.AddToScheme(scheme)
 
 	clientWithObjects := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(
 		&infrav1.ElfCluster{},

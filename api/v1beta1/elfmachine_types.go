@@ -22,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
+	"sigs.k8s.io/cluster-api/util/conditions"
 )
 
 const (
@@ -37,6 +38,9 @@ const (
 
 	// VMDisconnectionTimestampAnnotation is the annotation identifying the VM of ElfMachine disconnection time.
 	VMDisconnectionTimestampAnnotation = "cape.infrastructure.cluster.x-k8s.io/vm-disconnection-timestamp"
+
+	// VMFirstBootTimestampAnnotation is the annotation identifying the VM of ElfMachine first power on time.
+	VMFirstBootTimestampAnnotation = "cape.infrastructure.cluster.x-k8s.io/vm-first-boot-timestamp"
 )
 
 // ElfMachineSpec defines the desired state of ElfMachine.
@@ -123,6 +127,10 @@ type ElfMachineStatus struct {
 	// GPU devices.
 	// +optional
 	GPUDevices []GPUStatus `json:"gpuDevices,omitempty"`
+
+	// Resources records the resources allocated for the machine.
+	// +optional
+	Resources ResourcesStatus `json:"resources,omitempty"`
 
 	// FailureReason will be set in the event that there is a terminal problem
 	// reconciling the Machine and will contain a succinct value suitable
@@ -241,6 +249,16 @@ func (m *ElfMachine) IsFailed() bool {
 	return m.Status.FailureReason != nil || m.Status.FailureMessage != nil
 }
 
+// IsHotUpdating returns whether the machine is being hot updated.
+func (m *ElfMachine) IsHotUpdating() bool {
+	if conditions.Has(m, ResourcesHotUpdatedCondition) &&
+		conditions.IsFalse(m, ResourcesHotUpdatedCondition) {
+		return true
+	}
+
+	return false
+}
+
 func (m *ElfMachine) SetVMDisconnectionTimestamp(timestamp *metav1.Time) {
 	if m.Annotations == nil {
 		m.Annotations = make(map[string]string)
@@ -313,6 +331,35 @@ func (m *ElfMachine) GetVMDisconnectionTimestamp() *metav1.Time {
 		disconnectionTimestamp := metav1.NewTime(timestamp)
 
 		return &disconnectionTimestamp
+	}
+
+	return nil
+}
+
+func (m *ElfMachine) SetVMFirstBootTimestamp(timestamp *metav1.Time) {
+	annotations := m.GetAnnotations()
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	m.Annotations[VMFirstBootTimestampAnnotation] = timestamp.Format(time.RFC3339)
+	m.SetAnnotations(annotations)
+}
+
+func (m *ElfMachine) GetVMFirstBootTimestamp() *metav1.Time {
+	if m.Annotations == nil {
+		return nil
+	}
+
+	if _, ok := m.Annotations[VMFirstBootTimestampAnnotation]; ok {
+		timestampAnnotation := m.Annotations[VMFirstBootTimestampAnnotation]
+		timestamp, err := time.Parse(time.RFC3339, timestampAnnotation)
+		if err != nil {
+			return nil
+		}
+
+		firstBootTimestamp := metav1.NewTime(timestamp)
+
+		return &firstBootTimestamp
 	}
 
 	return nil

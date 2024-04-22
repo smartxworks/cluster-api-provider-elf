@@ -34,3 +34,25 @@ func GetMDByMachine(ctx goctx.Context, ctrlClient client.Client, machine *cluste
 
 	return &md, nil
 }
+
+func GetMDsForCluster(
+	ctx goctx.Context,
+	ctrlClient client.Client,
+	namespace, clusterName string) ([]*clusterv1.MachineDeployment, error) {
+	var mdList clusterv1.MachineDeploymentList
+	labels := map[string]string{clusterv1.ClusterNameLabel: clusterName}
+
+	if err := ctrlClient.List(
+		ctx, &mdList,
+		client.InNamespace(namespace),
+		client.MatchingLabels(labels)); err != nil {
+		return nil, err
+	}
+
+	mds := make([]*clusterv1.MachineDeployment, len(mdList.Items))
+	for i := range mdList.Items {
+		mds[i] = &mdList.Items[i]
+	}
+
+	return mds, nil
+}

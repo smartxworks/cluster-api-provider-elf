@@ -63,8 +63,9 @@ var (
 	webhookOpts                 webhook.Options
 	watchNamespace              string
 
-	elfClusterConcurrency int
-	elfMachineConcurrency int
+	elfClusterConcurrency         int
+	elfMachineConcurrency         int
+	elfMachineTemplateConcurrency int
 
 	tlsOptions         = capiflags.TLSOptions{}
 	diagnosticsOptions = capiflags.DiagnosticsOptions{}
@@ -92,6 +93,9 @@ func InitFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&elfMachineConcurrency, "max-elfmachine-concurrent-reconciles", 10,
 		"Number of ELF machines to process simultaneously")
+
+	fs.IntVar(&elfMachineTemplateConcurrency, "max-elfmachinetemplate-concurrent-reconciles", 10,
+		"Number of ELF machine templates to process simultaneously")
 
 	fs.StringVar(&managerOpts.PodName, "pod-name", defaultPodName,
 		"The name of the pod running the controller manager.")
@@ -197,6 +201,16 @@ func main() {
 	// Create a function that adds all of the controllers and webhooks to the manager.
 	addToManager := func(ctx goctx.Context, ctrlMgrCtx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
 		if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+			if err := (&webhooks.ElfMachineTemplateValidator{}).SetupWebhookWithManager(mgr); err != nil {
+				return err
+			}
+
+			if err := (&webhooks.ElfMachineValidator{
+				Client: mgr.GetClient(),
+			}).SetupWebhookWithManager(mgr); err != nil {
+				return err
+			}
+
 			if err := (&webhooks.ElfMachineMutation{
 				Client: mgr.GetClient(),
 				Logger: mgr.GetLogger().WithName("ElfMachineMutation"),
@@ -217,6 +231,10 @@ func main() {
 		}
 
 		if err := controllers.AddMachineControllerToManager(ctx, ctrlMgrCtx, mgr, controller.Options{MaxConcurrentReconciles: elfMachineConcurrency}); err != nil {
+			return err
+		}
+
+		if err := controllers.AddMachineTemplateControllerToManager(ctx, ctrlMgrCtx, mgr, controller.Options{MaxConcurrentReconciles: elfMachineTemplateConcurrency}); err != nil {
 			return err
 		}
 

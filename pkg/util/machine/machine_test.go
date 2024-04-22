@@ -22,6 +22,8 @@ import (
 	"testing"
 
 	"github.com/onsi/gomega"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util/conditions"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
@@ -229,6 +231,81 @@ func TestGetNetworkStatus(t *testing.T) {
 			g.Expect(networkStatus).To(gomega.Equal(tc.networkStatus))
 		})
 	}
+}
+
+func TestGetElfMachinesForMD(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	md := fake.NewMD()
+	elfCluster, cluster, elfMachine, _, _ := fake.NewClusterAndMachineObjects()
+	fake.ToWorkerMachine(elfMachine, md)
+	elfMachine2, _ := fake.NewMachineObjects(elfCluster, cluster)
+	ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, elfMachine2)
+	elfMachines, err := GetElfMachinesForMD(goctx.TODO(), ctrlMgrCtx.Client, cluster, md)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	g.Expect(elfMachines).To(gomega.HaveLen(1))
+	g.Expect(elfMachines[0].Name).To(gomega.Equal(elfMachine.Name))
+}
+
+func TestGetControlPlaneMachinesForCluster(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	kcp := fake.NewKCP()
+	elfCluster, cluster, _, machine, _ := fake.NewClusterAndMachineObjects()
+	fake.ToControlPlaneMachine(machine, kcp)
+	_, machine2 := fake.NewMachineObjects(elfCluster, cluster)
+	ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, machine, machine2)
+	machines, err := GetControlPlaneMachinesForCluster(goctx.TODO(), ctrlMgrCtx.Client, cluster)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	g.Expect(machines).To(gomega.HaveLen(1))
+	g.Expect(machines[0].Name).To(gomega.Equal(machine.Name))
+}
+
+func TestIsUpdatingElfMachineResources(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	elfCluster, cluster := fake.NewClusterObjects()
+	emt := fake.NewElfMachineTemplate()
+	elfMachine, _ := fake.NewMachineObjects(elfCluster, cluster)
+	fake.SetElfMachineTemplateForElfMachine(elfMachine, emt)
+	g.Expect(IsUpdatingElfMachineResources(elfMachine)).To(gomega.BeFalse())
+
+	conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, "")
+	g.Expect(IsUpdatingElfMachineResources(elfMachine)).To(gomega.BeTrue())
+
+	conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, "xx")
+	g.Expect(IsUpdatingElfMachineResources(elfMachine)).To(gomega.BeFalse())
+}
+
+func TestNeedUpdateElfMachineResources(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	elfCluster, cluster := fake.NewClusterObjects()
+	emt := fake.NewElfMachineTemplate()
+	elfMachine, _ := fake.NewMachineObjects(elfCluster, cluster)
+	fake.SetElfMachineTemplateForElfMachine(elfMachine, emt)
+	g.Expect(NeedUpdateElfMachineResources(emt, elfMachine)).To(gomega.BeFalse())
+
+	conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, "")
+	g.Expect(NeedUpdateElfMachineResources(emt, elfMachine)).To(gomega.BeFalse())
+
+	conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, "xx")
+	g.Expect(NeedUpdateElfMachineResources(emt, elfMachine)).To(gomega.BeTrue())
+
+	elfMachine.Spec.DiskGiB -= 1
+	g.Expect(NeedUpdateElfMachineResources(emt, elfMachine)).To(gomega.BeTrue())
+}
+
+func TestIsResourcesUpToDate(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	elfCluster, cluster := fake.NewClusterObjects()
+	emt := fake.NewElfMachineTemplate()
+	elfMachine, _ := fake.NewMachineObjects(elfCluster, cluster)
+	fake.SetElfMachineTemplateForElfMachine(elfMachine, emt)
+	g.Expect(IsResourcesUpToDate(emt, elfMachine)).To(gomega.BeTrue())
+	elfMachine.Spec.DiskGiB -= 1
+	g.Expect(IsResourcesUpToDate(emt, elfMachine)).To(gomega.BeFalse())
 }
 
 func toString(s string) *string {
