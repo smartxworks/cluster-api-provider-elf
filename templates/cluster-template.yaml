@@ -104,9 +104,9 @@ spec:
       #! to the system disk through Tower API. These commands will add the new
       #! capacity of the system disk to the root partition.
       #! - |
-      #!   ostype=$(cat /etc/os-release | grep "^ID=" | cut -d "=" -f 2)
+      #!   . /etc/os-release
       #!   rootpath="/dev/mapper/rl-root"
-      #!   if [[ $ostype == '"openEuler"' ]]; then
+      #!   if [[ $ID == 'openEuler' ]]; then
       #!     rootpath="/dev/mapper/openeuler-root"
       #!   fi
       #! - |
@@ -130,7 +130,6 @@ spec:
       #!     echo "$result"
       #!     exit 1
       #!   fi
-      #! - "resize2fs $rootpath"
     useExperimentalRetryJoin: true
     files:
     - content: |
@@ -286,9 +285,9 @@ spec:
       #! to the system disk through Tower API. These commands will add the new
       #! capacity of the system disk to the root partition.
       #! - |
-      #!   ostype=$(cat /etc/os-release | grep "^ID=" | cut -d "=" -f 2)
+      #!   . /etc/os-release
       #!   rootpath="/dev/mapper/rl-root"
-      #!   if [[ $ostype == '"openEuler"' ]]; then
+      #!   if [[ $ID == 'openEuler' ]]; then
       #!     rootpath="/dev/mapper/openeuler-root"
       #!   fi
       #! - |
@@ -312,7 +311,6 @@ spec:
       #!     echo "$result"
       #!     exit 1
       #!   fi
-      #! - "resize2fs $rootpath"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: ElfMachineTemplate

@@ -6,9 +6,9 @@
   tasks:
   - name: Get root path
     shell: |
-      ostype=$(cat /etc/os-release | grep "^ID=" | cut -d "=" -f 2)
+      . /etc/os-release
       rootpath="/dev/mapper/rl-root"
-      if [[ $ostype == '"openEuler"' ]]; then
+      if [[ $ID == 'openEuler' ]]; then
         rootpath="/dev/mapper/openeuler-root"
       fi
       echo $rootpath
@@ -28,7 +28,7 @@
     shell: pvresize /dev/vda2
   - name: Extend root
     shell: |
-      result=$(lvextend -l+100%FREE -n {{ rootpath.stdout }} 2>&1)
+      result=$(lvextend -r -l+100%FREE -n {{ rootpath.stdout }} 2>&1)
       if [[ $? == 0 ]]; then
         echo "$result"
       elif [[ $result == *'matches existing size'* ]]; then
@@ -37,5 +37,3 @@
         echo "$result"
         exit 1
       fi
-  - name: Resize root
-    shell: resize2fs {{ rootpath.stdout }}
