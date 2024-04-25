@@ -114,7 +114,7 @@ func expectElfMachineTestCase(g Gomega, tc elfMachineTestCase, err error) {
 		g.Expect(statusErr.ErrStatus.Details.Kind).To(Equal(tc.EM.GroupVersionKind().Kind))
 		g.Expect(statusErr.ErrStatus.Details.Name).To(Equal(tc.EM.Name))
 		causes := make([]metav1.StatusCause, 0, len(tc.Errs))
-		for i := 0; i < len(tc.Errs); i++ {
+		for i := range len(tc.Errs) {
 			causes = append(causes, metav1.StatusCause{
 				Type:    metav1.CauseType(tc.Errs[i].Type),
 				Message: tc.Errs[i].ErrorBody(),

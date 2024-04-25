@@ -18,7 +18,6 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -46,7 +45,7 @@ func WaitForKubeProxyUpgrade(ctx context.Context, input WaitForKubeProxyUpgradeI
 			return false, err
 		}
 
-		if strings.HasSuffix(ds.Spec.Template.Spec.Containers[0].Image, fmt.Sprintf(":%s", input.KubernetesVersion)) {
+		if strings.HasSuffix(ds.Spec.Template.Spec.Containers[0].Image, ":"+input.KubernetesVersion) {
 			return true, nil
 		}
 

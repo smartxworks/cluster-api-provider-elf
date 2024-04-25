@@ -104,7 +104,7 @@ type NetworkSpec struct {
 }
 
 func (n *NetworkSpec) RequiresStaticIPs() bool {
-	for i := 0; i < len(n.Devices); i++ {
+	for i := range len(n.Devices) {
 		if n.Devices[i].NetworkType == NetworkTypeIPV4 && len(n.Devices[i].IPAddrs) == 0 {
 			return true
 		}

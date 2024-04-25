@@ -18,7 +18,6 @@ package machine
 
 import (
 	goctx "context"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -154,7 +153,7 @@ func GetNodeGroupName(machine *clusterv1.Machine) string {
 
 	clusterName := labelsutil.GetClusterNameLabelLabel(machine)
 
-	return strings.ReplaceAll(nodeGroupName, fmt.Sprintf("%s-", clusterName), "")
+	return strings.ReplaceAll(nodeGroupName, clusterName+"-", "")
 }
 
 // IsNodeHealthyConditionUnknown returns whether the node's healthy condition is unknown.

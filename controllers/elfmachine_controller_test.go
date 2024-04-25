@@ -34,7 +34,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
@@ -140,7 +140,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should exit immediately on an error state", func() {
 			createMachineError := capierrors.CreateMachineError
 			elfMachine.Status.FailureReason = &createMachineError
-			elfMachine.Status.FailureMessage = pointer.String("Couldn't create machine")
+			elfMachine.Status.FailureMessage = ptr.To("Couldn't create machine")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -262,7 +262,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.IsZero()).To(BeTrue())
 
 			conditions.MarkUnknown(machine, clusterv1.MachineNodeHealthyCondition, clusterv1.NodeConditionsFailedReason, "test")
-			machine.Status.FailureMessage = pointer.String("error")
+			machine.Status.FailureMessage = ptr.To("error")
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
@@ -316,7 +316,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should set CloningFailedReason condition when failed to retrieve bootstrap data", func() {
 			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
-			machine.Spec.Bootstrap.DataSecretName = pointer.String("notfound")
+			machine.Spec.Bootstrap.DataSecretName = ptr.To("notfound")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -389,7 +389,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should recover from lost task", func() {
 			vm := fake.NewTowerVM()
 			vm.Name = &elfMachine.Name
-			vm.LocalID = pointer.String("placeholder-%s" + *vm.LocalID)
+			vm.LocalID = ptr.To("placeholder-%s" + *vm.LocalID)
 			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -506,7 +506,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should set ElfMachine to failure when VM was moved to the recycle bin", func() {
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
-			vm.InRecycleBin = pointer.Bool(true)
+			vm.InRecycleBin = ptr.To[bool](true)
 			elfMachine.Status.VMRef = *vm.LocalID
 			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -651,7 +651,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should wait for the ELF virtual machine to be created", func() {
 			vm := fake.NewTowerVM()
-			placeholderID := fmt.Sprintf("placeholder-%s", *vm.LocalID)
+			placeholderID := "placeholder-" + *vm.LocalID
 			vm.LocalID = &placeholderID
 			vm.EntityAsyncStatus = nil
 			task := fake.NewTowerTask()
@@ -1176,7 +1176,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				vm2 := fake.NewTowerVM()
 				vm2.Host = &models.NestedHost{ID: host.ID, Name: host.Name}
 				placementGroup := fake.NewVMPlacementGroup([]string{*vm2.ID})
-				kcp.Spec.Replicas = pointer.Int32(1)
+				kcp.Spec.Replicas = ptr.To[int32](1)
 				kcp.Status.Replicas = 2
 				kcp.Status.UpdatedReplicas = 1
 				conditions.MarkFalse(kcp, controlplanev1.MachinesSpecUpToDateCondition, controlplanev1.RollingUpdateInProgressReason, clusterv1.ConditionSeverityWarning, "")
@@ -1223,7 +1223,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
-				kcp.Spec.Replicas = pointer.Int32(1)
+				kcp.Spec.Replicas = ptr.To[int32](1)
 				kcp.Status.Replicas = 1
 				kcp.Status.UpdatedReplicas = 1
 				ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
@@ -1292,7 +1292,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				newCP2 := fake.NewTowerVM()
 				newCP2.Host = &models.NestedHost{ID: service.TowerString(*host1.ID)}
 				placementGroup := fake.NewVMPlacementGroup([]string{*oldCP3.ID, *newCP2.ID})
-				kcp.Spec.Replicas = pointer.Int32(3)
+				kcp.Spec.Replicas = ptr.To[int32](3)
 				kcp.Status.UpdatedReplicas = 3
 				kcp.Status.Replicas = 4
 				conditions.MarkFalse(kcp, controlplanev1.MachinesSpecUpToDateCondition, controlplanev1.RollingUpdateInProgressReason, clusterv1.ConditionSeverityWarning, "")
@@ -1349,7 +1349,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				elfMachine2.Status.HostServerRef = *host2.ID
 				task := fake.NewTowerTask()
 				withTaskVM := fake.NewWithTaskVM(vm1, task)
-				kcp.Spec.Replicas = pointer.Int32(3)
+				kcp.Spec.Replicas = ptr.To[int32](3)
 				kcp.Status.Replicas = 3
 				kcp.Status.UpdatedReplicas = 3
 
@@ -1449,7 +1449,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				elfMachine.Status.VMRef = *vm.LocalID
 				placementGroup := fake.NewVMPlacementGroup([]string{})
 				placementGroup.Vms = []*models.NestedVM{}
-				kcp.Spec.Replicas = pointer.Int32(3)
+				kcp.Spec.Replicas = ptr.To[int32](3)
 				kcp.Status.Replicas = 3
 				kcp.Status.UpdatedReplicas = 3
 				ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2, elfMachine3, machine3)
@@ -1520,7 +1520,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 					{ID: vm2.ID, Name: vm2.Name},
 					{ID: vm3.ID, Name: vm3.Name},
 				}
-				kcp.Spec.Replicas = pointer.Int32(3)
+				kcp.Spec.Replicas = ptr.To[int32](3)
 				kcp.Status.Replicas = 4
 				kcp.Status.UpdatedReplicas = 1
 				conditions.MarkFalse(kcp, controlplanev1.MachinesSpecUpToDateCondition, controlplanev1.RollingUpdateInProgressReason, clusterv1.ConditionSeverityWarning, "")
@@ -1590,7 +1590,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
-				kcp.Spec.Replicas = pointer.Int32(5)
+				kcp.Spec.Replicas = ptr.To[int32](5)
 				kcp.Status.Replicas = 6
 				kcp.Status.UpdatedReplicas = 4
 				ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2, elfMachine3, machine3)
@@ -1670,7 +1670,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		Context("Scale", func() {
 			It("kcp scale up", func() {
-				kcp.Spec.Replicas = pointer.Int32(2)
+				kcp.Spec.Replicas = ptr.To[int32](2)
 				kcp.Status.Replicas = 1
 				host1 := fake.NewTowerHost()
 				host2 := fake.NewTowerHost()
@@ -1734,7 +1734,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			})
 
 			It("kcp scale down", func() {
-				kcp.Spec.Replicas = pointer.Int32(1)
+				kcp.Spec.Replicas = ptr.To[int32](1)
 				kcp.Status.Replicas = 2
 				kcp.Status.UpdatedReplicas = kcp.Status.Replicas
 				conditions.MarkFalse(kcp, controlplanev1.ResizedCondition, controlplanev1.ScalingDownReason, clusterv1.ConditionSeverityWarning, "")
@@ -2417,7 +2417,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should delete the VM that in creating status and have not been saved to ElfMachine", func() {
 			vm := fake.NewTowerVM()
-			vm.LocalID = pointer.String("placeholder-%s" + *vm.LocalID)
+			vm.LocalID = ptr.To("placeholder-%s" + *vm.LocalID)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
@@ -2548,7 +2548,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task := fake.NewTowerTask()
 			status := models.TaskStatusFAILED
 			task.Status = &status
-			task.ErrorMessage = pointer.String("JOB_VM_SHUTDOWN_TIMEOUT")
+			task.ErrorMessage = ptr.To("JOB_VM_SHUTDOWN_TIMEOUT")
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task.ID
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -2579,7 +2579,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task := fake.NewTowerTask()
 			status := models.TaskStatusFAILED
 			task.Status = &status
-			task.ErrorMessage = pointer.String("JOB_VM_SHUTDOWN_TIMEOUT")
+			task.ErrorMessage = ptr.To("JOB_VM_SHUTDOWN_TIMEOUT")
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task.ID
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -2825,7 +2825,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(getPGFromCache(*placementGroup.Name)).To(BeNil())
 
 			md.DeletionTimestamp = nil
-			md.Spec.Replicas = pointer.Int32(0)
+			md.Spec.Replicas = ptr.To[int32](0)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			ok, err = reconciler.deletePlacementGroup(ctx, machineContext)
@@ -3120,7 +3120,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
 			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
-			task.ErrorMessage = pointer.String(service.VMPlacementGroupDuplicate)
+			task.ErrorMessage = ptr.To(service.VMPlacementGroupDuplicate)
 			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(task, nil)
 
 			result, err = reconciler.reconcilePlacementGroup(ctx, machineContext)
@@ -3137,7 +3137,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err = reconciler.reconcilePlacementGroup(ctx, machineContext)
 			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Tower has duplicate placement group, skip creating placement group %s", placementGroupName)))
+			Expect(logBuffer.String()).To(ContainSubstring("Tower has duplicate placement group, skip creating placement group " + placementGroupName))
 		})
 
 		It("should save and get placement group cache", func() {

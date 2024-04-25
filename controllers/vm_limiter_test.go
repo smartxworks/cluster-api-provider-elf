@@ -58,7 +58,7 @@ var _ = Describe("VMLimiter", func() {
 		_, found = vmConcurrentCache.Get(getKeyForVM(vmName))
 		Expect(found).To(BeTrue())
 
-		for i := 0; i < config.MaxConcurrentVMCreations-1; i++ {
+		for range config.MaxConcurrentVMCreations - 1 {
 			vmConcurrentCache.Set(fake.UUID(), nil, vmCreationTimeout)
 		}
 		ok, msg = acquireTicketForCreateVM(vmName, false)

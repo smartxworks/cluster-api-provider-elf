@@ -61,11 +61,11 @@ func isELFScheduleVMErrorRecorded(ctx goctx.Context, machineCtx *context.Machine
 	if resource := getClusterResource(getKeyForInsufficientMemoryError(machineCtx.ElfCluster.Spec.Cluster)); resource != nil {
 		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForELFClusterWithSufficientMemoryReason, clusterv1.ConditionSeverityInfo, "")
 
-		return true, fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", machineCtx.ElfCluster.Spec.Cluster), nil
+		return true, "Insufficient memory detected for the ELF cluster " + machineCtx.ElfCluster.Spec.Cluster, nil
 	} else if resource := getClusterResource(getKeyForInsufficientStorageError(machineCtx.ElfCluster.Spec.Cluster)); resource != nil {
 		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForELFClusterWithSufficientStorageReason, clusterv1.ConditionSeverityInfo, "")
 
-		return true, fmt.Sprintf("Insufficient storage detected for the ELF cluster %s", machineCtx.ElfCluster.Spec.Cluster), nil
+		return true, "Insufficient storage detected for the ELF cluster " + machineCtx.ElfCluster.Spec.Cluster, nil
 	}
 
 	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctrlClient, machineCtx.Machine, machineCtx.Cluster)
@@ -76,7 +76,7 @@ func isELFScheduleVMErrorRecorded(ctx goctx.Context, machineCtx *context.Machine
 	if resource := getClusterResource(getKeyForDuplicatePlacementGroupError(placementGroupName)); resource != nil {
 		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForPlacementGroupPolicySatisfiedReason, clusterv1.ConditionSeverityInfo, "")
 
-		return true, fmt.Sprintf("Not satisfy policy detected for the placement group %s", placementGroupName), nil
+		return true, "Not satisfy policy detected for the placement group " + placementGroupName, nil
 	}
 
 	return false, "", nil
@@ -178,15 +178,15 @@ func getClusterResource(key string) *clusterResource {
 }
 
 func getKeyForInsufficientStorageError(clusterID string) string {
-	return fmt.Sprintf("insufficient:storage:%s", clusterID)
+	return "insufficient:storage:" + clusterID
 }
 
 func getKeyForInsufficientMemoryError(clusterID string) string {
-	return fmt.Sprintf("insufficient:memory:%s", clusterID)
+	return "insufficient:memory:" + clusterID
 }
 
 func getKeyForDuplicatePlacementGroupError(placementGroup string) string {
-	return fmt.Sprintf("pg:duplicate:%s", placementGroup)
+	return "pg:duplicate:" + placementGroup
 }
 
 // pgCacheDuration is the lifespan of placement group cache.
@@ -204,7 +204,7 @@ func setPGCache(pg *models.VMPlacementGroup) {
 
 // delPGCaches deletes the specified placement group caches.
 func delPGCaches(pgNames []string) {
-	for i := 0; i < len(pgNames); i++ {
+	for i := range len(pgNames) {
 		inMemoryCache.Delete(getKeyForPGCache(pgNames[i]))
 	}
 }
@@ -261,7 +261,7 @@ func getLabelFromCache(labelKey string) *models.Label {
 const gpuCacheDuration = 3 * time.Second
 
 func getKeyForGPUVMInfo(gpuID string) string {
-	return fmt.Sprintf("gpu:vm:info:%s", gpuID)
+	return "gpu:vm:info:" + gpuID
 }
 
 // setGPUVMInfosCache saves the specified GPU device infos to the memory,
@@ -275,7 +275,7 @@ func setGPUVMInfosCache(gpuVMInfos service.GPUVMInfos) {
 // setGPUDeviceInfosCache gets the specified GPU device infos from the memory.
 func getGPUVMInfosFromCache(gpuIDs []string) service.GPUVMInfos {
 	gpuVMInfos := service.NewGPUVMInfos()
-	for i := 0; i < len(gpuIDs); i++ {
+	for i := range len(gpuIDs) {
 		key := getKeyForGPUVMInfo(gpuIDs[i])
 		if val, found := inMemoryCache.Get(key); found {
 			if gpuVMInfo, ok := val.(models.GpuVMInfo); ok {

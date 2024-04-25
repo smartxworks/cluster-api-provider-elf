@@ -186,7 +186,7 @@ func NewTestEnvironment(ctx goctx.Context) *TestEnvironment {
 		klog.Fatalf("failed to create the CAPE controller manager: %v", err)
 	}
 
-	kubeconfig, err := CreateKubeconfig(mgr.GetConfig(), fmt.Sprintf("%s-cluster", capiutil.RandomString(6)))
+	kubeconfig, err := CreateKubeconfig(mgr.GetConfig(), "%s-cluster"+capiutil.RandomString(6))
 	if err != nil {
 		klog.Fatalf("failed to create kubeconfig: %v", err)
 	}
@@ -347,7 +347,7 @@ func getFilePathToCAPICRDs(root string) string {
 	}
 
 	gopath := envOr("GOPATH", build.Default.GOPATH)
-	return filepath.Join(gopath, "pkg", "mod", "sigs.k8s.io", fmt.Sprintf("cluster-api@%s", clusterAPIVersion), "config", "crd", "bases")
+	return filepath.Join(gopath, "pkg", "mod", "sigs.k8s.io", "cluster-api@%s"+clusterAPIVersion, "config", "crd", "bases")
 }
 
 func envOr(envKey, defaultValue string) string {

@@ -228,7 +228,7 @@ var _ = Describe("TowerCache", func() {
 })
 
 func removeGPUVMInfosCache(gpuIDs []string) {
-	for i := 0; i < len(gpuIDs); i++ {
+	for i := range len(gpuIDs) {
 		inMemoryCache.Delete(getKeyForGPUVMInfo(gpuIDs[i]))
 	}
 }

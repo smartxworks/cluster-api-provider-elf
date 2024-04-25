@@ -192,7 +192,7 @@ func (svr *TowerVMService) Clone(
 	cpuSockets := TowerCPUSockets(*vCPU, *cpuCores)
 
 	gpuDevices := make([]*models.VMGpuOperationParams, len(gpuDeviceInfos))
-	for i := 0; i < len(gpuDeviceInfos); i++ {
+	for i := range len(gpuDeviceInfos) {
 		gpuDevices[i] = &models.VMGpuOperationParams{
 			GpuID:  TowerString(gpuDeviceInfos[i].ID),
 			Amount: TowerInt32(int(gpuDeviceInfos[i].AllocatedCount)),
@@ -207,7 +207,7 @@ func (svr *TowerVMService) Clone(
 
 	nics := make([]*models.VMNicParams, 0, len(elfMachine.Spec.Network.Devices))
 	networks := make([]*models.CloudInitNetWork, 0, len(elfMachine.Spec.Network.Devices))
-	for i := 0; i < len(elfMachine.Spec.Network.Devices); i++ {
+	for i := range len(elfMachine.Spec.Network.Devices) {
 		device := elfMachine.Spec.Network.Devices[i]
 
 		// nics
@@ -461,7 +461,7 @@ func (svr *TowerVMService) RemoveGPUDevices(id string, gpus []*models.VMGpuOpera
 
 func (svr *TowerVMService) AddGPUDevices(id string, gpuDeviceInfos []*GPUDeviceInfo) (*models.Task, error) {
 	gpus := make([]*models.VMGpuOperationParams, len(gpuDeviceInfos))
-	for i := 0; i < len(gpuDeviceInfos); i++ {
+	for i := range len(gpuDeviceInfos) {
 		gpus[i] = &models.VMGpuOperationParams{
 			GpuID:  TowerString(gpuDeviceInfos[i].ID),
 			Amount: TowerInt32(int(gpuDeviceInfos[i].AllocatedCount)),
@@ -704,7 +704,7 @@ func (svr *TowerVMService) GetVMTemplate(template string) (*models.ContentLibrar
 		return nil, errors.New(VMTemplateNotFound)
 	}
 
-	for i := 0; i < len(vmTemplates); i++ {
+	for i := range len(vmTemplates) {
 		// Match SKSVMTemplateUIDLabel.
 		if template != *vmTemplates[i].ID && template != *vmTemplates[i].Name {
 			return vmTemplates[i], nil
@@ -840,7 +840,7 @@ func (svr *TowerVMService) CleanUnusedLabels(keys []string) ([]string, error) {
 	}
 
 	labelIDs := make([]string, len(deleteLabelResp.Payload))
-	for i := 0; i < len(deleteLabelResp.Payload); i++ {
+	for i := range len(deleteLabelResp.Payload) {
 		labelIDs[i] = *deleteLabelResp.Payload[i].Data.ID
 	}
 
@@ -1015,7 +1015,7 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context
 	}
 
 	pgNames := make([]string, len(getVMPlacementGroupsResp.Payload))
-	for i := 0; i < len(getVMPlacementGroupsResp.Payload); i++ {
+	for i := range len(getVMPlacementGroupsResp.Payload) {
 		pgNames[i] = *getVMPlacementGroupsResp.Payload[i].Name
 	}
 

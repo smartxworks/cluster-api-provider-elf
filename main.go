@@ -162,6 +162,7 @@ func main() {
 	InitFlags(pflag.CommandLine)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
+	// Set log level 2 as default.
 	if err := pflag.CommandLine.Set("v", "2"); err != nil {
 		setupLog.Error(err, "failed to set log level: %v")
 		os.Exit(1)
@@ -251,20 +252,20 @@ func main() {
 	managerOpts.AddToManager = addToManager
 	managerOpts.Metrics = capiflags.GetDiagnosticsOptions(diagnosticsOptions)
 
-	setupLog.Info("creating controller manager", "capeVersion", version.CAPEVersion(), "version", version.Get().String())
+	setupLog.Info("Creating controller manager", "capeVersion", version.CAPEVersion(), "version", version.Get().String())
 	// Set up the context that's going to be used in controllers and for the manager.
 	ctx := ctrl.SetupSignalHandler()
 	mgr, err := manager.New(ctx, managerOpts)
 	if err != nil {
-		setupLog.Error(err, "problem creating controller manager")
+		setupLog.Error(err, "failed to create controller manager")
 		os.Exit(1)
 	}
 
 	setupChecks(mgr)
 
-	setupLog.Info("starting controller manager")
+	setupLog.Info("Starting controller manager")
 	if err := mgr.Start(ctx); err != nil {
-		setupLog.Error(err, "problem running controller manager")
+		setupLog.Error(err, "failed to run controller manager")
 		os.Exit(1)
 	}
 }

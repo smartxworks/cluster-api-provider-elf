@@ -21,7 +21,7 @@ import (
 
 	"github.com/onsi/gomega"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
@@ -89,7 +89,7 @@ func TestIsAvailableHost(t *testing.T) {
 	})
 
 	t.Run("should return false when insufficient memory", func(t *testing.T) {
-		host := &models.Host{AllocatableMemoryBytes: pointer.Int64(2), Status: models.NewHostStatus(models.HostStatusCONNECTEDHEALTHY)}
+		host := &models.Host{AllocatableMemoryBytes: ptr.To[int64](2), Status: models.NewHostStatus(models.HostStatusCONNECTEDHEALTHY)}
 
 		ok, _ := IsAvailableHost(host, 1)
 		g.Expect(ok).To(gomega.BeTrue())

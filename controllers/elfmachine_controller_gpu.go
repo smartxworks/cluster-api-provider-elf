@@ -22,7 +22,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -50,7 +50,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 	log := ctrl.LoggerFrom(ctx)
 
 	if !machineCtx.ElfMachine.RequiresGPUDevices() {
-		return pointer.String(""), nil, nil
+		return ptr.To(""), nil, nil
 	}
 
 	defer func() {
@@ -129,7 +129,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 		unsortedHostIDs = hostIDSet.UnsortedList()
 	}
 
-	for i := 0; i < len(unsortedHostIDs); i++ {
+	for i := range len(unsortedHostIDs) {
 		hostGPUVMInfos, ok := hostGPUVMInfoMap[unsortedHostIDs[i]]
 		if !ok {
 			continue
@@ -173,14 +173,14 @@ func selectGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredGPUDevices
 	})
 
 	var selectedGPUDeviceInfos []*service.GPUDeviceInfo
-	for i := 0; i < len(requiredGPUDevices); i++ {
+	for i := range len(requiredGPUDevices) {
 		gpuVMInfos, ok := modelGPUVMInfoMap[requiredGPUDevices[i].Model]
 		if !ok || len(gpuVMInfos) < int(requiredGPUDevices[i].Count) {
 			return nil
 		}
 
 		gpuInfos := gpuVMInfos[:int(requiredGPUDevices[i].Count)]
-		for j := 0; j < len(gpuInfos); j++ {
+		for j := range len(gpuInfos) {
 			selectedGPUDeviceInfos = append(selectedGPUDeviceInfos, &service.GPUDeviceInfo{ID: *gpuInfos[j].ID, AllocatedCount: 1, AvailableCount: 1})
 		}
 	}
@@ -202,7 +202,7 @@ func selectVGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredVGPUDevic
 	})
 
 	var selectedGPUDeviceInfos []*service.GPUDeviceInfo
-	for i := 0; i < len(requiredVGPUDevices); i++ {
+	for i := range len(requiredVGPUDevices) {
 		gpuVMInfos, ok := typeVGPUVMInfoMap[requiredVGPUDevices[i].Type]
 		if !ok {
 			return nil
@@ -210,7 +210,7 @@ func selectVGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredVGPUDevic
 
 		var gpuInfos []*service.GPUDeviceInfo
 		requiredCount := requiredVGPUDevices[i].Count
-		for j := 0; j < len(gpuVMInfos); j++ {
+		for j := range len(gpuVMInfos) {
 			availableCount := service.GetAvailableCountFromGPUVMInfo(gpuVMInfos[j])
 			if availableCount <= 0 {
 				continue
@@ -249,7 +249,7 @@ func (r *ElfMachineReconciler) reconcileGPUDevices(ctx goctx.Context, machineCtx
 
 	// Ensure GPUStatus is set or up to date.
 	gpuDevices := make([]infrav1.GPUStatus, len(vm.GpuDevices))
-	for i := 0; i < len(vm.GpuDevices); i++ {
+	for i := range len(vm.GpuDevices) {
 		gpuDevices[i] = infrav1.GPUStatus{GPUID: *vm.GpuDevices[i].ID, Name: *vm.GpuDevices[i].Name}
 	}
 	machineCtx.ElfMachine.Status.GPUDevices = gpuDevices
@@ -272,7 +272,7 @@ func (r *ElfMachineReconciler) reconcileGPUDevices(ctx goctx.Context, machineCtx
 	}
 
 	gpuIDs := make([]string, len(vm.GpuDevices))
-	for i := 0; i < len(vm.GpuDevices); i++ {
+	for i := range len(vm.GpuDevices) {
 		gpuIDs[i] = *vm.GpuDevices[i].ID
 	}
 
@@ -338,14 +338,14 @@ func (r *ElfMachineReconciler) removeVMGPUDevices(ctx goctx.Context, machineCtx 
 			return err
 		}
 
-		for i := 0; i < len(vmGPUInfo.GpuDevices); i++ {
+		for i := range len(vmGPUInfo.GpuDevices) {
 			staleGPUs = append(staleGPUs, &models.VMGpuOperationParams{
 				GpuID:  vmGPUInfo.GpuDevices[i].ID,
 				Amount: vmGPUInfo.GpuDevices[i].VgpuInstanceOnVMNum,
 			})
 		}
 	} else {
-		for i := 0; i < len(vm.GpuDevices); i++ {
+		for i := range len(vm.GpuDevices) {
 			staleGPUs = append(staleGPUs, &models.VMGpuOperationParams{
 				GpuID:  vm.GpuDevices[i].ID,
 				Amount: service.TowerInt32(1),

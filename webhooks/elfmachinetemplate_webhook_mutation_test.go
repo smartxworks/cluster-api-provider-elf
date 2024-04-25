@@ -26,7 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
@@ -48,9 +48,9 @@ func TestElfMachineMutationTemplate(t *testing.T) {
 	}
 	elfMachineTemplate.Spec.Template.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
 		{AddressesFromPools: []corev1.TypedLocalObjectReference{{Name: "test"}}},
-		{AddressesFromPools: []corev1.TypedLocalObjectReference{{Name: "test", APIGroup: pointer.String("")}}},
-		{AddressesFromPools: []corev1.TypedLocalObjectReference{{Name: "test", APIGroup: pointer.String("apiGroup")}}},
-		{AddressesFromPools: []corev1.TypedLocalObjectReference{{Name: "test", APIGroup: pointer.String("apiGroup"), Kind: "kind"}}},
+		{AddressesFromPools: []corev1.TypedLocalObjectReference{{Name: "test", APIGroup: ptr.To("")}}},
+		{AddressesFromPools: []corev1.TypedLocalObjectReference{{Name: "test", APIGroup: ptr.To("apiGroup")}}},
+		{AddressesFromPools: []corev1.TypedLocalObjectReference{{Name: "test", APIGroup: ptr.To("apiGroup"), Kind: "kind"}}},
 	}
 	raw, err := marshal(elfMachineTemplate)
 	g.Expect(err).NotTo(HaveOccurred())

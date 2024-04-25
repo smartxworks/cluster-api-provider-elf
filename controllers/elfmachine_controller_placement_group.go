@@ -26,7 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 	capiutil "sigs.k8s.io/cluster-api/util"
@@ -84,7 +84,7 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx goctx.Context, machineCt
 
 	// TODO: This will be removed when Tower fixes issue with placement group data syncing.
 	if ok := canCreatePlacementGroup(placementGroupName); !ok {
-		log.V(2).Info(fmt.Sprintf("Tower has duplicate placement group, skip creating placement group %s", placementGroupName))
+		log.V(2).Info("Tower has duplicate placement group, skip creating placement group " + placementGroupName)
 
 		return nil, nil
 	}
@@ -146,7 +146,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx goctx.Context, machine
 	}()
 
 	if !machineutil.IsControlPlaneMachine(machineCtx.Machine) {
-		return pointer.String(""), nil
+		return ptr.To(""), nil
 	}
 
 	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster)
@@ -174,7 +174,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx goctx.Context, machine
 	if !availableHosts.IsEmpty() {
 		log.V(1).Info("The placement group still has capacity", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String())
 
-		return pointer.String(""), nil
+		return ptr.To(""), nil
 	}
 
 	kcp, err := machineutil.GetKCPByMachine(ctx, r.Client, machineCtx.Machine)
@@ -250,7 +250,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx goctx.Context, machine
 		return nil, err
 	}
 
-	return pointer.String(hostID), err
+	return ptr.To(hostID), err
 }
 
 // getVMHostForRollingUpdate returns the target host server id for a virtual machine during rolling update.
@@ -267,7 +267,7 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx goctx.Context, mach
 	}
 
 	elfMachineMap := make(map[string]*infrav1.ElfMachine)
-	for i := 0; i < len(elfMachines); i++ {
+	for i := range len(elfMachines) {
 		if typesutil.IsUUID(elfMachines[i].Status.VMRef) {
 			elfMachineMap[elfMachines[i].Name] = elfMachines[i]
 		}
@@ -275,7 +275,7 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx goctx.Context, mach
 
 	placementGroupMachines := make([]*clusterv1.Machine, 0, len(placementGroup.Vms))
 	vmMap := make(map[string]string)
-	for i := 0; i < len(placementGroup.Vms); i++ {
+	for i := range len(placementGroup.Vms) {
 		if elfMachine, ok := elfMachineMap[*placementGroup.Vms[i].Name]; ok {
 			machine, err := capiutil.GetOwnerMachine(ctx, r.Client, elfMachine.ObjectMeta)
 			if err != nil {
@@ -324,7 +324,7 @@ func (r *ElfMachineReconciler) getHostsInPlacementGroup(machineCtx *context.Mach
 	}
 
 	hostSet := sets.Set[string]{}
-	for i := 0; i < len(vms); i++ {
+	for i := range len(vms) {
 		hostSet.Insert(*vms[i].Host.ID)
 	}
 
@@ -508,7 +508,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx goctx.Context, machineCtx 
 
 			usedHostsByPG := sets.Set[string]{}
 			cpElfMachineNames := make([]string, 0, len(cpElfMachines))
-			for i := 0; i < len(cpElfMachines); i++ {
+			for i := range len(cpElfMachines) {
 				cpElfMachineNames = append(cpElfMachineNames, cpElfMachines[i].Name)
 				if machineCtx.ElfMachine.Name != cpElfMachines[i].Name &&
 					cpElfMachines[i].Status.PlacementGroupRef == *placementGroup.ID {
