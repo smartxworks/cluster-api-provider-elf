@@ -16,6 +16,7 @@ package controllers
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -157,7 +158,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("ElfMachines resources of md %s are up to date", klog.KObj(md))))
 
 			logBuffer.Reset()
-			elfMachine.Spec.DiskGiB -= 1
+			setResourcesNoUpToDate(elfMachine, emt)
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			mtCtx = newMachineTemplateContext(elfCluster, cluster, emt)
@@ -169,19 +170,21 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			Expect(logBuffer.String()).To(ContainSubstring("Resources of ElfMachine is not up to date, marking for updating resources"))
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for worker ElfMachines to be updated resources"))
 
-			// logBuffer.Reset()
-			// elfMachine.Spec.DiskGiB -= 1
-			// updatingElfMachine, updatingMachine := fake.NewMachineObjects(elfCluster, cluster)
-			// fake.ToWorkerMachine(updatingElfMachine, md)
-			// fake.ToWorkerMachine(updatingMachine, md)
-			// fake.SetElfMachineTemplateForElfMachine(updatingElfMachine, emt)
-			// ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, updatingElfMachine, updatingMachine)
-			// fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
-			// fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, updatingElfMachine, updatingMachine)
-			// mtCtx = newMachineTemplateContext(elfCluster, cluster, emt)
-			// reconciler = &ElfMachineTemplateReconciler{ControllerManagerContext: ctrlMgrCtx}
-			// ok, err = reconciler.reconcileWorkerResources(ctx, mtCtx)
-			// Expect(logBuffer.String()).To(ContainSubstring("Resources of ElfMachine is not up to date, marking for updating resources"))
+			logBuffer.Reset()
+			setResourcesNoUpToDate(elfMachine, emt)
+			updatingElfMachine, updatingMachine := fake.NewMachineObjects(elfCluster, cluster)
+			fake.ToWorkerMachine(updatingElfMachine, md)
+			fake.ToWorkerMachine(updatingMachine, md)
+			fake.SetElfMachineTemplateForElfMachine(updatingElfMachine, emt)
+			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, updatingElfMachine, updatingMachine)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, updatingElfMachine, updatingMachine)
+			mtCtx = newMachineTemplateContext(elfCluster, cluster, emt)
+			reconciler = &ElfMachineTemplateReconciler{ControllerManagerContext: ctrlMgrCtx}
+			ok, err = reconciler.reconcileWorkerResources(ctx, mtCtx)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Resources of ElfMachine is not up to date, marking for updating resources"))
 		})
 
 		It("selectToBeUpdatedAndNeedUpdatedElfMachines", func() {
@@ -214,7 +217,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 				InfrastructureRef: corev1.ObjectReference{Namespace: emt.Namespace, Name: "notfoud"},
 			}
 			cluster.Spec.ControlPlaneRef = &corev1.ObjectReference{Namespace: kcp.Namespace, Name: kcp.Name}
-			elfMachine.Spec.DiskGiB -= 1
+			setResourcesNoUpToDate(elfMachine, emt)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kcp)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			mtCtx := newMachineTemplateContext(elfCluster, cluster, emt)
@@ -257,7 +260,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			kcp.Status.UpdatedReplicas = 2
 			fake.ToControlPlaneMachine(elfMachine, kcp)
 			fake.ToControlPlaneMachine(machine, kcp)
-			elfMachine.Spec.DiskGiB -= 1
+			setResourcesNoUpToDate(elfMachine, emt)
 			machine.Status.NodeRef = &corev1.ObjectReference{}
 			conditions.MarkTrue(machine, controlplanev1.MachineAPIServerPodHealthyCondition)
 			conditions.MarkTrue(machine, controlplanev1.MachineControllerManagerPodHealthyCondition)
@@ -426,9 +429,15 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			emt := fake.NewElfMachineTemplate()
 			upToDateElfMachine, upToDateMachine := fake.NewMachineObjects(elfCluster, cluster)
 			fake.SetElfMachineTemplateForElfMachine(upToDateElfMachine, emt)
-			noUpToDateElfMachine, noUpToDateMachine := fake.NewMachineObjects(elfCluster, cluster)
-			fake.SetElfMachineTemplateForElfMachine(noUpToDateElfMachine, emt)
-			noUpToDateElfMachine.Spec.DiskGiB -= 1
+			diskNoUpToDateElfMachine, diskNoUpToDateMachine := fake.NewMachineObjects(elfCluster, cluster)
+			fake.SetElfMachineTemplateForElfMachine(diskNoUpToDateElfMachine, emt)
+			diskNoUpToDateElfMachine.Spec.DiskGiB -= 1
+			memoryNoUpToDateElfMachine, memoryNoUpToDateMachine := fake.NewMachineObjects(elfCluster, cluster)
+			fake.SetElfMachineTemplateForElfMachine(memoryNoUpToDateElfMachine, emt)
+			memoryNoUpToDateElfMachine.Spec.MemoryMiB -= 1
+			cpuNoUpToDateElfMachine, cpuNoUpToDateMachine := fake.NewMachineObjects(elfCluster, cluster)
+			fake.SetElfMachineTemplateForElfMachine(cpuNoUpToDateElfMachine, emt)
+			cpuNoUpToDateElfMachine.Spec.NumCPUs -= 1
 			updatingElfMachine, updatingMachine := fake.NewMachineObjects(elfCluster, cluster)
 			fake.SetElfMachineTemplateForElfMachine(updatingElfMachine, emt)
 			conditions.MarkFalse(updatingElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, "")
@@ -438,21 +447,25 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			failedMachine.Status.Phase = string(clusterv1.MachinePhaseFailed)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret,
 				upToDateElfMachine, upToDateMachine,
-				noUpToDateElfMachine, noUpToDateMachine,
+				diskNoUpToDateElfMachine, diskNoUpToDateMachine,
+				memoryNoUpToDateElfMachine, memoryNoUpToDateMachine,
+				cpuNoUpToDateElfMachine, cpuNoUpToDateMachine,
 				updatingElfMachine, updatingMachine,
 				failedElfMachine, failedMachine,
 			)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, upToDateElfMachine, upToDateMachine)
-			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, noUpToDateElfMachine, noUpToDateMachine)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, diskNoUpToDateElfMachine, upToDateMachine)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, memoryNoUpToDateElfMachine, memoryNoUpToDateMachine)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, cpuNoUpToDateElfMachine, cpuNoUpToDateMachine)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, updatingElfMachine, updatingMachine)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, failedElfMachine, failedMachine)
 			reconciler := &ElfMachineTemplateReconciler{ControllerManagerContext: ctrlMgrCtx}
-			elfMachines := []*infrav1.ElfMachine{upToDateElfMachine, noUpToDateElfMachine, updatingElfMachine, failedElfMachine}
+			elfMachines := []*infrav1.ElfMachine{upToDateElfMachine, diskNoUpToDateElfMachine, updatingElfMachine, failedElfMachine}
 			updatingResourcesElfMachines, needUpdatedResourcesElfMachines, err := reconciler.selectResourcesNotUpToDateElfMachines(ctx, emt, elfMachines)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatingResourcesElfMachines).To(Equal([]*infrav1.ElfMachine{updatingElfMachine}))
-			Expect(needUpdatedResourcesElfMachines).To(Equal([]*infrav1.ElfMachine{noUpToDateElfMachine}))
+			Expect(needUpdatedResourcesElfMachines).To(Equal([]*infrav1.ElfMachine{diskNoUpToDateElfMachine}))
 		})
 	})
 
@@ -460,7 +473,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 		It("should mark resources to be updated", func() {
 			emt := fake.NewElfMachineTemplate()
 			fake.SetElfMachineTemplateForElfMachine(elfMachine, emt)
-			elfMachine.Spec.DiskGiB -= 1
+			setResourcesNoUpToDate(elfMachine, emt)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			reconciler := &ElfMachineTemplateReconciler{ControllerManagerContext: ctrlMgrCtx}
@@ -488,7 +501,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			expectConditions(elfMachine, []conditionAssertion{})
 
 			logBuffer.Reset()
-			elfMachine.Spec.DiskGiB -= 1
+			setResourcesNoUpToDate(elfMachine, emt)
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			reconciler = &ElfMachineTemplateReconciler{ControllerManagerContext: ctrlMgrCtx}
@@ -505,3 +518,17 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 		})
 	})
 })
+
+func setResourcesNoUpToDate(elfMachine *infrav1.ElfMachine, emt *infrav1.ElfMachineTemplate) {
+	fake.SetElfMachineTemplateForElfMachine(elfMachine, emt)
+	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	n := seededRand.Intn(3)
+	switch n {
+	case 0:
+		elfMachine.Spec.DiskGiB -= 1
+	case 1:
+		elfMachine.Spec.MemoryMiB -= 1
+	default:
+		elfMachine.Spec.NumCPUs -= 1
+	}
+}

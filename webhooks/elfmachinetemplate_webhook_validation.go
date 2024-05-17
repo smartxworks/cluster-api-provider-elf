@@ -33,7 +33,12 @@ import (
 // Error messages.
 const (
 	diskCapacityCannotLessThanZeroMsg = "the disk capacity can only greater than or equal to 0"
-	diskCapacityCanOnlyBeExpanded     = "the disk capacity can only be expanded"
+	diskCapacityCanOnlyBeExpandedMsg  = "the disk capacity can only be expanded"
+
+	memoryCannotLessThanZeroMsg = "the memory can only greater than 0"
+
+	numCPUsCannotLessThanZeroMsg           = "the umCPUs can only greater than 0"
+	numCoresPerSocketCannotLessThanZeroMsg = "the numCoresPerSocket can only greater than 0"
 )
 
 func (v *ElfMachineTemplateValidator) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -62,6 +67,18 @@ func (v *ElfMachineTemplateValidator) ValidateCreate(ctx goctx.Context, obj runt
 		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), elfMachineTemplate.Spec.Template.Spec.DiskGiB, diskCapacityCannotLessThanZeroMsg))
 	}
 
+	if elfMachineTemplate.Spec.Template.Spec.MemoryMiB <= 0 {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "memoryMiB"), elfMachineTemplate.Spec.Template.Spec.MemoryMiB, memoryCannotLessThanZeroMsg))
+	}
+
+	if elfMachineTemplate.Spec.Template.Spec.NumCPUs <= 0 {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "numCPUs"), elfMachineTemplate.Spec.Template.Spec.NumCPUs, numCPUsCannotLessThanZeroMsg))
+	}
+
+	if elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket <= 0 {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "numCoresPerSocket"), elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket, numCoresPerSocketCannotLessThanZeroMsg))
+	}
+
 	return nil, aggregateObjErrors(elfMachineTemplate.GroupVersionKind().GroupKind(), elfMachineTemplate.Name, allErrs)
 }
 
@@ -78,7 +95,19 @@ func (v *ElfMachineTemplateValidator) ValidateUpdate(ctx goctx.Context, oldObj, 
 
 	var allErrs field.ErrorList
 	if elfMachineTemplate.Spec.Template.Spec.DiskGiB < oldElfMachineTemplate.Spec.Template.Spec.DiskGiB {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), elfMachineTemplate.Spec.Template.Spec.DiskGiB, diskCapacityCanOnlyBeExpanded))
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), elfMachineTemplate.Spec.Template.Spec.DiskGiB, diskCapacityCanOnlyBeExpandedMsg))
+	}
+
+	if elfMachineTemplate.Spec.Template.Spec.MemoryMiB <= 0 {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "memoryMiB"), elfMachineTemplate.Spec.Template.Spec.MemoryMiB, memoryCannotLessThanZeroMsg))
+	}
+
+	if elfMachineTemplate.Spec.Template.Spec.NumCPUs <= 0 {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "numCPUs"), elfMachineTemplate.Spec.Template.Spec.NumCPUs, numCPUsCannotLessThanZeroMsg))
+	}
+
+	if elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket <= 0 {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "numCoresPerSocket"), elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket, numCoresPerSocketCannotLessThanZeroMsg))
 	}
 
 	return nil, aggregateObjErrors(elfMachineTemplate.GroupVersionKind().GroupKind(), elfMachineTemplate.Name, allErrs)

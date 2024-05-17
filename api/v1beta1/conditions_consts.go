@@ -144,6 +144,23 @@ const (
 	// detecting an error while adding new disk capacity to root directory; those kind of errors are
 	// usually transient and failed updating are automatically re-tried by the controller.
 	ExpandingRootPartitionFailedReason = "ExpandingRootPartitionFailed"
+
+	// ExpandingVMResourcesReason documents (Severity=Info) ElfMachine currently executing the
+	// expand resources(CPU/memory) operation.
+	ExpandingVMResourcesReason = "ExpandingVMResources"
+
+	// ExpandingVMResourcesFailedReason (Severity=Warning) documents an ElfMachine controller detecting
+	// an error while expanding resources(CPU/memory); those kind of errors are usually transient and
+	// failed updating are automatically re-tried by the controller.
+	ExpandingVMResourcesFailedReason = "ExpandingVMResourcesFailed"
+
+	// RestartingKubeletReason documents (Severity=Info) ElfMachine currently executing the restart kubelet operation.
+	RestartingKubeletReason = "RestartingKubelet"
+
+	// RestartingKubeletFailedReason (Severity=Warning) documents an ElfMachine controller detecting
+	// an error while restarting kubelet; those kind of errors are usually transient and failed restarting
+	// are automatically re-tried by the controller.
+	RestartingKubeletFailedReason = "RestartingKubeletFailed"
 )
 
 // Conditions and Reasons related to make connections to a Tower. Can currently be used by ElfCluster and ElfMachine

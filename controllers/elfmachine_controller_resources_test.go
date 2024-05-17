@@ -16,6 +16,7 @@ package controllers
 import (
 	"bytes"
 	goctx "context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -55,6 +56,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 		mockNewVMService service.NewVMServiceFunc
 	)
 
+	_, err := testEnv.CreateNamespace(goctx.Background(), "sks-system")
+	Expect(err).NotTo(HaveOccurred())
+
 	BeforeEach(func() {
 		logBuffer = new(bytes.Buffer)
 		klog.SetOutput(logBuffer)
@@ -85,24 +89,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for hot updating resources"))
-		})
-
-		It("should wait for node exists", func() {
-			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
-			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
-			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
-			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
-			vmVolume := fake.NewVMVolume(elfMachine)
-			vmDisk := fake.NewVMDisk(vmVolume)
-			vm := fake.NewTowerVMFromElfMachine(elfMachine)
-			vm.VMDisks = []*models.NestedVMDisk{{ID: vmDisk.ID}}
-			mockVMService.EXPECT().GetVMDisks([]string{*vmDisk.ID}).Return([]*models.VMDisk{vmDisk}, nil)
-			mockVMService.EXPECT().GetVMVolume(*vmVolume.ID).Return(vmVolume, nil)
-			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
-			ok, err := reconciler.reconcileVMResources(ctx, machineContext, vm)
-			Expect(ok).To(BeFalse())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Waiting for node exists for host agent expand vm root partition"))
 		})
 
 		It("should mark ResourcesHotUpdatedCondition to true", func() {
@@ -261,7 +247,21 @@ var _ = Describe("ElfMachineReconciler", func() {
 			expectConditions(elfMachine, []conditionAssertion{})
 		})
 
+		It("should wait for node exists", func() {
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.expandVMRootPartition(ctx, machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for node exists for host agent expand vm root partition"))
+		})
+
 		It("should create agent job to expand root partition", func() {
+			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -283,6 +283,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should retry when job failed", func() {
+			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
 			agentJob := newExpandRootPartitionJob(elfMachine)
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
@@ -322,6 +323,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should record job succeeded", func() {
+			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
 			agentJob := newExpandRootPartitionJob(elfMachine)
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
@@ -340,13 +342,186 @@ var _ = Describe("ElfMachineReconciler", func() {
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingRootPartitionReason}})
 		})
 	})
+
+	Context("restartKubelet", func() {
+		BeforeEach(func() {
+			var err error
+			kubeConfigSecret, err = helpers.NewKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		It("should not restart kubelet without restartKubelet", func() {
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.restartKubelet(ctx, machineContext)
+			Expect(ok).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+			expectConditions(elfMachine, []conditionAssertion{})
+		})
+
+		It("should wait for node exists", func() {
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.restartKubelet(ctx, machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for node exists for host agent expand vm root partition"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.RestartingKubeletReason}})
+		})
+
+		It("should create agent job to restart kubelet", func() {
+			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.restartKubelet(ctx, machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for resting kubelet to expanding CPU and memory"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.RestartingKubeletReason}})
+			var agentJob *agentv1.HostOperationJob
+			Eventually(func() error {
+				var err error
+				agentJob, err = hostagent.GetHostJob(ctx, testEnv.Client, elfMachine.Namespace, hostagent.GetRestartKubeletJobName(elfMachine))
+				return err
+			}, timeout).Should(BeNil())
+			Expect(agentJob.Name).To(Equal(hostagent.GetRestartKubeletJobName(elfMachine)))
+		})
+
+		It("should retry when job failed", func() {
+			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			agentJob := newRestartKubelet(elfMachine)
+			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.restartKubelet(ctx, machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for expanding CPU and memory job done"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.RestartingKubeletReason}})
+
+			logBuffer.Reset()
+			Expect(testEnv.Get(ctx, client.ObjectKey{Namespace: agentJob.Namespace, Name: agentJob.Name}, agentJob)).NotTo(HaveOccurred())
+			agentJobPatchSource := agentJob.DeepCopy()
+			agentJob.Status.Phase = agentv1.PhaseFailed
+			Expect(testEnv.PatchAndWait(ctx, agentJob, agentJobPatchSource)).To(Succeed())
+			ok, err = reconciler.restartKubelet(ctx, machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Expand CPU and memory failed, will try again after three minutes"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.RestartingKubeletFailedReason}})
+
+			Expect(testEnv.Get(ctx, client.ObjectKey{Namespace: agentJob.Namespace, Name: agentJob.Name}, agentJob)).NotTo(HaveOccurred())
+			agentJobPatchSource = agentJob.DeepCopy()
+			agentJob.Status.LastExecutionTime = &metav1.Time{Time: time.Now().Add(-3 * time.Minute).UTC()}
+			Expect(testEnv.PatchAndWait(ctx, agentJob, agentJobPatchSource)).To(Succeed())
+			ok, err = reconciler.restartKubelet(ctx, machineContext)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() bool {
+				err := testEnv.Get(ctx, client.ObjectKey{Namespace: agentJob.Namespace, Name: agentJob.Name}, agentJob)
+				return apierrors.IsNotFound(err)
+			}, timeout).Should(BeTrue())
+		})
+
+		It("should record job succeeded", func() {
+			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			agentJob := newRestartKubelet(elfMachine)
+			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
+			Expect(testEnv.Get(ctx, client.ObjectKey{Namespace: agentJob.Namespace, Name: agentJob.Name}, agentJob)).NotTo(HaveOccurred())
+			agentJobPatchSource := agentJob.DeepCopy()
+			agentJob.Status.Phase = agentv1.PhaseSucceeded
+			Expect(testEnv.PatchAndWait(ctx, agentJob, agentJobPatchSource)).To(Succeed())
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.restartKubelet(ctx, machineContext)
+			Expect(ok).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Expand CPU and memory succeeded"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.RestartingKubeletReason}})
+		})
+	})
+
+	Context("reconcileVMCPUAndMemory", func() {
+		It("should not reconcile when numCPUs or memory is excepted", func() {
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineCtx := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileVMCPUAndMemory(ctx, machineCtx, vm)
+			Expect(ok).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(elfMachine.Status.Resources.CPUCores).To(Equal(*vm.Vcpu))
+			Expect(elfMachine.Status.Resources.Memory.String()).To(Equal(fmt.Sprintf("%dMi", service.ByteToMiB(*vm.Memory))))
+		})
+
+		It("should save the conditionType first", func() {
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			elfMachine.Spec.NumCPUs += 1
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineCtx := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileVMCPUAndMemory(ctx, machineCtx, vm)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingVMResourcesReason}})
+		})
+
+		It("should wait task done", func() {
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			elfMachine.Spec.MemoryMiB += 1
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineCtx := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			mockVMService.EXPECT().UpdateVM(vm, elfMachine).Return(nil, unexpectedError)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileVMCPUAndMemory(ctx, machineCtx, vm)
+			Expect(ok).To(BeFalse())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to trigger update CPU and memory for VM"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMResourcesFailedReason}})
+
+			logBuffer.Reset()
+			inMemoryCache.Flush()
+			task := fake.NewTowerTask()
+			withTaskVM := fake.NewWithTaskVM(vm, task)
+			mockVMService.EXPECT().UpdateVM(vm, elfMachine).Return(withTaskVM, nil)
+			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err = reconciler.reconcileVMCPUAndMemory(ctx, machineCtx, vm)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be updated CPU and memory"))
+			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingVMResourcesReason}})
+		})
+	})
 })
 
 func newExpandRootPartitionJob(elfMachine *infrav1.ElfMachine) *agentv1.HostOperationJob {
 	return &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      hostagent.GetExpandRootPartitionJobName(elfMachine),
-			Namespace: "default",
+			Namespace: "sks-system",
 		},
 		Spec: agentv1.HostOperationJobSpec{
 			NodeName: elfMachine.Name,
@@ -354,6 +529,25 @@ func newExpandRootPartitionJob(elfMachine *infrav1.ElfMachine) *agentv1.HostOper
 				Ansible: &agentv1.Ansible{
 					LocalPlaybookText: &agentv1.YAMLText{
 						Inline: tasks.ExpandRootPartitionTask,
+					},
+				},
+			},
+		},
+	}
+}
+
+func newRestartKubelet(elfMachine *infrav1.ElfMachine) *agentv1.HostOperationJob {
+	return &agentv1.HostOperationJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hostagent.GetRestartKubeletJobName(elfMachine),
+			Namespace: "sks-system",
+		},
+		Spec: agentv1.HostOperationJobSpec{
+			NodeName: elfMachine.Name,
+			Operation: agentv1.Operation{
+				Ansible: &agentv1.Ansible{
+					LocalPlaybookText: &agentv1.YAMLText{
+						Inline: tasks.RestartKubeletTask,
 					},
 				},
 			},

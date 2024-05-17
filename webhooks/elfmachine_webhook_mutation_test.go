@@ -50,6 +50,7 @@ func TestElfMachineMutation(t *testing.T) {
 
 	elfMachine := fake.NewElfMachine(nil)
 	elfMachine.Annotations = nil
+	elfMachine.Spec.NumCoresPerSocket = 0
 	raw, err := marshal(elfMachine)
 	g.Expect(err).NotTo(HaveOccurred())
 	tests = append(tests, testCase{
@@ -62,6 +63,7 @@ func TestElfMachineMutation(t *testing.T) {
 		expectRespAllowed: true,
 		expectPatchs: []jsonpatch.Operation{
 			{Operation: "add", Path: "/metadata/annotations", Value: map[string]interface{}{infrav1.CAPEVersionAnnotation: version.CAPEVersion()}},
+			{Operation: "add", Path: "/spec/numCoresPerSocket", Value: float64(elfMachine.Spec.NumCPUs)},
 		},
 	})
 
@@ -72,7 +74,7 @@ func TestElfMachineMutation(t *testing.T) {
 
 			resp := mutation.Handle(context.Background(), tc.admissionRequest)
 			g.Expect(resp.Allowed).Should(Equal(tc.expectRespAllowed))
-			g.Expect(resp.Patches).Should(Equal(tc.expectPatchs))
+			g.Expect(resp.Patches).Should(ContainElements(tc.expectPatchs))
 		})
 	}
 }

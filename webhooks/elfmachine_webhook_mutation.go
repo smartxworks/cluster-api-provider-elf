@@ -63,6 +63,10 @@ func (m *ElfMachineMutation) Handle(ctx goctx.Context, request admission.Request
 		version.SetCurrentCAPEVersion(&elfMachine)
 	}
 
+	if elfMachine.Spec.NumCoresPerSocket <= 0 {
+		elfMachine.Spec.NumCoresPerSocket = elfMachine.Spec.NumCPUs
+	}
+
 	if marshaledElfMachine, err := json.Marshal(elfMachine); err != nil {
 		return admission.Errored(http.StatusInternalServerError, err)
 	} else {

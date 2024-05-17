@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // CloneMode is the type of clone operation used to clone a VM from a template.
@@ -199,6 +200,10 @@ type GPUStatus struct {
 // ResourcesStatus records the resources allocated to the virtual machine.
 type ResourcesStatus struct {
 	Disk int32 `json:"disk,omitempty"`
+	// CPUCores is the total number of CPU cores allocated for the virtual machine.
+	CPUCores int32 `json:"cpu,omitempty"`
+	// Memory is the total number of memory in MiB allocated for the virtual machine.
+	Memory resource.Quantity `json:"memory,omitempty"`
 }
 
 //+kubebuilder:object:generate=false

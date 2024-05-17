@@ -42,7 +42,7 @@ func TestElfMachineMutationTemplate(t *testing.T) {
 		},
 		Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{},
+				Spec: infrav1.ElfMachineSpec{NumCoresPerSocket: 1},
 			},
 		},
 	}
@@ -68,6 +68,24 @@ func TestElfMachineMutationTemplate(t *testing.T) {
 			{Operation: "replace", Path: "/spec/template/spec/network/devices/1/addressesFromPools/0/apiGroup", Value: defaultIPPoolAPIGroup},
 			{Operation: "replace", Path: "/spec/template/spec/network/devices/1/addressesFromPools/0/kind", Value: defaultIPPoolKind},
 			{Operation: "replace", Path: "/spec/template/spec/network/devices/2/addressesFromPools/0/kind", Value: defaultIPPoolKind},
+		},
+	})
+
+	elfMachineTemplate.Spec.Template.Spec.Network.Devices = nil
+	elfMachineTemplate.Spec.Template.Spec.NumCPUs = 1
+	elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket = 0
+	raw, err = marshal(elfMachineTemplate)
+	g.Expect(err).NotTo(HaveOccurred())
+	tests = append(tests, testCase{
+		name: "should set default values for numCoresPerSocket",
+		admissionRequest: admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{
+			Kind:      metav1.GroupVersionKind{Group: infrav1.GroupVersion.Group, Version: infrav1.GroupVersion.Version, Kind: "ElfMachine"},
+			Operation: admissionv1.Create,
+			Object:    runtime.RawExtension{Raw: raw},
+		}},
+		expectRespAllowed: true,
+		expectPatchs: []jsonpatch.Operation{
+			{Operation: "add", Path: "/spec/template/spec/numCoresPerSocket", Value: float64(elfMachineTemplate.Spec.Template.Spec.NumCPUs)},
 		},
 	})
 

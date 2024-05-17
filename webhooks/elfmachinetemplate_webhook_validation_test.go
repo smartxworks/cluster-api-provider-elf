@@ -37,7 +37,10 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: -1,
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           -1,
 				},
 			},
 		}},
@@ -49,7 +52,10 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 0,
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           0,
 				},
 			},
 		}},
@@ -59,11 +65,59 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 100,
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           100,
 				},
 			},
 		}},
 		Errs: nil,
+	}, testCaseEMT{
+		Name: "memory cannot be less than 0",
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					DiskGiB:           100,
+					MemoryMiB:         0,
+				},
+			},
+		}},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "template", "spec", "memoryMiB"), 0, memoryCannotLessThanZeroMsg),
+		},
+	}, testCaseEMT{
+		Name: "numCPUs cannot be less than 0",
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCoresPerSocket: 1,
+					DiskGiB:           100,
+					MemoryMiB:         1,
+					NumCPUs:           0,
+				},
+			},
+		}},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "template", "spec", "numCPUs"), 0, numCPUsCannotLessThanZeroMsg),
+		},
+	}, testCaseEMT{
+		Name: "numCoresPerSocket cannot be less than 0",
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCPUs:           1,
+					DiskGiB:           100,
+					MemoryMiB:         1,
+					NumCoresPerSocket: 0,
+				},
+			},
+		}},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "template", "spec", "numCoresPerSocket"), 0, numCoresPerSocketCannotLessThanZeroMsg),
+		},
 	})
 
 	validator := &ElfMachineTemplateValidator{}
@@ -86,19 +140,85 @@ func TestElfMachineTemplateValidatorValidateUpdate(t *testing.T) {
 		OldEMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 2,
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           2,
 				},
 			},
 		}},
 		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 1,
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           1,
 				},
 			},
 		}},
 		Errs: field.ErrorList{
-			field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), 1, diskCapacityCanOnlyBeExpanded),
+			field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), 1, diskCapacityCanOnlyBeExpandedMsg),
+		},
+	}, testCaseEMT{
+		Name: "memory cannot be less than 0",
+		OldEMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{},
+			},
+		}},
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					DiskGiB:           1,
+					MemoryMiB:         0,
+				},
+			},
+		}},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "template", "spec", "memoryMiB"), 0, memoryCannotLessThanZeroMsg),
+		},
+	}, testCaseEMT{
+		Name: "numCPUs cannot be less than 0",
+		OldEMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{},
+			},
+		}},
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCoresPerSocket: 1,
+					DiskGiB:           1,
+					MemoryMiB:         1,
+					NumCPUs:           0,
+				},
+			},
+		}},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "template", "spec", "numCPUs"), 0, numCPUsCannotLessThanZeroMsg),
+		},
+	}, testCaseEMT{
+		Name: "numCoresPerSocket cannot be less than 0",
+		OldEMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{},
+			},
+		}},
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					DiskGiB:           1,
+					MemoryMiB:         1,
+					NumCPUs:           1,
+					NumCoresPerSocket: 0,
+				},
+			},
+		}},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "template", "spec", "numCoresPerSocket"), 0, numCoresPerSocketCannotLessThanZeroMsg),
 		},
 	})
 
