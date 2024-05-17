@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.13.0
+    controller-gen.kubebuilder.io/version: v0.15.0
   name: elfmachines.infrastructure.cluster.x-k8s.io
 spec:
   group: infrastructure.cluster.x-k8s.io
@@ -49,14 +49,19 @@ spec:
         description: ElfMachine is the Schema for the elfmachines API.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -71,10 +76,9 @@ spec:
                 format: int32
                 type: integer
               failureDomain:
-                description: FailureDomain is the failure domain unique identifier
-                  this Machine should be attached to, as defined in Cluster API. For
-                  this infrastructure provider, the name is equivalent to the name
-                  of the ElfDeploymentZone.
+                description: |-
+                  FailureDomain is the failure domain unique identifier this Machine should be attached to, as defined in Cluster API.
+                  For this infrastructure provider, the name is equivalent to the name of the ElfDeploymentZone.
                 type: string
               gpuDevices:
                 description: GPUDevices is the list of physical GPUs used by the virtual
@@ -98,8 +102,10 @@ spec:
               ha:
                 type: boolean
               host:
-                description: Host is a unique identifier for a ELF host. Required
-                  when cloneMode is FullClone. Defaults to AUTO_SCHEDULE.
+                description: |-
+                  Host is a unique identifier for a ELF host.
+                  Required when cloneMode is FullClone.
+                  Defaults to AUTO_SCHEDULE.
                 type: string
               memoryMiB:
                 format: int64
@@ -112,21 +118,23 @@ spec:
                     description: Devices is the list of network devices used by the
                       virtual machine.
                     items:
-                      description: NetworkDeviceSpec defines the network configuration
-                        for a virtual machine's network device.
+                      description: |-
+                        NetworkDeviceSpec defines the network configuration for a virtual machine's
+                        network device.
                       properties:
                         addressesFromPools:
-                          description: AddressesFromPools is a list of IPAddressPools
-                            that should be assigned to IPAddressClaims.
+                          description: |-
+                            AddressesFromPools is a list of IPAddressPools that should be assigned
+                            to IPAddressClaims.
                           items:
-                            description: TypedLocalObjectReference contains enough
-                              information to let you locate the typed referenced object
-                              inside the same namespace.
+                            description: |-
+                              TypedLocalObjectReference contains enough information to let you locate the
+                              typed referenced object inside the same namespace.
                             properties:
                               apiGroup:
-                                description: APIGroup is the group for the resource
-                                  being referenced. If APIGroup is not specified,
-                                  the specified Kind must be in the core API group.
+                                description: |-
+                                  APIGroup is the group for the resource being referenced.
+                                  If APIGroup is not specified, the specified Kind must be in the core API group.
                                   For any other third-party types, APIGroup is required.
                                 type: string
                               kind:
@@ -142,19 +150,22 @@ spec:
                             x-kubernetes-map-type: atomic
                           type: array
                         ipAddrs:
-                          description: IPAddrs is a list of one or more IPv4 and/or
-                            IPv6 addresses to assign to this device. Required when
-                            DHCP4 and DHCP6 are both false.
+                          description: |-
+                            IPAddrs is a list of one or more IPv4 and/or IPv6 addresses to assign
+                            to this device.
+                            Required when DHCP4 and DHCP6 are both false.
                           items:
                             type: string
                           type: array
                         macAddr:
-                          description: MACAddr is the MAC address used by this device.
-                            It is generally a good idea to omit this field and allow
-                            a MAC address to be generated.
+                          description: |-
+                            MACAddr is the MAC address used by this device.
+                            It is generally a good idea to omit this field and allow a MAC address
+                            to be generated.
                           type: string
                         netmask:
-                          description: Netmask is the subnet mask used by this device.
+                          description: |-
+                            Netmask is the subnet mask used by this device.
                             Required when DHCP4 is false.
                           type: string
                         networkType:
@@ -163,9 +174,9 @@ spec:
                         routes:
                           description: Required when DHCP4 is false.
                           items:
-                            description: NetworkDeviceRouteSpec defines the network
-                              configuration for a virtual machine's network device
-                              route.
+                            description: |-
+                              NetworkDeviceRouteSpec defines the network configuration for a virtual machine's
+                              network device route.
                             properties:
                               gateway:
                                 description: Gateway is the IPv4 gateway used by this
@@ -189,28 +200,32 @@ spec:
                       type: object
                     type: array
                   nameservers:
-                    description: Nameservers is a list of IPv4 and/or IPv6 addresses
-                      used as DNS nameservers. Please note that Linux allows only
-                      three nameservers (https://linux.die.net/man/5/resolv.conf).
+                    description: |-
+                      Nameservers is a list of IPv4 and/or IPv6 addresses used as DNS
+                      nameservers.
+                      Please note that Linux allows only three nameservers (https://linux.die.net/man/5/resolv.conf).
                     items:
                       type: string
                     type: array
                   preferredAPIServerCidr:
-                    description: PreferredAPIServeCIDR is the preferred CIDR for the
-                      Kubernetes API server endpoint on this machine
+                    description: |-
+                      PreferredAPIServeCIDR is the preferred CIDR for the Kubernetes API
+                      server endpoint on this machine
                     type: string
                 required:
                 - devices
                 type: object
               numCPUS:
-                description: NumCPUs is the number of virtual processors in a VM.
-                  Defaults to the analogue property value in the template from which
-                  this machine is cloned.
+                description: |-
+                  NumCPUs is the number of virtual processors in a VM.
+                  Defaults to the analogue property value in the template from which this
+                  machine is cloned.
                 format: int32
                 type: integer
               numCoresPerSocket:
-                description: NumCoresPerSocket is the number of cores among which
-                  to distribute CPUs in this VM.
+                description: |-
+                  NumCoresPerSocket is the number of cores among which to distribute CPUs
+                  in this VM.
                 format: int32
                 type: integer
               osType:
@@ -221,7 +236,8 @@ spec:
                 - WINDOWS
                 type: string
               providerID:
-                description: ProviderID is the virtual machine's UUID formatted as
+                description: |-
+                  ProviderID is the virtual machine's UUID formatted as
                   elf://f0f6f65d-0786-4170-9ab9-d02187a61ad6
                 type: string
               template:
@@ -277,37 +293,37 @@ spec:
                     operational state.
                   properties:
                     lastTransitionTime:
-                      description: Last time the condition transitioned from one status
-                        to another. This should be when the underlying condition changed.
-                        If that is not known, then using the time when the API field
-                        changed is acceptable.
+                      description: |-
+                        Last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed. If that is not known, then using the time when
+                        the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
-                      description: A human readable message indicating details about
-                        the transition. This field may be empty.
+                      description: |-
+                        A human readable message indicating details about the transition.
+                        This field may be empty.
                       type: string
                     reason:
-                      description: The reason for the condition's last transition
-                        in CamelCase. The specific API may choose whether or not this
-                        field is considered a guaranteed API. This field may not be
-                        empty.
+                      description: |-
+                        The reason for the condition's last transition in CamelCase.
+                        The specific API may choose whether or not this field is considered a guaranteed API.
+                        This field may not be empty.
                       type: string
                     severity:
-                      description: Severity provides an explicit classification of
-                        Reason code, so the users or machines can immediately understand
-                        the current situation and act accordingly. The Severity field
-                        MUST be set only when Status=False.
+                      description: |-
+                        Severity provides an explicit classification of Reason code, so the users or machines can immediately
+                        understand the current situation and act accordingly.
+                        The Severity field MUST be set only when Status=False.
                       type: string
                     status:
                       description: Status of the condition, one of True, False, Unknown.
                       type: string
                     type:
-                      description: Type of condition in CamelCase or in foo.example.com/CamelCase.
-                        Many .condition.type values are consistent across resources
-                        like Available, but because arbitrary conditions can be useful
-                        (see .node.status.conditions), the ability to deconflict is
-                        important.
+                      description: |-
+                        Type of condition in CamelCase or in foo.example.com/CamelCase.
+                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions
+                        can be useful (see .node.status.conditions), the ability to deconflict is important.
                       type: string
                   required:
                   - lastTransitionTime
@@ -316,38 +332,51 @@ spec:
                   type: object
                 type: array
               failureMessage:
-                description: "FailureMessage will be set in the event that there is
-                  a terminal problem reconciling the Machine and will contain a more
-                  verbose string suitable for logging and human consumption. \n This
-                  field should not be set for transitive errors that a controller
-                  faces that are expected to be fixed automatically over time (like
-                  service outages), but instead indicate that something is fundamentally
-                  wrong with the Machine's spec or the configuration of the controller,
-                  and that manual intervention is required. Examples of terminal errors
-                  would be invalid combinations of settings in the spec, values that
-                  are unsupported by the controller, or the responsible controller
-                  itself being critically misconfigured. \n Any transient errors that
-                  occur during the reconciliation of Machines can be added as events
-                  to the Machine object and/or logged in the controller's output."
+                description: |-
+                  FailureMessage will be set in the event that there is a terminal problem
+                  reconciling the Machine and will contain a more verbose string suitable
+                  for logging and human consumption.
+
+
+                  This field should not be set for transitive errors that a controller
+                  faces that are expected to be fixed automatically over
+                  time (like service outages), but instead indicate that something is
+                  fundamentally wrong with the Machine's spec or the configuration of
+                  the controller, and that manual intervention is required. Examples
+                  of terminal errors would be invalid combinations of settings in the
+                  spec, values that are unsupported by the controller, or the
+                  responsible controller itself being critically misconfigured.
+
+
+                  Any transient errors that occur during the reconciliation of Machines
+                  can be added as events to the Machine object and/or logged in the
+                  controller's output.
                 type: string
               failureReason:
-                description: "FailureReason will be set in the event that there is
-                  a terminal problem reconciling the Machine and will contain a succinct
-                  value suitable for machine interpretation. \n This field should
-                  not be set for transitive errors that a controller faces that are
-                  expected to be fixed automatically over time (like service outages),
-                  but instead indicate that something is fundamentally wrong with
-                  the Machine's spec or the configuration of the controller, and that
-                  manual intervention is required. Examples of terminal errors would
-                  be invalid combinations of settings in the spec, values that are
-                  unsupported by the controller, or the responsible controller itself
-                  being critically misconfigured. \n Any transient errors that occur
-                  during the reconciliation of Machines can be added as events to
-                  the Machine object and/or logged in the controller's output."
+                description: |-
+                  FailureReason will be set in the event that there is a terminal problem
+                  reconciling the Machine and will contain a succinct value suitable
+                  for machine interpretation.
+
+
+                  This field should not be set for transitive errors that a controller
+                  faces that are expected to be fixed automatically over
+                  time (like service outages), but instead indicate that something is
+                  fundamentally wrong with the Machine's spec or the configuration of
+                  the controller, and that manual intervention is required. Examples
+                  of terminal errors would be invalid combinations of settings in the
+                  spec, values that are unsupported by the controller, or the
+                  responsible controller itself being critically misconfigured.
+
+
+                  Any transient errors that occur during the reconciliation of Machines
+                  can be added as events to the Machine object and/or logged in the
+                  controller's output.
                 type: string
               gpuDevices:
-                description: GPUDevices returns the GPU devices status for each of
-                  the machine's configured GPU devices.
+                description: |-
+                  GPUDevices returns the GPU devices status for each of the machine's configured
+                  GPU devices.
                 items:
                   description: GPUStatus provides information about one of a VM's
                     GPU device.
@@ -359,25 +388,29 @@ spec:
                   type: object
                 type: array
               hostServerName:
-                description: HostServerName is the name of host server where the virtual
-                  machine runs on. This value is set automatically at runtime and
-                  should not be set or modified by users.
+                description: |-
+                  HostServerName is the name of host server where the virtual machine runs on.
+                  This value is set automatically at runtime and should not be set or
+                  modified by users.
                 type: string
               hostServerRef:
-                description: HostServerRef is the Tower ID of host server where the
-                  virtual machine runs on. This value is set automatically at runtime
-                  and should not be set or modified by users.
+                description: |-
+                  HostServerRef is the Tower ID of host server where the virtual machine runs on.
+                  This value is set automatically at runtime and should not be set or
+                  modified by users.
                 type: string
               network:
-                description: Network returns the network status for each of the machine's
-                  configured network interfaces.
+                description: |-
+                  Network returns the network status for each of the machine's configured
+                  network interfaces.
                 items:
                   description: NetworkStatus provides information about one of a VM's
                     networks.
                   properties:
                     connected:
-                      description: Connected is a flag that indicates whether this
-                        network is currently connected to the VM.
+                      description: |-
+                        Connected is a flag that indicates whether this network is currently
+                        connected to the VM.
                       type: boolean
                     ipAddrs:
                       description: IPAddrs is one or more IP addresses reported by
@@ -396,9 +429,10 @@ spec:
                   type: object
                 type: array
               placementGroupRef:
-                description: PlacementGroupRef is the reference to the Tower PlacementGroup
-                  which this ElfMachine belongs to. This value is set automatically
-                  at runtime and should not be set or modified by users.
+                description: |-
+                  PlacementGroupRef is the reference to the Tower PlacementGroup which this ElfMachine belongs to.
+                  This value is set automatically at runtime and should not be set or
+                  modified by users.
                 type: string
               ready:
                 description: Ready is true when the provider resource is ready.
@@ -406,18 +440,34 @@ spec:
               resources:
                 description: Resources records the resources allocated for the machine.
                 properties:
+                  cpu:
+                    description: CPUCores is the total number of CPU cores allocated
+                      for the virtual machine.
+                    format: int32
+                    type: integer
                   disk:
                     format: int32
                     type: integer
+                  memory:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: Memory is the total number of memory in MiB allocated
+                      for the virtual machine.
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
                 type: object
               taskRef:
-                description: TaskRef is a managed object reference to a Task related
-                  to the machine. This value is set automatically at runtime and should
-                  not be set or modified by users.
+                description: |-
+                  TaskRef is a managed object reference to a Task related to the machine.
+                  This value is set automatically at runtime and should not be set or
+                  modified by users.
                 type: string
               vmRef:
-                description: VMRef is used to lookup the VM. This value is set automatically
-                  at runtime and should not be set or modified by users.
+                description: |-
+                  VMRef is used to lookup the VM.
+                  This value is set automatically at runtime and should not be set or
+                  modified by users.
                 type: string
             type: object
         type: object

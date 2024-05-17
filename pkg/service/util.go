@@ -34,14 +34,14 @@ import (
 func GetUpdatedVMRestrictedFields(vm *models.VM, elfMachine *infrav1.ElfMachine) map[string]string {
 	fieldMap := make(map[string]string)
 	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
-	cpuCores := TowerCPUCores(*vCPU, elfMachine.Spec.NumCoresPerSocket)
-	cpuSockets := TowerCPUSockets(*vCPU, *cpuCores)
+	cpuSocketCores := TowerCPUSocketCores(elfMachine.Spec.NumCoresPerSocket, *vCPU)
+	cpuSockets := TowerCPUSockets(*vCPU, *cpuSocketCores)
 
 	if *vm.Vcpu > *vCPU {
 		fieldMap["vcpu"] = fmt.Sprintf("actual: %d, expected: %d", *vm.Vcpu, *vCPU)
 	}
-	if *vm.CPU.Cores > *cpuCores {
-		fieldMap["cpuCores"] = fmt.Sprintf("actual: %d, expected: %d", *vm.CPU.Cores, *cpuCores)
+	if *vm.CPU.Cores > *cpuSocketCores {
+		fieldMap["cpuCores"] = fmt.Sprintf("actual: %d, expected: %d", *vm.CPU.Cores, *cpuSocketCores)
 	}
 	if *vm.CPU.Sockets > *cpuSockets {
 		fieldMap["cpuSockets"] = fmt.Sprintf("actual: %d, expected: %d", *vm.CPU.Sockets, *cpuSockets)
@@ -136,22 +136,26 @@ func TowerVCPU(vCPU int32) *int32 {
 	return &vCPU
 }
 
-func TowerCPUCores(cpuCores, vCPU int32) *int32 {
-	if cpuCores <= 0 {
-		cpuCores = vCPU
+func TowerCPUSocketCores(cpuSocketCores, vCPU int32) *int32 {
+	if cpuSocketCores <= 0 {
+		cpuSocketCores = vCPU
 	}
 
-	return &cpuCores
+	return &cpuSocketCores
 }
 
-func TowerCPUSockets(vCPU, cpuCores int32) *int32 {
-	cpuSockets := vCPU / cpuCores
+func TowerCPUSockets(vCPU, cpuSocketCores int32) *int32 {
+	cpuSockets := vCPU / cpuSocketCores
 
 	return &cpuSockets
 }
 
 func ByteToGiB(bytes int64) int32 {
 	return int32(bytes / 1024 / 1024 / 1024)
+}
+
+func ByteToMiB(bytes int64) int64 {
+	return bytes / 1024 / 1024
 }
 
 func IsVMInRecycleBin(vm *models.VM) bool {

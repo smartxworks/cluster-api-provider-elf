@@ -147,14 +147,7 @@ func (r *ElfMachineTemplateReconciler) Reconcile(ctx goctx.Context, req ctrl.Req
 
 // reconcileMachineResources ensures that the resources(disk capacity) of the
 // virtual machines are the same as expected by ElfMachine.
-// TODO: CPU and memory will be supported in the future.
 func (r *ElfMachineTemplateReconciler) reconcileMachineResources(ctx goctx.Context, emtCtx *context.MachineTemplateContext) (reconcile.Result, error) {
-	// The disk size is 0, it means the disk size is the same as the virtual machine template.
-	// So if the capacity is 0, it means that the disk size has not changed and returns directly.
-	if emtCtx.ElfMachineTemplate.Spec.Template.Spec.DiskGiB == 0 {
-		return reconcile.Result{}, nil
-	}
-
 	if ok, err := r.reconcileCPResources(ctx, emtCtx); err != nil {
 		return reconcile.Result{}, err
 	} else if !ok {
@@ -495,12 +488,11 @@ func (r *ElfMachineTemplateReconciler) markElfMachinesToBeUpdatedResources(ctx g
 			return err
 		}
 
-		// Ensure resources are up to date.
-		orignalDiskGiB := elfMachine.Spec.DiskGiB
-		elfMachine.Spec.DiskGiB = elfMachineTemplate.Spec.Template.Spec.DiskGiB
+		orignalDiskGiB, orignalMemoryMiB, orignalNumCPUs, orignalNumCoresPerSocket := ensureResourcesUpToDate(elfMachine, elfMachineTemplate)
 		conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, "")
 
-		log.Info(fmt.Sprintf("Resources of ElfMachine is not up to date, marking for updating resources(disk: %d -> %d)", orignalDiskGiB, elfMachine.Spec.DiskGiB), "elfMachine", elfMachine.Name)
+		log.Info(fmt.Sprintf("Resources of ElfMachine is not up to date, marking for updating resources(disk: %d -> %d, memory: %d -> %d, cpu: %d -> %d, numCoresPerSocket: %d -> %d)",
+			orignalDiskGiB, elfMachine.Spec.DiskGiB, orignalMemoryMiB, elfMachine.Spec.MemoryMiB, orignalNumCPUs, elfMachine.Spec.NumCPUs, orignalNumCoresPerSocket, elfMachine.Spec.NumCoresPerSocket), "elfMachine", elfMachine.Name)
 
 		if err := patchHelper.Patch(ctx, elfMachine); err != nil {
 			return errors.Wrapf(err, "failed to patch ElfMachine %s to mark for updating resources", elfMachine.Name)
@@ -526,12 +518,11 @@ func (r *ElfMachineTemplateReconciler) markElfMachinesResourcesNotUpToDate(ctx g
 			return err
 		}
 
-		// Ensure resources are up to date.
-		orignalDiskGiB := elfMachine.Spec.DiskGiB
-		elfMachine.Spec.DiskGiB = elfMachineTemplate.Spec.Template.Spec.DiskGiB
+		orignalDiskGiB, orignalMemoryMiB, orignalNumCPUs, orignalNumCoresPerSocket := ensureResourcesUpToDate(elfMachine, elfMachineTemplate)
 		conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, anotherMachineHotUpdateInProgressMessage)
 
-		log.Info(fmt.Sprintf("Resources of ElfMachine is not up to date, marking for resources not up to date and waiting for hot updating resources(disk: %d -> %d)", orignalDiskGiB, elfMachine.Spec.DiskGiB), "elfMachine", elfMachine.Name)
+		log.Info(fmt.Sprintf("Resources of ElfMachine is not up to date, marking for resources not up to date and waiting for hot updating resources(disk: %d -> %d, memory: %d -> %d, cpu: %d -> %d, numCoresPerSocket: %d -> %d)",
+			orignalDiskGiB, elfMachine.Spec.DiskGiB, orignalMemoryMiB, elfMachine.Spec.MemoryMiB, orignalNumCPUs, elfMachine.Spec.NumCPUs, orignalNumCoresPerSocket, elfMachine.Spec.NumCoresPerSocket), "elfMachine", elfMachine.Name)
 
 		if err := patchHelper.Patch(ctx, elfMachine); err != nil {
 			return errors.Wrapf(err, "failed to patch ElfMachine %s to mark for resources not up to date", elfMachine.Name)
@@ -539,4 +530,18 @@ func (r *ElfMachineTemplateReconciler) markElfMachinesResourcesNotUpToDate(ctx g
 	}
 
 	return nil
+}
+
+// ensureResourcesUpToDate ensures resources are up to date.
+func ensureResourcesUpToDate(elfMachine *infrav1.ElfMachine, elfMachineTemplate *infrav1.ElfMachineTemplate) (int32, int64, int32, int32) {
+	orignalDiskGiB := elfMachine.Spec.DiskGiB
+	elfMachine.Spec.DiskGiB = elfMachineTemplate.Spec.Template.Spec.DiskGiB
+	orignalMemoryMiB := elfMachine.Spec.MemoryMiB
+	elfMachine.Spec.MemoryMiB = elfMachineTemplate.Spec.Template.Spec.MemoryMiB
+	orignalNumCPUs := elfMachine.Spec.NumCPUs
+	elfMachine.Spec.NumCPUs = elfMachineTemplate.Spec.Template.Spec.NumCPUs
+	orignalNumCoresPerSocket := elfMachine.Spec.NumCoresPerSocket
+	elfMachine.Spec.NumCoresPerSocket = elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket
+
+	return orignalDiskGiB, orignalMemoryMiB, orignalNumCPUs, orignalNumCoresPerSocket
 }

@@ -63,6 +63,10 @@ func (m *ElfMachineTemplateMutation) Handle(ctx goctx.Context, request admission
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
+	if elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket <= 0 {
+		elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket = elfMachineTemplate.Spec.Template.Spec.NumCPUs
+	}
+
 	devices := elfMachineTemplate.Spec.Template.Spec.Network.Devices
 	for i := 0; i < len(devices); i++ {
 		for j := 0; j < len(devices[i].AddressesFromPools); j++ {

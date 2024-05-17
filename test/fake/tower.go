@@ -78,8 +78,8 @@ func NewTowerVMFromElfMachine(elfMachine *infrav1.ElfMachine) *models.VM {
 	vm.Name = service.TowerString(elfMachine.Name)
 	vm.Vcpu = service.TowerVCPU(elfMachine.Spec.NumCPUs)
 	vm.CPU = &models.NestedCPU{
-		Cores:   service.TowerCPUCores(*vm.Vcpu, elfMachine.Spec.NumCoresPerSocket),
-		Sockets: service.TowerCPUSockets(*vm.Vcpu, *service.TowerCPUCores(*vm.Vcpu, elfMachine.Spec.NumCoresPerSocket)),
+		Cores:   service.TowerCPUSocketCores(*vm.Vcpu, elfMachine.Spec.NumCoresPerSocket),
+		Sockets: service.TowerCPUSockets(*vm.Vcpu, *service.TowerCPUSocketCores(*vm.Vcpu, elfMachine.Spec.NumCoresPerSocket)),
 	}
 	vm.Memory = service.TowerMemory(elfMachine.Spec.MemoryMiB)
 	vm.Ha = service.TowerBool(elfMachine.Spec.HA)

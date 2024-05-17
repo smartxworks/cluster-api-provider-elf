@@ -306,6 +306,16 @@ func TestIsResourcesUpToDate(t *testing.T) {
 	g.Expect(IsResourcesUpToDate(emt, elfMachine)).To(gomega.BeTrue())
 	elfMachine.Spec.DiskGiB -= 1
 	g.Expect(IsResourcesUpToDate(emt, elfMachine)).To(gomega.BeFalse())
+
+	fake.SetElfMachineTemplateForElfMachine(elfMachine, emt)
+	g.Expect(IsResourcesUpToDate(emt, elfMachine)).To(gomega.BeTrue())
+	elfMachine.Spec.MemoryMiB -= 1
+	g.Expect(IsResourcesUpToDate(emt, elfMachine)).To(gomega.BeFalse())
+
+	fake.SetElfMachineTemplateForElfMachine(elfMachine, emt)
+	g.Expect(IsResourcesUpToDate(emt, elfMachine)).To(gomega.BeTrue())
+	elfMachine.Spec.NumCPUs -= 1
+	g.Expect(IsResourcesUpToDate(emt, elfMachine)).To(gomega.BeFalse())
 }
 
 func toString(s string) *string {

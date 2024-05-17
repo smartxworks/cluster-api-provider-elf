@@ -63,7 +63,7 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 			},
 		},
 		Errs: field.ErrorList{
-			field.Invalid(field.NewPath("spec", "diskGiB"), 1, diskCapacityCanOnlyBeExpanded),
+			field.Invalid(field.NewPath("spec", "diskGiB"), 1, diskCapacityCanOnlyBeExpandedMsg),
 		},
 	})
 

@@ -102,15 +102,17 @@ type TowerVMService struct {
 
 func (svr *TowerVMService) UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachine) (*models.WithTaskVM, error) {
 	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
-	cpuCores := TowerCPUCores(*vCPU, elfMachine.Spec.NumCoresPerSocket)
-	cpuSockets := TowerCPUSockets(*vCPU, *cpuCores)
+	cpuSocketCores := TowerCPUSocketCores(elfMachine.Spec.NumCoresPerSocket, *vCPU)
+	cpuSockets := TowerCPUSockets(*vCPU, *cpuSocketCores)
+	memory := TowerMemory(elfMachine.Spec.MemoryMiB)
 
 	updateVMParams := clientvm.NewUpdateVMParams()
 	updateVMParams.RequestBody = &models.VMUpdateParams{
 		Data: &models.VMUpdateParamsData{
 			Vcpu:       vCPU,
-			CPUCores:   cpuCores,
+			CPUCores:   cpuSocketCores,
 			CPUSockets: cpuSockets,
+			Memory:     memory,
 		},
 		Where: &models.VMWhereInput{ID: TowerString(*vm.ID)},
 	}
@@ -188,8 +190,8 @@ func (svr *TowerVMService) Clone(
 	}
 
 	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
-	cpuCores := TowerCPUCores(*vCPU, elfMachine.Spec.NumCoresPerSocket)
-	cpuSockets := TowerCPUSockets(*vCPU, *cpuCores)
+	cpuSocketCores := TowerCPUSocketCores(elfMachine.Spec.NumCoresPerSocket, *vCPU)
+	cpuSockets := TowerCPUSockets(*vCPU, *cpuSocketCores)
 
 	gpuDevices := make([]*models.VMGpuOperationParams, len(gpuDeviceInfos))
 	for i := 0; i < len(gpuDeviceInfos); i++ {
@@ -299,7 +301,7 @@ func (svr *TowerVMService) Clone(
 		Description: TowerString(fmt.Sprintf(config.VMDescription, elfCluster.Spec.Tower.Server)),
 		Owner:       owner,
 		Vcpu:        vCPU,
-		CPUCores:    cpuCores,
+		CPUCores:    cpuSocketCores,
 		CPUSockets:  cpuSockets,
 		Memory:      TowerMemory(elfMachine.Spec.MemoryMiB),
 		GpuDevices:  gpuDevices,
