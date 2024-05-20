@@ -188,7 +188,8 @@ func IsUpdatingElfMachineResources(elfMachine *infrav1.ElfMachine) bool {
 func IsResourcesUpToDate(elfMachineTemplate *infrav1.ElfMachineTemplate, elfMachine *infrav1.ElfMachine) bool {
 	if elfMachine.Spec.DiskGiB >= elfMachineTemplate.Spec.Template.Spec.DiskGiB &&
 		elfMachine.Spec.MemoryMiB >= elfMachineTemplate.Spec.Template.Spec.MemoryMiB &&
-		elfMachine.Spec.NumCPUs >= elfMachineTemplate.Spec.Template.Spec.NumCPUs {
+		elfMachine.Spec.NumCPUs >= elfMachineTemplate.Spec.Template.Spec.NumCPUs &&
+		len(elfMachine.Spec.Network.Devices) >= len(elfMachineTemplate.Spec.Template.Spec.Network.Devices) {
 		return true
 	}
 

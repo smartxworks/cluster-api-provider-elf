@@ -1,0 +1,14 @@
+---
+- name: Set network device configuration
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+  - name: Connect network device
+    shell: nmcli device connect ens11
+  - name: Disable network device default route
+    shell: nmcli connection modify ens11 ipv4.never-default yes ipv6.never-default yes
+  - name: Disable network device default DNS
+    shell: echo PEERDNS=no | tee -a /etc/sysconfig/network-scripts/ifcfg-* > /dev/null
+  - name: Up network device
+    shell: nmcli conn up ens11

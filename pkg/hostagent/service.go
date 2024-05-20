@@ -16,6 +16,7 @@ package hostagent
 import (
 	goctx "context"
 	"fmt"
+	"strings"
 	"time"
 
 	agentv1 "github.com/smartxworks/host-config-agent-api/api/v1alpha1"
@@ -27,13 +28,17 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/hostagent/tasks"
 )
 
-const defaultTimeout = 1 * time.Minute
+const (
+	defaultTimeout = 1 * time.Minute
+	// Namespace is the agent namespace.
+	Namespace = "sks-system"
+)
 
-func GetHostJob(ctx goctx.Context, c client.Client, namespace, name string) (*agentv1.HostOperationJob, error) {
+func GetHostJob(ctx goctx.Context, c client.Client, name string) (*agentv1.HostOperationJob, error) {
 	var restartKubeletJob agentv1.HostOperationJob
 	if err := c.Get(ctx, apitypes.NamespacedName{
 		Name:      name,
-		Namespace: "sks-system",
+		Namespace: Namespace,
 	}, &restartKubeletJob); err != nil {
 		return nil, err
 	}
@@ -51,11 +56,15 @@ func GetRestartKubeletJobName(elfMachine *infrav1.ElfMachine) string {
 	return fmt.Sprintf("cape-restart-kubelet-%s-%d-%d-%d", elfMachine.Name, elfMachine.Spec.NumCPUs, elfMachine.Spec.NumCoresPerSocket, elfMachine.Spec.MemoryMiB)
 }
 
+func GetSetNetworkDeviceConfigJobName(elfMachine *infrav1.ElfMachine, mac string) string {
+	return fmt.Sprintf("cape-set-network-device-config-%s-%s", elfMachine.Name, strings.ReplaceAll(mac, ":", ""))
+}
+
 func ExpandRootPartition(ctx goctx.Context, c client.Client, elfMachine *infrav1.ElfMachine) (*agentv1.HostOperationJob, error) {
 	agentJob := &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetExpandRootPartitionJobName(elfMachine),
-			Namespace: "sks-system",
+			Namespace: Namespace,
 		},
 		Spec: agentv1.HostOperationJobSpec{
 			NodeName: elfMachine.Name,
@@ -81,7 +90,7 @@ func RestartMachineKubelet(ctx goctx.Context, c client.Client, elfMachine *infra
 	restartKubeletJob := &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetRestartKubeletJobName(elfMachine),
-			Namespace: "sks-system",
+			Namespace: Namespace,
 		},
 		Spec: agentv1.HostOperationJobSpec{
 			NodeName: elfMachine.Name,
@@ -101,4 +110,30 @@ func RestartMachineKubelet(ctx goctx.Context, c client.Client, elfMachine *infra
 	}
 
 	return restartKubeletJob, nil
+}
+
+func SetNetworkDeviceConfig(ctx goctx.Context, c client.Client, elfMachine *infrav1.ElfMachine, mac string) (*agentv1.HostOperationJob, error) {
+	agentJob := &agentv1.HostOperationJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      GetSetNetworkDeviceConfigJobName(elfMachine, mac),
+			Namespace: Namespace,
+		},
+		Spec: agentv1.HostOperationJobSpec{
+			NodeName: elfMachine.Name,
+			Operation: agentv1.Operation{
+				Ansible: &agentv1.Ansible{
+					LocalPlaybookText: &agentv1.YAMLText{
+						Inline: tasks.SetNetworkDeviceConfig,
+					},
+				},
+				Timeout: metav1.Duration{Duration: defaultTimeout},
+			},
+		},
+	}
+
+	if err := c.Create(ctx, agentJob); err != nil {
+		return nil, err
+	}
+
+	return agentJob, nil
 }

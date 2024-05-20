@@ -29,6 +29,7 @@ const (
 	VMNotFound                = "VM_NOT_FOUND"
 	VMVolumeNotFound          = "VM_VOLUME_NOT_FOUND"
 	VMGPUInfoNotFound         = "VM_GPU_INFO_NOT_FOUND"
+	VMNicFound                = "VM_NIC_NOT_FOUND"
 	VMDuplicate               = "VM_DUPLICATE"
 	TaskNotFound              = "TASK_NOT_FOUND"
 	VlanNotFound              = "VLAN_NOT_FOUND"

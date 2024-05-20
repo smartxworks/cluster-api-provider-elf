@@ -543,5 +543,11 @@ func ensureResourcesUpToDate(elfMachine *infrav1.ElfMachine, elfMachineTemplate 
 	orignalNumCoresPerSocket := elfMachine.Spec.NumCoresPerSocket
 	elfMachine.Spec.NumCoresPerSocket = elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket
 
+	if len(elfMachineTemplate.Spec.Template.Spec.Network.Devices) > len(elfMachine.Spec.Network.Devices) {
+		for i := len(elfMachine.Spec.Network.Devices); i < len(elfMachineTemplate.Spec.Template.Spec.Network.Devices); i++ {
+			elfMachine.Spec.Network.Devices = append(elfMachine.Spec.Network.Devices, elfMachineTemplate.Spec.Template.Spec.Network.Devices[i])
+		}
+	}
+
 	return orignalDiskGiB, orignalMemoryMiB, orignalNumCPUs, orignalNumCoresPerSocket
 }

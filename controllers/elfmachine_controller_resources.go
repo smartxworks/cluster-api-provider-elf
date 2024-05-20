@@ -16,6 +16,7 @@ package controllers
 import (
 	goctx "context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -61,6 +62,10 @@ func (r *ElfMachineReconciler) reconcileVMResources(ctx goctx.Context, machineCt
 	}
 
 	if ok, err := r.expandVMRootPartition(ctx, machineCtx); err != nil || !ok {
+		return ok, err
+	}
+
+	if ok, err := r.reconcieVMNetworkDevices(ctx, machineCtx, vm); err != nil || !ok {
 		return ok, err
 	}
 
@@ -176,7 +181,7 @@ func (r *ElfMachineReconciler) expandVMRootPartition(ctx goctx.Context, machineC
 		return false, err
 	}
 
-	agentJob, err := hostagent.GetHostJob(ctx, kubeClient, machineCtx.ElfMachine.Namespace, hostagent.GetExpandRootPartitionJobName(machineCtx.ElfMachine))
+	agentJob, err := hostagent.GetHostJob(ctx, kubeClient, hostagent.GetExpandRootPartitionJobName(machineCtx.ElfMachine))
 	if err != nil && !apierrors.IsNotFound(err) {
 		return false, err
 	}
@@ -298,7 +303,7 @@ func (r *ElfMachineReconciler) restartKubelet(ctx goctx.Context, machineCtx *con
 		return false, err
 	}
 
-	agentJob, err := hostagent.GetHostJob(ctx, kubeClient, machineCtx.ElfMachine.Namespace, hostagent.GetRestartKubeletJobName(machineCtx.ElfMachine))
+	agentJob, err := hostagent.GetHostJob(ctx, kubeClient, hostagent.GetRestartKubeletJobName(machineCtx.ElfMachine))
 	if err != nil && !apierrors.IsNotFound(err) {
 		return false, err
 	}
@@ -337,6 +342,187 @@ func (r *ElfMachineReconciler) restartKubelet(ctx goctx.Context, machineCtx *con
 		return false, nil
 	default:
 		log.Info("Waiting for expanding CPU and memory job done", "hostAgentJob", agentJob.Name, "jobStatus", agentJob.Status.Phase)
+
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (r *ElfMachineReconciler) reconcieVMNetworkDevices(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) (bool, error) {
+	if !conditions.Has(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition) {
+		return true, nil
+	}
+
+	log := ctrl.LoggerFrom(ctx)
+
+	vmNics, err := machineCtx.VMService.GetVMNics(*vm.ID)
+	if err != nil {
+		return false, err
+	}
+
+	devices := machineCtx.ElfMachine.Spec.Network.Devices
+	if len(devices) > len(vmNics) {
+		return false, r.addVMNetworkDevices(ctx, machineCtx, vm, vmNics)
+	}
+
+	if ok, err := r.setVMNetworkDeviceConfig(ctx, machineCtx, vmNics); err != nil || !ok {
+		return ok, err
+	}
+
+	reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	if reason == "" {
+		return true, nil
+	} else if reason != infrav1.AddingVMNetworkDeviceReason &&
+		reason != infrav1.AddingVMNetworkDeviceFailedReason &&
+		reason != infrav1.SettingVMNetworkDeviceConfigFailedReason &&
+		reason != infrav1.SettingVMNetworkDeviceConfigReason &&
+		reason != infrav1.WaitingForNetworkAddressesReason {
+		return true, nil
+	}
+
+	for i := 0; i < len(devices); i++ {
+		if devices[i].NetworkType == infrav1.NetworkTypeNone {
+			continue
+		}
+
+		if service.GetTowerString(vmNics[i].IPAddress) == "" {
+			message := fmt.Sprintf("waiting for the vm network device %d ready", i)
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityInfo, "message")
+			log.V(1).Info(message)
+
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+func (r *ElfMachineReconciler) addVMNetworkDevices(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM, vmNics []*models.VMNic) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	if reason == "" ||
+		(reason != infrav1.AddingVMNetworkDeviceReason && reason != infrav1.AddingVMNetworkDeviceFailedReason) {
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceReason, clusterv1.ConditionSeverityInfo, "")
+		return nil
+	}
+
+	var newNics []*models.VMNicParams
+	devices := machineCtx.ElfMachine.Spec.Network.Devices
+	for i := len(vmNics); i < len(devices); i++ {
+		device := devices[i]
+
+		vlan, err := machineCtx.VMService.GetVlan(device.Vlan)
+		if err != nil {
+			return err
+		}
+
+		nic := &models.VMNicParams{
+			Model:         models.NewVMNicModel(models.VMNicModelVIRTIO),
+			Enabled:       service.TowerBool(true),
+			Mirror:        service.TowerBool(false),
+			ConnectVlanID: vlan.ID,
+			MacAddress:    service.TowerString(device.MACAddr),
+			SubnetMask:    service.TowerString(device.Netmask),
+		}
+
+		if len(device.IPAddrs) > 0 {
+			nic.IPAddress = service.TowerString(device.IPAddrs[0])
+		}
+
+		newNics = append(newNics, nic)
+	}
+
+	withTaskVM, err := machineCtx.VMService.AddVMNics(*vm.ID, newNics)
+	if err != nil {
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+
+		return errors.Wrapf(err, "failed to trigger add new nic to vm")
+	}
+
+	if reason == infrav1.AddingVMNetworkDeviceFailedReason {
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceReason, clusterv1.ConditionSeverityInfo, "")
+	}
+
+	machineCtx.ElfMachine.SetTask(*withTaskVM.TaskID)
+
+	log.Info("Waiting for the vm to be added new nic", "taskRef", machineCtx.ElfMachine.Status.TaskRef)
+
+	return nil
+}
+
+func (r *ElfMachineReconciler) setVMNetworkDeviceConfig(ctx goctx.Context, machineCtx *context.MachineContext, vmNics []*models.VMNic) (bool, error) {
+	reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	if reason == "" {
+		return true, nil
+	} else if reason != infrav1.AddingVMNetworkDeviceReason &&
+		reason != infrav1.AddingVMNetworkDeviceFailedReason &&
+		reason != infrav1.SettingVMNetworkDeviceConfigReason &&
+		reason != infrav1.SettingVMNetworkDeviceConfigFailedReason {
+		return true, nil
+	}
+
+	if reason != infrav1.SettingVMNetworkDeviceConfigFailedReason {
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.SettingVMNetworkDeviceConfigReason, clusterv1.ConditionSeverityInfo, "")
+	}
+
+	log := ctrl.LoggerFrom(ctx)
+
+	if machineCtx.Machine.Status.NodeInfo == nil {
+		log.Info("Waiting for node exists for host agent set vm network device configuration")
+
+		return false, nil
+	}
+
+	kubeClient, err := capiremote.NewClusterClient(ctx, "", r.Client, client.ObjectKey{Namespace: machineCtx.Cluster.Namespace, Name: machineCtx.Cluster.Name})
+	if err != nil {
+		return false, err
+	}
+
+	sort.Slice(vmNics, func(i, j int) bool {
+		return *vmNics[i].Order <= *vmNics[j].Order
+	})
+
+	agentJob, err := hostagent.GetHostJob(ctx, kubeClient, hostagent.GetSetNetworkDeviceConfigJobName(machineCtx.ElfMachine, *vmNics[len(vmNics)-1].MacAddress))
+	if err != nil && !apierrors.IsNotFound(err) {
+		return false, err
+	}
+
+	if agentJob == nil {
+		agentJob, err = hostagent.SetNetworkDeviceConfig(ctx, kubeClient, machineCtx.ElfMachine, *vmNics[len(vmNics)-1].MacAddress)
+		if err != nil {
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.SettingVMNetworkDeviceConfigFailedReason, clusterv1.ConditionSeverityInfo, err.Error())
+
+			return false, err
+		}
+
+		log.Info("Waiting for setting network device configuration", "hostAgentJob", agentJob.Name)
+
+		return false, nil
+	}
+
+	switch agentJob.Status.Phase {
+	case agentv1.PhaseSucceeded:
+		log.Info("Set network device configuration succeeded", "hostAgentJob", agentJob.Name)
+	case agentv1.PhaseFailed:
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.SettingVMNetworkDeviceConfigFailedReason, clusterv1.ConditionSeverityWarning, agentJob.Status.FailureMessage)
+		log.Info("Set network device configuration failed, will try again after three minutes", "hostAgentJob", agentJob.Name, "failureMessage", agentJob.Status.FailureMessage)
+
+		lastExecutionTime := agentJob.Status.LastExecutionTime
+		if lastExecutionTime == nil {
+			lastExecutionTime = &agentJob.CreationTimestamp
+		}
+		// Three minutes after the job fails, delete the job and try again.
+		if time.Now().After(lastExecutionTime.Add(3 * time.Minute)) {
+			if err := kubeClient.Delete(ctx, agentJob); err != nil {
+				return false, errors.Wrapf(err, "failed to delete set network device configuration job %s/%s for retry", agentJob.Namespace, agentJob.Name)
+			}
+		}
+
+		return false, nil
+	default:
+		log.Info("Waiting for setting network device configuration job done", "hostAgentJob", agentJob.Name, "jobStatus", agentJob.Status.Phase)
 
 		return false, nil
 	}

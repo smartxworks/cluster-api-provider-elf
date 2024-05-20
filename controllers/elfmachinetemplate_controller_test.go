@@ -522,13 +522,15 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 func setResourcesNoUpToDate(elfMachine *infrav1.ElfMachine, emt *infrav1.ElfMachineTemplate) {
 	fake.SetElfMachineTemplateForElfMachine(elfMachine, emt)
 	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	n := seededRand.Intn(3)
+	n := seededRand.Intn(4)
 	switch n {
 	case 0:
 		elfMachine.Spec.DiskGiB -= 1
 	case 1:
 		elfMachine.Spec.MemoryMiB -= 1
-	default:
+	case 2:
 		elfMachine.Spec.NumCPUs -= 1
+	default:
+		elfMachine.Spec.Network.Devices = elfMachine.Spec.Network.Devices[:len(elfMachine.Spec.Network.Devices)-1]
 	}
 }
