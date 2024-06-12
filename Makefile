@@ -25,7 +25,7 @@ VERSION ?= $(shell cat clusterctl-settings.json | jq .config.nextVersion -r)
 #
 # Go.
 #
-GO_VERSION ?= 1.21.9
+GO_VERSION ?= 1.21.11
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
