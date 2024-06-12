@@ -54,7 +54,7 @@ func NewTowerHost() *models.Host {
 		LocalID:                &localID,
 		Name:                   &id,
 		Status:                 models.NewHostStatus(models.HostStatusCONNECTEDHEALTHY),
-		AllocatableMemoryBytes: pointer.Int64(1 * 1024 * 1024),
+		AllocatableMemoryBytes: pointer.Int64(MemoryMiB * 1024 * 1024),
 	}
 }
 
@@ -69,6 +69,11 @@ func NewTowerVM() *models.VM {
 		Name:              &id,
 		Status:            &status,
 		EntityAsyncStatus: (*models.EntityAsyncStatus)(pointer.String("CREATING")),
+		CPU: &models.NestedCPU{
+			Cores:   pointer.Int32(NumCPUs),
+			Sockets: pointer.Int32(NumCPUs / NumCoresPerSocket),
+		},
+		Memory: service.TowerMemory(MemoryMiB),
 	}
 }
 
@@ -99,13 +104,16 @@ func NewTowerVMNic(order int) *models.VMNic {
 	}
 }
 
-func NewTowerTask() *models.Task {
+func NewTowerTask(status models.TaskStatus) *models.Task {
 	id := uuid.New().String()
-	status := models.TaskStatusPENDING
+	st := models.NewTaskStatus(models.TaskStatusPENDING)
+	if status != "" {
+		st = models.NewTaskStatus(status)
+	}
 
 	return &models.Task{
 		ID:     &id,
-		Status: &status,
+		Status: st,
 	}
 }
 

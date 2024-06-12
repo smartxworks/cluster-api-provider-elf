@@ -49,7 +49,7 @@ func TestGetControlPlaneElfMachinesInCluster(t *testing.T) {
 	elfCluster, cluster := fake.NewClusterObjects()
 	elfMachine1, _ := fake.NewMachineObjects(elfCluster, cluster)
 	elfMachine2, _ := fake.NewMachineObjects(elfCluster, cluster)
-	fake.ToControlPlaneMachine(elfMachine1, fake.NewKCP())
+	fake.ToCPMachine(elfMachine1, fake.NewKCP())
 	ctrlMgrCtx := fake.NewControllerManagerContext(elfMachine1, elfMachine2)
 
 	t.Run("should return Control Plane ElfMachines", func(t *testing.T) {
@@ -65,7 +65,7 @@ func TestIsControlPlaneMachine(t *testing.T) {
 	elfCluster, cluster := fake.NewClusterObjects()
 	_, machine1 := fake.NewMachineObjects(elfCluster, cluster)
 	_, machine2 := fake.NewMachineObjects(elfCluster, cluster)
-	fake.ToControlPlaneMachine(machine1, fake.NewKCP())
+	fake.ToCPMachine(machine1, fake.NewKCP())
 	fake.ToWorkerMachine(machine2, fake.NewMD())
 
 	t.Run("CP Machine returns true, Worker node returns false", func(t *testing.T) {
@@ -83,7 +83,7 @@ func TestGetNodeGroupName(t *testing.T) {
 	kcp.Name = fmt.Sprintf("%s-kcp", cluster.Name)
 	md := fake.NewMD()
 	md.Name = fmt.Sprintf("%s-md", cluster.Name)
-	fake.ToControlPlaneMachine(machine1, kcp)
+	fake.ToCPMachine(machine1, kcp)
 	fake.ToWorkerMachine(machine2, md)
 
 	t.Run("CP Machine returns true, Worker node returns false", func(t *testing.T) {
@@ -252,7 +252,7 @@ func TestGetControlPlaneMachinesForCluster(t *testing.T) {
 
 	kcp := fake.NewKCP()
 	elfCluster, cluster, _, machine, _ := fake.NewClusterAndMachineObjects()
-	fake.ToControlPlaneMachine(machine, kcp)
+	fake.ToCPMachine(machine, kcp)
 	_, machine2 := fake.NewMachineObjects(elfCluster, cluster)
 	ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, machine, machine2)
 	machines, err := GetControlPlaneMachinesForCluster(goctx.TODO(), ctrlMgrCtx.Client, cluster)

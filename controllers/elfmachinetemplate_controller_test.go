@@ -236,8 +236,8 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 
 			logBuffer.Reset()
 			updatingElfMachine, updatingMachine := fake.NewMachineObjects(elfCluster, cluster)
-			fake.ToControlPlaneMachine(updatingElfMachine, kcp)
-			fake.ToControlPlaneMachine(updatingMachine, kcp)
+			fake.ToCPMachine(updatingElfMachine, kcp)
+			fake.ToCPMachine(updatingMachine, kcp)
 			fake.SetElfMachineTemplateForElfMachine(updatingElfMachine, emt)
 			conditions.MarkFalse(updatingElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, "")
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kcp,
@@ -255,8 +255,8 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			kcp.Spec.Replicas = pointer.Int32(3)
 			kcp.Status.Replicas = 3
 			kcp.Status.UpdatedReplicas = 2
-			fake.ToControlPlaneMachine(elfMachine, kcp)
-			fake.ToControlPlaneMachine(machine, kcp)
+			fake.ToCPMachine(elfMachine, kcp)
+			fake.ToCPMachine(machine, kcp)
 			elfMachine.Spec.DiskGiB -= 1
 			machine.Status.NodeRef = &corev1.ObjectReference{}
 			conditions.MarkTrue(machine, controlplanev1.MachineAPIServerPodHealthyCondition)
@@ -311,8 +311,8 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			kcp.Spec.Replicas = pointer.Int32(3)
 			kcp.Status.Replicas = 3
 			kcp.Status.UpdatedReplicas = 3
-			fake.ToControlPlaneMachine(elfMachine, kcp)
-			fake.ToControlPlaneMachine(machine, kcp)
+			fake.ToCPMachine(elfMachine, kcp)
+			fake.ToCPMachine(machine, kcp)
 			ctrlutil.AddFinalizer(machine, infrav1.MachineFinalizer)
 			machine.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
@@ -352,8 +352,8 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			kcp.Spec.Replicas = pointer.Int32(3)
 			kcp.Status.Replicas = 3
 			kcp.Status.UpdatedReplicas = 3
-			fake.ToControlPlaneMachine(elfMachine, kcp)
-			fake.ToControlPlaneMachine(machine, kcp)
+			fake.ToCPMachine(elfMachine, kcp)
+			fake.ToCPMachine(machine, kcp)
 			machine.Status.NodeRef = &corev1.ObjectReference{}
 			conditions.MarkTrue(machine, controlplanev1.MachineAPIServerPodHealthyCondition)
 			conditions.MarkTrue(machine, controlplanev1.MachineControllerManagerPodHealthyCondition)

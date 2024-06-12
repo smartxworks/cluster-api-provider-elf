@@ -178,7 +178,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.VMDisks = []*models.NestedVMDisk{{ID: vmDisk.ID}}
 			mockVMService.EXPECT().GetVMDisks([]string{*vmDisk.ID}).Return([]*models.VMDisk{vmDisk}, nil)
 			mockVMService.EXPECT().GetVMVolume(*vmVolume.ID).Return(vmVolume, nil)
-			task := fake.NewTowerTask()
+			task := fake.NewTowerTask("")
 			withTaskVMVolume := fake.NewWithTaskVMVolume(vmVolume, task)
 			mockVMService.EXPECT().ResizeVMVolume(*vmVolume.ID, *service.TowerDisk(20)).Return(withTaskVMVolume, nil)
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
@@ -226,7 +226,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err.Error()).To(ContainSubstring("failed to trigger expand size from"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMDiskFailedReason}})
 
-			task := fake.NewTowerTask()
+			task := fake.NewTowerTask("")
 			withTaskVMVolume := fake.NewWithTaskVMVolume(vmVolume, task)
 			mockVMService.EXPECT().ResizeVMVolume(*vmVolume.ID, int64(10)).Return(withTaskVMVolume, nil)
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")

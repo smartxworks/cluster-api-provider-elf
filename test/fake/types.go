@@ -49,8 +49,14 @@ const (
 	// ElfMachineKind is the fake elf machine kind.
 	ElfMachineKind = "ElfMachine"
 
+	// NumCPUs is the default CPU number.
+	NumCPUs = 6
+	// NumCoresPerSocket is the default CPU number of socket.
+	NumCoresPerSocket = 6
 	// DiskGiB is the default disk size.
 	DiskGiB = 60
+	// MemoryMiB is the default memory size.
+	MemoryMiB = 1024 * 7
 )
 
 func NewClusterObjects() (*infrav1.ElfCluster, *clusterv1.Cluster) {
@@ -117,9 +123,9 @@ func NewElfMachine(elfCluster *infrav1.ElfCluster) *infrav1.ElfMachine {
 		},
 		Spec: infrav1.ElfMachineSpec{
 			HA:                true,
-			NumCPUs:           1,
-			NumCoresPerSocket: 1,
-			MemoryMiB:         1,
+			NumCPUs:           NumCPUs,
+			NumCoresPerSocket: NumCoresPerSocket,
+			MemoryMiB:         MemoryMiB,
 			DiskGiB:           DiskGiB,
 			Network: infrav1.NetworkSpec{
 				Devices: []infrav1.NetworkDeviceSpec{
@@ -210,7 +216,7 @@ func InitOwnerReferences(
 	}
 }
 
-func ToControlPlaneMachine(machine metav1.Object, kcp *controlplanev1.KubeadmControlPlane) {
+func ToCPMachine(machine metav1.Object, kcp *controlplanev1.KubeadmControlPlane) {
 	labels := machine.GetLabels()
 	if labels == nil {
 		labels = make(map[string]string)
