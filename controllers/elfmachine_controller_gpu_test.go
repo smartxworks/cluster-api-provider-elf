@@ -24,7 +24,6 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/pkg/errors"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,7 +60,6 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 
 	gpuModel := "A16"
 	vGPUType := "V100"
-	unexpectedError := errors.New("unexpected error")
 
 	BeforeEach(func() {
 		logBuffer = new(bytes.Buffer)
@@ -351,7 +349,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			gpuVMInfo := fake.NewTowerGPUVMInfo()
 			gpuVMInfo.Host = &models.NestedHost{ID: host.ID}
 			gpuVMInfos := service.NewGPUVMInfos(gpuVMInfo)
-			task := fake.NewTowerTask()
+			task := fake.NewTowerTask("")
 			withTaskVM := fake.NewWithTaskVM(vm, task)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -385,7 +383,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			gpuVMInfo := fake.NewTowerGPUVMInfo()
 			gpuVMInfo.Host = &models.NestedHost{ID: host.ID}
 			gpuVMInfos := service.NewGPUVMInfos(gpuVMInfo)
-			task := fake.NewTowerTask()
+			task := fake.NewTowerTask("")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Times(2).Return(service.NewHosts(host), nil)
@@ -417,7 +415,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			elfMachine.Status.VMRef = *vm.LocalID
 			vm.GpuDevices = []*models.NestedGpuDevice{{ID: service.TowerString(fake.ID()), Name: service.TowerString("A16")}}
-			task := fake.NewTowerTask()
+			task := fake.NewTowerTask("")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			mockVMService.EXPECT().RemoveGPUDevices(elfMachine.Status.VMRef, gomock.Len(1)).Return(nil, unexpectedError)
@@ -466,7 +464,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 		It("should set clusterAutoscaler GPU label for node", func() {
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
-			vm := fake.NewTowerVM()
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			ctrlMgrCtx := &context.ControllerManagerContext{
 				Client:                  testEnv.Client,
 				Name:                    fake.ControllerManagerName,

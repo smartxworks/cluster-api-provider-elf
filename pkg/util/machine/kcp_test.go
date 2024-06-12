@@ -31,7 +31,7 @@ func TestGetKCPByMachine(t *testing.T) {
 	elfCluster, cluster := fake.NewClusterObjects()
 	_, cpMachine := fake.NewMachineObjects(elfCluster, cluster)
 	kubeadmCP := fake.NewKCP()
-	fake.ToControlPlaneMachine(cpMachine, kubeadmCP)
+	fake.ToCPMachine(cpMachine, kubeadmCP)
 	ctrlMgrCtx := fake.NewControllerManagerContext(kubeadmCP)
 	t.Run("should return kcp", func(t *testing.T) {
 		kcp, err := GetKCPByMachine(ctx, ctrlMgrCtx.Client, cpMachine)

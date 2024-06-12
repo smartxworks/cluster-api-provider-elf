@@ -173,7 +173,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 		})
 
 		It("should delete labels and remove elfcluster finalizer", func() {
-			task := fake.NewTowerTask()
+			task := fake.NewTowerTask("")
 			ctrlMgrCtx := fake.NewControllerManagerContext(cluster, elfCluster)
 			fake.InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
 
@@ -266,7 +266,6 @@ var _ = Describe("ElfClusterReconciler", func() {
 			}
 
 			logBuffer.Reset()
-			unexpectedError := errors.New("unexpected error")
 			keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace()}
 			mockVMService.EXPECT().CleanUnusedLabels(keys).Return(nil, unexpectedError)
 			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
