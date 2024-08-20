@@ -129,19 +129,19 @@ func canCreatePlacementGroup(groupName string) bool {
 }
 
 func getKeyForPlacementGroup(name string) string {
-	return fmt.Sprintf("pg:%s", name)
+	return "pg:" + name
 }
 
 func getKeyForPlacementGroupDuplicate(name string) string {
-	return fmt.Sprintf("pg:duplicate:%s", name)
+	return "pg:duplicate:" + name
 }
 
 func getKeyForVM(name string) string {
-	return fmt.Sprintf("vm:%s", name)
+	return "vm:" + name
 }
 
 func getKeyForVMDuplicate(name string) string {
-	return fmt.Sprintf("vm:duplicate:%s", name)
+	return "vm:duplicate:" + name
 }
 
 /* Label */
@@ -149,11 +149,11 @@ func getKeyForVMDuplicate(name string) string {
 var labelOperationLock sync.Mutex
 
 func getKeyForGCLabel(tower string) string {
-	return fmt.Sprintf("label:gc:%s", tower)
+	return "label:gc:" + tower
 }
 
 func getKeyForGCLabelTime(tower string) string {
-	return fmt.Sprintf("label:gc:time:%s", tower)
+	return "label:gc:time:" + tower
 }
 
 // acquireLockForGCTowerLabels returns whether label gc operation can be performed.
@@ -214,7 +214,7 @@ type lockedVMGPUs struct {
 
 func (g *lockedVMGPUs) GetGPUIDs() []string {
 	ids := make([]string, len(g.GPUDevices))
-	for i := 0; i < len(g.GPUDevices); i++ {
+	for i := range len(g.GPUDevices) {
 		ids[i] = g.GPUDevices[i].ID
 	}
 
@@ -223,7 +223,7 @@ func (g *lockedVMGPUs) GetGPUIDs() []string {
 
 func (g *lockedVMGPUs) GetGPUDeviceInfos() []*service.GPUDeviceInfo {
 	gpuDeviceInfos := make([]*service.GPUDeviceInfo, len(g.GPUDevices))
-	for i := 0; i < len(g.GPUDevices); i++ {
+	for i := range len(g.GPUDevices) {
 		gpuDeviceInfos[i] = &service.GPUDeviceInfo{ID: g.GPUDevices[i].ID, AllocatedCount: g.GPUDevices[i].Count}
 	}
 
@@ -246,7 +246,7 @@ func lockGPUDevicesForVM(clusterID, vmName, hostID string, gpuDeviceInfos []*ser
 
 	availableCountMap := make(map[string]int32)
 	lockedGPUs := lockedVMGPUs{HostID: hostID, LockedAt: time.Now(), GPUDevices: make([]lockedGPUDevice, len(gpuDeviceInfos))}
-	for i := 0; i < len(gpuDeviceInfos); i++ {
+	for i := range len(gpuDeviceInfos) {
 		availableCountMap[gpuDeviceInfos[i].ID] = gpuDeviceInfos[i].AvailableCount - gpuDeviceInfos[i].AllocatedCount
 		lockedGPUs.GPUDevices[i] = lockedGPUDevice{ID: gpuDeviceInfos[i].ID, Count: gpuDeviceInfos[i].AllocatedCount}
 	}
@@ -330,7 +330,7 @@ func getLockedClusterGPUsWithoutLock(clusterID string) lockedClusterGPUMap {
 func getLockedCountMapWithoutLock(lockedClusterGPUs lockedClusterGPUMap) map[string]int32 {
 	lockedCountMap := make(map[string]int32)
 	for _, lockedGPUs := range lockedClusterGPUs {
-		for i := 0; i < len(lockedGPUs.GPUDevices); i++ {
+		for i := range len(lockedGPUs.GPUDevices) {
 			if count, ok := lockedCountMap[lockedGPUs.GPUDevices[i].ID]; ok {
 				lockedCountMap[lockedGPUs.GPUDevices[i].ID] = count + lockedGPUs.GPUDevices[i].Count
 			} else {

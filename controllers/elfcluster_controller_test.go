@@ -270,7 +270,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			mockVMService.EXPECT().CleanUnusedLabels(keys).Return(nil, unexpectedError)
 			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			reconciler.cleanOrphanLabels(ctx, clusterCtx)
-			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Warning: failed to clean orphan labels in Tower %s", elfCluster.Spec.Tower.Server)))
+			Expect(logBuffer.String()).To(ContainSubstring("Warning: failed to clean orphan labels in Tower " + elfCluster.Spec.Tower.Server))
 
 			logBuffer.Reset()
 			mockVMService.EXPECT().CleanUnusedLabels(keys).Return(nil, nil)

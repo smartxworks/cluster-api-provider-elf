@@ -6,7 +6,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -192,7 +192,7 @@ func TestMaxSurge(t *testing.T) {
 
 			deployment := clusterv1.MachineDeployment{
 				Spec: clusterv1.MachineDeploymentSpec{
-					Replicas: pointer.Int32(1),
+					Replicas: ptr.To[int32](1),
 					Strategy: tc.strategy,
 				},
 			}
@@ -241,7 +241,7 @@ func TestIsMDInRollingUpdate(t *testing.T) {
 
 			deployment := clusterv1.MachineDeployment{
 				Spec: clusterv1.MachineDeploymentSpec{
-					Replicas: pointer.Int32(tc.specReplicas),
+					Replicas: ptr.To[int32](tc.specReplicas),
 				},
 				Status: clusterv1.MachineDeploymentStatus{
 					Replicas:        tc.statusReplicas,

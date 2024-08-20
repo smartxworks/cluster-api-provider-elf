@@ -17,7 +17,6 @@ limitations under the License.
 package controllers
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"testing"
@@ -36,6 +35,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/conditions"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
@@ -74,15 +74,9 @@ func TestMain(m *testing.M) {
 func setup() {
 	// set log
 	klog.InitFlags(nil)
-	if err := flag.Set("logtostderr", "false"); err != nil {
-		_ = fmt.Errorf("Error setting logtostderr flag")
-	}
-	if err := flag.Set("v", "6"); err != nil {
-		_ = fmt.Errorf("Error setting v flag")
-	}
-	if err := flag.Set("alsologtostderr", "false"); err != nil {
-		_ = fmt.Errorf("Error setting alsologtostderr flag")
-	}
+	klog.SetOutput(GinkgoWriter)
+	ctrl.SetLogger(klog.Background())
+	ctrllog.SetLogger(klog.Background())
 
 	utilruntime.Must(infrav1.AddToScheme(cgscheme.Scheme))
 	utilruntime.Must(clusterv1.AddToScheme(cgscheme.Scheme))

@@ -24,7 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/storage/names"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -101,7 +101,7 @@ func NewMachineObjects(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluste
 		},
 		Spec: clusterv1.MachineSpec{
 			ClusterName: cluster.Name,
-			Version:     pointer.String("1.26.0"),
+			Version:     ptr.To("1.26.0"),
 			InfrastructureRef: corev1.ObjectReference{
 				APIVersion: infrav1.GroupVersion.String(),
 				Kind:       ElfMachineKind,
@@ -180,7 +180,7 @@ func NewMD() *clusterv1.MachineDeployment {
 			Name:      names.SimpleNameGenerator.GenerateName("md-"),
 			Namespace: Namespace,
 		},
-		Spec:   clusterv1.MachineDeploymentSpec{Replicas: pointer.Int32(1)},
+		Spec:   clusterv1.MachineDeploymentSpec{Replicas: ptr.To[int32](1)},
 		Status: clusterv1.MachineDeploymentStatus{},
 	}
 }
