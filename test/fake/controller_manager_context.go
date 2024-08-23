@@ -19,6 +19,7 @@ package fake
 import (
 	agentv1 "github.com/smartxworks/host-config-agent-api/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
@@ -51,11 +52,11 @@ const (
 // initialize it with a slice of runtime.Object.
 func NewControllerManagerContext(initObjects ...client.Object) *context.ControllerManagerContext {
 	scheme := runtime.NewScheme()
-	_ = cgscheme.AddToScheme(scheme)
-	_ = clusterv1.AddToScheme(scheme)
-	_ = controlplanev1.AddToScheme(scheme)
-	_ = infrav1.AddToScheme(scheme)
-	_ = agentv1.AddToScheme(scheme)
+	utilruntime.Must(cgscheme.AddToScheme(scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
+	utilruntime.Must(controlplanev1.AddToScheme(scheme))
+	utilruntime.Must(infrav1.AddToScheme(scheme))
+	utilruntime.Must(agentv1.AddToScheme(scheme))
 
 	clientWithObjects := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(
 		&infrav1.ElfCluster{},
@@ -63,8 +64,7 @@ func NewControllerManagerContext(initObjects ...client.Object) *context.Controll
 	).WithObjects(initObjects...).Build()
 
 	return &context.ControllerManagerContext{
-		Client: clientWithObjects,
-		// Logger:                  ctrllog.Log.WithName(ControllerManagerName),
+		Client:                  clientWithObjects,
 		Scheme:                  scheme,
 		Namespace:               ControllerManagerNamespace,
 		Name:                    ControllerManagerName,

@@ -31,9 +31,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	capierrors "sigs.k8s.io/cluster-api/errors"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -540,15 +539,15 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 			if canRetry, err := canRetryVMOperation(ctx, machineCtx, r.Client); err != nil {
 				return nil, false, err
 			} else if !canRetry {
-				log.V(1).Info(fmt.Sprintf("%s, skip creating VM", message))
+				log.V(1).Info(message + ", skip creating VM")
 				return nil, false, nil
 			}
 
-			log.V(1).Info(fmt.Sprintf("%s and the retry silence period passes, will try to create the VM again", message))
+			log.V(1).Info(message + " and the retry silence period passes, will try to create the VM again")
 		}
 
 		if ok, msg := acquireTicketForCreateVM(machineCtx.ElfMachine.Name, machineutil.IsControlPlaneMachine(machineCtx.ElfMachine)); !ok {
-			log.V(1).Info(fmt.Sprintf("%s, skip creating VM", msg))
+			log.V(1).Info(msg + ", skip creating VM")
 			return nil, false, nil
 		}
 
@@ -644,8 +643,8 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 	// The VM was moved to the recycle bin. Treat the VM as deleted, and will not reconganize it even if it's moved back from the recycle bin.
 	if service.IsVMInRecycleBin(vm) {
 		message := fmt.Sprintf("The VM %s was moved to the Tower recycle bin by users, so treat it as deleted.", machineCtx.ElfMachine.Status.VMRef)
-		machineCtx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.MovedToRecycleBinError)
-		machineCtx.ElfMachine.Status.FailureMessage = pointer.String(message)
+		machineCtx.ElfMachine.Status.FailureReason = ptr.To(capeerrors.MovedToRecycleBinError)
+		machineCtx.ElfMachine.Status.FailureMessage = ptr.To(message)
 		machineCtx.ElfMachine.SetVM("")
 		log.Error(stderrors.New(message), "")
 
@@ -700,8 +699,8 @@ func (r *ElfMachineReconciler) getVM(ctx goctx.Context, machineCtx *context.Mach
 		}
 
 		// If the machine was not found by UUID and timed out it means that it got deleted directly
-		machineCtx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.RemovedFromInfrastructureError)
-		machineCtx.ElfMachine.Status.FailureMessage = pointer.String(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", machineCtx.ElfMachine.Status.VMRef))
+		machineCtx.ElfMachine.Status.FailureReason = ptr.To(capeerrors.RemovedFromInfrastructureError)
+		machineCtx.ElfMachine.Status.FailureMessage = ptr.To(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", machineCtx.ElfMachine.Status.VMRef))
 		log.Error(err, fmt.Sprintf("failed to get VM by UUID %s in %s", machineCtx.ElfMachine.Status.VMRef, infrav1.VMDisconnectionTimeout.String()), "message", machineCtx.ElfMachine.Status.FailureMessage)
 
 		return nil, err
@@ -779,7 +778,7 @@ func (r *ElfMachineReconciler) reconcileVMStatus(ctx goctx.Context, machineCtx *
 		// See issue http://jira.smartx.com/browse/SKS-1351 for details.
 		return false, r.powerOffVM(ctx, machineCtx)
 	default:
-		log.Info(fmt.Sprintf("The VM is in an unexpected status %s", string(*vm.Status)), "vmRef", machineCtx.ElfMachine.Status.VMRef)
+		log.Info("The VM is in an unexpected status "+string(*vm.Status), "vmRef", machineCtx.ElfMachine.Status.VMRef)
 
 		return false, nil
 	}
@@ -814,7 +813,7 @@ func (r *ElfMachineReconciler) powerOffVM(ctx goctx.Context, machineCtx *context
 	log := ctrl.LoggerFrom(ctx)
 
 	if ok := acquireTicketForUpdatingVM(machineCtx.ElfMachine.Name); !ok {
-		log.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip powering off VM %s", machineCtx.ElfMachine.Status.VMRef))
+		log.V(1).Info("The VM operation reaches rate limit, skip powering off VM " + machineCtx.ElfMachine.Status.VMRef)
 
 		return nil
 	}
@@ -849,11 +848,11 @@ func (r *ElfMachineReconciler) powerOnVM(ctx goctx.Context, machineCtx *context.
 			return nil
 		}
 
-		log.V(1).Info(fmt.Sprintf("%s and the retry silence period passes, will try to power on the VM again", message))
+		log.V(1).Info(message + " and the retry silence period passes, will try to power on the VM again")
 	}
 
 	if ok := acquireTicketForUpdatingVM(machineCtx.ElfMachine.Name); !ok {
-		log.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip power on VM %s", machineCtx.ElfMachine.Status.VMRef))
+		log.V(1).Info("The VM operation reaches rate limit, skip power on VM " + machineCtx.ElfMachine.Status.VMRef)
 
 		return nil
 	}
@@ -885,7 +884,7 @@ func (r *ElfMachineReconciler) updateVM(ctx goctx.Context, machineCtx *context.M
 	log := ctrl.LoggerFrom(ctx)
 
 	if ok := acquireTicketForUpdatingVM(machineCtx.ElfMachine.Name); !ok {
-		log.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip updating VM %s", machineCtx.ElfMachine.Status.VMRef))
+		log.V(1).Info("The VM operation reaches rate limit, skip updating VM " + machineCtx.ElfMachine.Status.VMRef)
 
 		return nil
 	}
@@ -1005,8 +1004,8 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx goctx.Context, machineC
 	conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, errorMessage)
 
 	if service.IsCloudInitConfigError(errorMessage) {
-		machineCtx.ElfMachine.Status.FailureReason = capierrors.MachineStatusErrorPtr(capeerrors.CloudInitConfigError)
-		machineCtx.ElfMachine.Status.FailureMessage = pointer.String(fmt.Sprintf("VM cloud-init config error: %s", service.FormatCloudInitError(errorMessage)))
+		machineCtx.ElfMachine.Status.FailureReason = ptr.To(capeerrors.CloudInitConfigError)
+		machineCtx.ElfMachine.Status.FailureMessage = ptr.To("VM cloud-init config error: " + service.FormatCloudInitError(errorMessage))
 	}
 
 	log.Error(errors.New("VM task failed"), "", "vmRef", vmRef, "taskRef", taskRef, "taskErrorMessage", errorMessage, "taskErrorCode", service.GetTowerString(task.ErrorCode), "taskDescription", service.GetTowerString(task.Description))
@@ -1038,13 +1037,13 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx goctx.Context, machineC
 		setVMDuplicate(machineCtx.ElfMachine.Name)
 	case service.IsStorageInsufficientError(errorMessage):
 		recordElfClusterStorageInsufficient(machineCtx, true)
-		message := fmt.Sprintf("Insufficient storage detected for the ELF cluster %s", machineCtx.ElfCluster.Spec.Cluster)
+		message := "Insufficient storage detected for the ELF cluster " + machineCtx.ElfCluster.Spec.Cluster
 		log.Info(message)
 
 		return errors.New(message)
 	case service.IsMemoryInsufficientError(errorMessage):
 		recordElfClusterMemoryInsufficient(machineCtx, true)
-		message := fmt.Sprintf("Insufficient memory detected for the ELF cluster %s", machineCtx.ElfCluster.Spec.Cluster)
+		message := "Insufficient memory detected for the ELF cluster " + machineCtx.ElfCluster.Spec.Cluster
 		log.Info(message)
 
 		return errors.New(message)
@@ -1075,7 +1074,7 @@ func (r *ElfMachineReconciler) reconcileProviderID(ctx goctx.Context, machineCtx
 	}
 
 	if machineCtx.ElfMachine.Spec.ProviderID == nil || *machineCtx.ElfMachine.Spec.ProviderID != providerID {
-		machineCtx.ElfMachine.Spec.ProviderID = pointer.String(providerID)
+		machineCtx.ElfMachine.Spec.ProviderID = ptr.To(providerID)
 
 		log.Info("updated providerID", "providerID", providerID)
 	}
@@ -1185,7 +1184,7 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx goctx.Context, machineCtx *c
 		return false, err
 	}
 
-	for i := 0; i < len(nics); i++ {
+	for i := range len(nics) {
 		nic := nics[i]
 		ip := service.GetTowerString(nic.IPAddress)
 
@@ -1281,7 +1280,7 @@ func (r *ElfMachineReconciler) reconcileLabels(ctx goctx.Context, machineCtx *co
 
 	// If the virtual machine has been labeled with managed label,
 	// it is considered that all labels have been labeled.
-	for i := 0; i < len(vm.Labels); i++ {
+	for i := range len(vm.Labels) {
 		if *vm.Labels[i].ID == *capeManagedLabel.ID {
 			return true, nil
 		}
@@ -1429,14 +1428,14 @@ func (r *ElfMachineReconciler) deleteDuplicateVMs(ctx goctx.Context, machineCtx 
 
 	if machineCtx.ElfMachine.Status.VMRef == "" {
 		vmIDs := make([]string, 0, len(vms))
-		for i := 0; i < len(vms); i++ {
+		for i := range len(vms) {
 			vmIDs = append(vmIDs, *vms[i].ID)
 		}
 		log.Info("Waiting for ElfMachine to select one of the duplicate VMs before deleting the other", "vms", vmIDs)
 		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 	}
 
-	for i := 0; i < len(vms); i++ {
+	for i := range len(vms) {
 		// Do not delete already running virtual machines to avoid deleting already used virtual machines.
 		if *vms[i].ID == machineCtx.ElfMachine.Status.VMRef ||
 			*vms[i].LocalID == machineCtx.ElfMachine.Status.VMRef ||

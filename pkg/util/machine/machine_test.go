@@ -18,7 +18,6 @@ package machine
 
 import (
 	goctx "context"
-	"fmt"
 	"testing"
 
 	"github.com/onsi/gomega"
@@ -80,9 +79,9 @@ func TestGetNodeGroupName(t *testing.T) {
 	_, machine1 := fake.NewMachineObjects(elfCluster, cluster)
 	_, machine2 := fake.NewMachineObjects(elfCluster, cluster)
 	kcp := fake.NewKCP()
-	kcp.Name = fmt.Sprintf("%s-kcp", cluster.Name)
+	kcp.Name = cluster.Name + "-kcp"
 	md := fake.NewMD()
-	md.Name = fmt.Sprintf("%s-md", cluster.Name)
+	md.Name = cluster.Name + "-md"
 	fake.ToCPMachine(machine1, kcp)
 	fake.ToWorkerMachine(machine2, md)
 

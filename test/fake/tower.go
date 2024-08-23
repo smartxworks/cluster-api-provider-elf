@@ -21,7 +21,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
@@ -54,7 +54,7 @@ func NewTowerHost() *models.Host {
 		LocalID:                &localID,
 		Name:                   &id,
 		Status:                 models.NewHostStatus(models.HostStatusCONNECTEDHEALTHY),
-		AllocatableMemoryBytes: pointer.Int64(MemoryMiB * 1024 * 1024),
+		AllocatableMemoryBytes: ptr.To[int64](7 * 1024 * 1024 * 1024),
 	}
 }
 
@@ -68,10 +68,10 @@ func NewTowerVM() *models.VM {
 		LocalID:           &localID,
 		Name:              &id,
 		Status:            &status,
-		EntityAsyncStatus: (*models.EntityAsyncStatus)(pointer.String("CREATING")),
+		EntityAsyncStatus: (*models.EntityAsyncStatus)(ptr.To("CREATING")),
 		CPU: &models.NestedCPU{
-			Cores:   pointer.Int32(NumCPUs),
-			Sockets: pointer.Int32(NumCPUs / NumCoresPerSocket),
+			Cores:   ptr.To[int32](NumCPUs),
+			Sockets: ptr.To[int32](NumCPUs / NumCoresPerSocket),
 		},
 		Memory: service.TowerMemory(MemoryMiB),
 	}
@@ -140,7 +140,7 @@ func NewVMPlacementGroup(vmIDs []string) *models.VMPlacementGroup {
 	id := ID()
 	localID := UUID()
 	vms := make([]*models.NestedVM, 0, len(vmIDs))
-	for i := 0; i < len(vmIDs); i++ {
+	for i := range len(vmIDs) {
 		vms = append(vms, &models.NestedVM{ID: &vmIDs[i]})
 	}
 
@@ -161,33 +161,33 @@ func NewWithTaskVMPlacementGroup(placementGroup *models.VMPlacementGroup, task *
 
 func NewTowerGPUVMInfo() *models.GpuVMInfo {
 	return &models.GpuVMInfo{
-		ID:               pointer.String(ID()),
-		LocalID:          pointer.String(UUID()),
-		Name:             pointer.String(ID()),
-		Model:            pointer.String("A16"),
+		ID:               ptr.To(ID()),
+		LocalID:          ptr.To(UUID()),
+		Name:             ptr.To(ID()),
+		Model:            ptr.To("A16"),
 		UserUsage:        models.NewGpuDeviceUsage(models.GpuDeviceUsagePASSTHROUGH),
-		UserVgpuTypeName: pointer.String(""),
+		UserVgpuTypeName: ptr.To(""),
 	}
 }
 
 func NewTowerVGPUVMInfo(vGPUCount int32) *models.GpuVMInfo {
 	return &models.GpuVMInfo{
-		ID:                pointer.String(ID()),
-		LocalID:           pointer.String(UUID()),
-		Name:              pointer.String(ID()),
-		UserVgpuTypeName:  pointer.String("V100"),
+		ID:                ptr.To(ID()),
+		LocalID:           ptr.To(UUID()),
+		Name:              ptr.To(ID()),
+		UserVgpuTypeName:  ptr.To("V100"),
 		UserUsage:         models.NewGpuDeviceUsage(models.GpuDeviceUsageVGPU),
-		VgpuInstanceNum:   pointer.Int32(vGPUCount),
-		AvailableVgpusNum: pointer.Int32(vGPUCount),
-		AssignedVgpusNum:  pointer.Int32(0),
-		Model:             pointer.String(""),
+		VgpuInstanceNum:   ptr.To[int32](vGPUCount),
+		AvailableVgpusNum: ptr.To[int32](vGPUCount),
+		AssignedVgpusNum:  ptr.To[int32](0),
+		Model:             ptr.To(""),
 	}
 }
 
 func NewVMVolume(elfMachine *infrav1.ElfMachine) *models.VMVolume {
 	return &models.VMVolume{
-		ID:   pointer.String(ID()),
-		Name: pointer.String(ID()),
+		ID:   ptr.To(ID()),
+		Name: ptr.To(ID()),
 		Size: service.TowerDisk(elfMachine.Spec.DiskGiB),
 	}
 }
@@ -201,8 +201,8 @@ func NewWithTaskVMVolume(vmVolume *models.VMVolume, task *models.Task) *models.W
 
 func NewVMDisk(vmVolume *models.VMVolume) *models.VMDisk {
 	return &models.VMDisk{
-		ID:       pointer.String(ID()),
-		Boot:     pointer.Int32(0),
+		ID:       ptr.To(ID()),
+		Boot:     ptr.To[int32](0),
 		VMVolume: &models.NestedVMVolume{ID: vmVolume.ID},
 	}
 }
