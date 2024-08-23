@@ -22,7 +22,7 @@ import (
 
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
@@ -81,7 +81,7 @@ func IsAvailableHost(host *models.Host, memory int64) (bool, string) {
 // GetVMsInPlacementGroup returns a Set of IDs of the virtual machines in the placement group.
 func GetVMsInPlacementGroup(placementGroup *models.VMPlacementGroup) sets.Set[string] {
 	placementGroupVMSet := sets.Set[string]{}
-	for i := 0; i < len(placementGroup.Vms); i++ {
+	for i := range len(placementGroup.Vms) {
 		placementGroupVMSet.Insert(*placementGroup.Vms[i].ID)
 	}
 
@@ -94,7 +94,7 @@ func TowerMemory(memoryMiB int64) *int64 {
 		memory = config.VMMemoryMiB
 	}
 
-	return pointer.Int64(memory * 1024 * 1024)
+	return ptr.To[int64](memory * 1024 * 1024)
 }
 
 func TowerDisk(diskGiB int32) *int64 {
@@ -255,7 +255,7 @@ func HasGPUsCanNotBeUsedForVM(gpuVMInfos GPUVMInfos, elfMachine *infrav1.ElfMach
 	}
 
 	vGPUDevices := elfMachine.Spec.VGPUDevices
-	for i := 0; i < len(vGPUDevices); i++ {
+	for i := range len(vGPUDevices) {
 		if count, ok := availableCountMap[vGPUDevices[i].Type]; !ok || vGPUDevices[i].Count > count {
 			return true
 		}
@@ -281,7 +281,7 @@ func GetAvailableCountFromGPUVMInfo(gpuVMInfo *models.GpuVMInfo) int32 {
 // getVMsOccupyingGPU finds the virtual machines in the given list which are actually occupying the GPU devices.
 func getVMsOccupyingGPU(gpuVMs []*models.GpuVMDetail) []*models.GpuVMDetail {
 	var vms []*models.GpuVMDetail
-	for i := 0; i < len(gpuVMs); i++ {
+	for i := range len(gpuVMs) {
 		if (gpuVMs[i].InRecycleBin == nil || !*gpuVMs[i].InRecycleBin) &&
 			*gpuVMs[i].Status != models.VMStatusSTOPPED {
 			vms = append(vms, gpuVMs[i])
@@ -328,7 +328,7 @@ func GetVMSystemDisk(disks []*models.VMDisk) *models.VMDisk {
 	}
 
 	systemDisk := disks[0]
-	for i := 0; i < len(disks); i++ {
+	for i := range len(disks) {
 		if *disks[i].Boot < *systemDisk.Boot {
 			systemDisk = disks[i]
 		}

@@ -24,7 +24,7 @@ import (
 func TestMod_FindDependencyVersion(t *testing.T) {
 	goModData := `module sigs.k8s.io/dummy-project
 
-go 1.21
+go 1.22
 
 require (
 	github.com/foo/bar v1.0.0
@@ -32,7 +32,7 @@ require (
 )
 
 replace (
-	github.com/foo/bar v1.0.0 => github.com/foo/bar v1.0.1 
+	github.com/foo/bar v1.0.0 => github.com/foo/bar v1.0.1
 )
 `
 	tempPath, err := createTempGoMod(goModData)
@@ -90,12 +90,7 @@ func createTempGoMod(data string) (string, error) {
 	if _, err := f.WriteString(data); err != nil {
 		return "", err
 	}
+	defer f.Close()
 
-	name := f.Name()
-
-	if err := f.Close(); err != nil {
-		return "", err
-	}
-
-	return name, nil
+	return f.Name(), nil
 }

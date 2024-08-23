@@ -22,7 +22,7 @@ import (
 	"net/http"
 
 	"github.com/go-logr/logr"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -64,10 +64,10 @@ func (m *ElfMachineTemplateMutation) Handle(ctx goctx.Context, request admission
 	}
 
 	devices := elfMachineTemplate.Spec.Template.Spec.Network.Devices
-	for i := 0; i < len(devices); i++ {
-		for j := 0; j < len(devices[i].AddressesFromPools); j++ {
+	for i := range len(devices) {
+		for j := range len(devices[i].AddressesFromPools) {
 			if devices[i].AddressesFromPools[j].APIGroup == nil || *devices[i].AddressesFromPools[j].APIGroup == "" {
-				devices[i].AddressesFromPools[j].APIGroup = pointer.String(defaultIPPoolAPIGroup)
+				devices[i].AddressesFromPools[j].APIGroup = ptr.To(defaultIPPoolAPIGroup)
 			}
 			if devices[i].AddressesFromPools[j].Kind == "" {
 				devices[i].AddressesFromPools[j].Kind = defaultIPPoolKind

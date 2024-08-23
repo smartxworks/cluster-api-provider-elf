@@ -330,7 +330,7 @@ func (r *ElfMachineTemplateReconciler) reconcileWorkerResources(ctx goctx.Contex
 	}
 
 	allElfMachinesUpToDate := true
-	for i := 0; i < len(mds); i++ {
+	for i := range len(mds) {
 		if emtCtx.ElfMachineTemplate.Name != mds[i].Spec.Template.Spec.InfrastructureRef.Name {
 			continue
 		}
@@ -456,7 +456,7 @@ func (r *ElfMachineTemplateReconciler) preflightChecksForWorker(ctx goctx.Contex
 func (r *ElfMachineTemplateReconciler) selectResourcesNotUpToDateElfMachines(ctx goctx.Context, elfMachineTemplate *infrav1.ElfMachineTemplate, elfMachines []*infrav1.ElfMachine) ([]*infrav1.ElfMachine, []*infrav1.ElfMachine, error) {
 	var updatingResourcesElfMachines []*infrav1.ElfMachine
 	var needUpdatedResourcesElfMachines []*infrav1.ElfMachine
-	for i := 0; i < len(elfMachines); i++ {
+	for i := range len(elfMachines) {
 		elfMachine := elfMachines[i]
 
 		machine, err := capiutil.GetOwnerMachine(ctx, r.Client, elfMachine.ObjectMeta)
@@ -487,7 +487,7 @@ func (r *ElfMachineTemplateReconciler) selectResourcesNotUpToDateElfMachines(ctx
 func (r *ElfMachineTemplateReconciler) markElfMachinesToBeUpdatedResources(ctx goctx.Context, elfMachineTemplate *infrav1.ElfMachineTemplate, elfMachines []*infrav1.ElfMachine) error {
 	log := ctrl.LoggerFrom(ctx)
 
-	for i := 0; i < len(elfMachines); i++ {
+	for i := range len(elfMachines) {
 		elfMachine := elfMachines[i]
 
 		patchHelper, err := patch.NewHelper(elfMachine, r.Client)
@@ -515,7 +515,7 @@ func (r *ElfMachineTemplateReconciler) markElfMachinesToBeUpdatedResources(ctx g
 func (r *ElfMachineTemplateReconciler) markElfMachinesResourcesNotUpToDate(ctx goctx.Context, elfMachineTemplate *infrav1.ElfMachineTemplate, elfMachines []*infrav1.ElfMachine) error {
 	log := ctrl.LoggerFrom(ctx)
 
-	for i := 0; i < len(elfMachines); i++ {
+	for i := range len(elfMachines) {
 		elfMachine := elfMachines[i]
 		if machineutil.IsResourcesUpToDate(elfMachineTemplate, elfMachine) {
 			continue

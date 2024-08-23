@@ -82,7 +82,7 @@ func (r *ElfMachineReconciler) reconcieVMVolume(ctx goctx.Context, machineCtx *c
 	log := ctrl.LoggerFrom(ctx)
 
 	vmDiskIDs := make([]string, len(vm.VMDisks))
-	for i := 0; i < len(vm.VMDisks); i++ {
+	for i := range len(vm.VMDisks) {
 		vmDiskIDs[i] = *vm.VMDisks[i].ID
 	}
 

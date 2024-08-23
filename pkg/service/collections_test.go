@@ -23,7 +23,7 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 func TestHostCollection(t *testing.T) {
@@ -45,8 +45,8 @@ func TestHostCollection(t *testing.T) {
 	})
 
 	t.Run("Available", func(t *testing.T) {
-		host1 := &models.Host{ID: TowerString("1"), Name: TowerString("host1"), AllocatableMemoryBytes: pointer.Int64(1), Status: models.NewHostStatus(models.HostStatusCONNECTEDHEALTHY)}
-		host2 := &models.Host{ID: TowerString("2"), Name: TowerString("host2"), AllocatableMemoryBytes: pointer.Int64(2), Status: models.NewHostStatus(models.HostStatusCONNECTEDHEALTHY)}
+		host1 := &models.Host{ID: TowerString("1"), Name: TowerString("host1"), AllocatableMemoryBytes: ptr.To[int64](1), Status: models.NewHostStatus(models.HostStatusCONNECTEDHEALTHY)}
+		host2 := &models.Host{ID: TowerString("2"), Name: TowerString("host2"), AllocatableMemoryBytes: ptr.To[int64](2), Status: models.NewHostStatus(models.HostStatusCONNECTEDHEALTHY)}
 
 		hosts := NewHosts()
 		g.Expect(hosts.FilterAvailableHostsWithEnoughMemory(0).Len()).To(gomega.Equal(0))

@@ -23,7 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 	capiutil "sigs.k8s.io/cluster-api/util"
@@ -132,7 +132,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			emt := fake.NewElfMachineTemplate()
 			md := fake.NewMD()
 			md.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
-			md.Spec.Replicas = pointer.Int32(3)
+			md.Spec.Replicas = ptr.To[int32](3)
 			md.Spec.Template = clusterv1.MachineTemplateSpec{
 				Spec: clusterv1.MachineSpec{
 					InfrastructureRef: corev1.ObjectReference{Namespace: emt.Namespace, Name: emt.Name},
@@ -252,7 +252,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for control plane ElfMachines to be updated resources"))
 
 			logBuffer.Reset()
-			kcp.Spec.Replicas = pointer.Int32(3)
+			kcp.Spec.Replicas = ptr.To[int32](3)
 			kcp.Status.Replicas = 3
 			kcp.Status.UpdatedReplicas = 2
 			fake.ToCPMachine(elfMachine, kcp)
@@ -292,7 +292,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 		It("should return false if KCP rolling update in progress", func() {
 			emt := fake.NewElfMachineTemplate()
 			kcp := fake.NewKCP()
-			kcp.Spec.Replicas = pointer.Int32(3)
+			kcp.Spec.Replicas = ptr.To[int32](3)
 			kcp.Status.Replicas = 3
 			kcp.Status.UpdatedReplicas = 2
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
@@ -308,7 +308,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 		It("should return false if has deleting or failed machine", func() {
 			emt := fake.NewElfMachineTemplate()
 			kcp := fake.NewKCP()
-			kcp.Spec.Replicas = pointer.Int32(3)
+			kcp.Spec.Replicas = ptr.To[int32](3)
 			kcp.Status.Replicas = 3
 			kcp.Status.UpdatedReplicas = 3
 			fake.ToCPMachine(elfMachine, kcp)
@@ -349,7 +349,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 		It("should return true", func() {
 			emt := fake.NewElfMachineTemplate()
 			kcp := fake.NewKCP()
-			kcp.Spec.Replicas = pointer.Int32(3)
+			kcp.Spec.Replicas = ptr.To[int32](3)
 			kcp.Status.Replicas = 3
 			kcp.Status.UpdatedReplicas = 3
 			fake.ToCPMachine(elfMachine, kcp)
@@ -375,7 +375,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			md := fake.NewMD()
 			fake.ToWorkerMachine(elfMachine, md)
 			fake.ToWorkerMachine(machine, md)
-			md.Spec.Replicas = pointer.Int32(3)
+			md.Spec.Replicas = ptr.To[int32](3)
 			md.Status.Replicas = 3
 			md.Status.UpdatedReplicas = 2
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
@@ -393,7 +393,7 @@ var _ = Describe("ElfMachineTemplateReconciler", func() {
 			md.Spec.Strategy = &clusterv1.MachineDeploymentStrategy{
 				RollingUpdate: &clusterv1.MachineRollingUpdateDeployment{MaxSurge: intOrStrPtr(1)},
 			}
-			md.Spec.Replicas = pointer.Int32(3)
+			md.Spec.Replicas = ptr.To[int32](3)
 			md.Status.Replicas = 3
 			md.Status.UpdatedReplicas = 3
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)

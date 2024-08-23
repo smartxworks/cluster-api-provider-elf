@@ -62,7 +62,9 @@ func TestControllers(t *testing.T) {
 func TestMain(m *testing.M) {
 	code := 0
 
-	defer func() { os.Exit(code) }()
+	defer func() {
+		os.Exit(code)
+	}()
 
 	setup()
 
@@ -75,13 +77,13 @@ func setup() {
 	// set log
 	klog.InitFlags(nil)
 	if err := flag.Set("logtostderr", "false"); err != nil {
-		_ = fmt.Errorf("Error setting logtostderr flag")
+		panic(errors.Wrapf(err, "Error setting logtostderr flag"))
 	}
 	if err := flag.Set("v", "6"); err != nil {
-		_ = fmt.Errorf("Error setting v flag")
+		panic(errors.Wrapf(err, "Error setting v flag"))
 	}
 	if err := flag.Set("alsologtostderr", "false"); err != nil {
-		_ = fmt.Errorf("Error setting alsologtostderr flag")
+		panic(errors.Wrapf(err, "Error setting alsologtostderr flag"))
 	}
 
 	utilruntime.Must(infrav1.AddToScheme(cgscheme.Scheme))

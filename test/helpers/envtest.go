@@ -19,7 +19,6 @@ package helpers
 import (
 	goctx "context"
 	"fmt"
-	"go/build"
 	"os"
 	"path"
 	"path/filepath"
@@ -28,6 +27,7 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
+	"golang.org/x/tools/go/packages"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -95,8 +95,8 @@ func init() {
 	}
 
 	// append CAPI CRDs path
-	if capiPath := getFilePathToCAPICRDs(root); capiPath != "" {
-		crdPaths = append(crdPaths, capiPath)
+	if capiPaths := getFilePathToCAPICRDs(); capiPaths != nil {
+		crdPaths = append(crdPaths, capiPaths...)
 	}
 
 	crdPaths = append(crdPaths, filepath.Join(root, "test", "config", "host-agent"))
@@ -186,7 +186,7 @@ func NewTestEnvironment(ctx goctx.Context) *TestEnvironment {
 		klog.Fatalf("failed to create the CAPE controller manager: %v", err)
 	}
 
-	kubeconfig, err := CreateKubeconfig(mgr.GetConfig(), fmt.Sprintf("%s-cluster", capiutil.RandomString(6)))
+	kubeconfig, err := CreateKubeconfig(mgr.GetConfig(), capiutil.RandomString(6)+"-cluster")
 	if err != nil {
 		klog.Fatalf("failed to create kubeconfig: %v", err)
 	}
@@ -334,26 +334,21 @@ func CreateKubeconfig(cfg *rest.Config, clusterName string) (string, error) {
 	return kubeconfig, nil
 }
 
-func getFilePathToCAPICRDs(root string) string {
-	mod, err := NewMod(filepath.Join(root, "go.mod"))
-	if err != nil {
-		return ""
-	}
-
+func getFilePathToCAPICRDs() []string {
 	packageName := "sigs.k8s.io/cluster-api"
-	clusterAPIVersion, err := mod.FindDependencyVersion(packageName)
+	packageConfig := &packages.Config{
+		Mode: packages.NeedModule,
+	}
+
+	pkgs, err := packages.Load(packageConfig, packageName)
 	if err != nil {
-		return ""
+		return nil
 	}
 
-	gopath := envOr("GOPATH", build.Default.GOPATH)
-	return filepath.Join(gopath, "pkg", "mod", "sigs.k8s.io", fmt.Sprintf("cluster-api@%s", clusterAPIVersion), "config", "crd", "bases")
-}
+	pkg := pkgs[0]
 
-func envOr(envKey, defaultValue string) string {
-	if value, ok := os.LookupEnv(envKey); ok {
-		return value
+	return []string{
+		filepath.Join(pkg.Module.Dir, "config", "crd", "bases"),
+		filepath.Join(pkg.Module.Dir, "controlplane", "kubeadm", "config", "crd", "bases"),
 	}
-
-	return defaultValue
 }

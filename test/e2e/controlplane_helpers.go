@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
@@ -54,7 +54,7 @@ func ScaleAndWaitControlPlane(ctx context.Context, input ScaleAndWaitControlPlan
 
 	patchHelper, err := patch.NewHelper(input.ControlPlane, input.ClusterProxy.GetClient())
 	Expect(err).ToNot(HaveOccurred())
-	input.ControlPlane.Spec.Replicas = pointer.Int32(input.Replicas)
+	input.ControlPlane.Spec.Replicas = ptr.To[int32](input.Replicas)
 	Logf("Scaling controlplane %s/%s from %v to %v replicas", input.ControlPlane.Namespace, input.ControlPlane.Name, *input.ControlPlane.Spec.Replicas, input.Replicas)
 	Expect(patchHelper.Patch(ctx, input.ControlPlane)).To(Succeed())
 
