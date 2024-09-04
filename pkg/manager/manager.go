@@ -21,6 +21,7 @@ import (
 
 	"github.com/pkg/errors"
 	agentv1 "github.com/smartxworks/host-config-agent-api/api/v1alpha1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
@@ -29,6 +30,7 @@ import (
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/vendor"
 )
 
 // Manager is a CAPE controller manager.
@@ -44,12 +46,13 @@ func New(ctx goctx.Context, opts Options) (Manager, error) {
 	// Ensure the default options are set.
 	opts.defaults()
 
-	_ = cgscheme.AddToScheme(opts.Scheme)
-	_ = clusterv1.AddToScheme(opts.Scheme)
-	_ = infrav1.AddToScheme(opts.Scheme)
-	_ = bootstrapv1.AddToScheme(opts.Scheme)
-	_ = controlplanev1.AddToScheme(opts.Scheme)
-	_ = agentv1.AddToScheme(opts.Scheme)
+	utilruntime.Must(cgscheme.AddToScheme(opts.Scheme))
+	utilruntime.Must(clusterv1.AddToScheme(opts.Scheme))
+	utilruntime.Must(infrav1.AddToScheme(opts.Scheme))
+	utilruntime.Must(bootstrapv1.AddToScheme(opts.Scheme))
+	utilruntime.Must(controlplanev1.AddToScheme(opts.Scheme))
+	vendor.InitHostAgentAPIGroup(&agentv1.GroupVersion, agentv1.SchemeBuilder)
+	utilruntime.Must(agentv1.AddToScheme(opts.Scheme))
 	// +kubebuilder:scaffold:scheme
 
 	// Build the controller manager.
