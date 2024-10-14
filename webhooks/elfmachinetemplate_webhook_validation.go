@@ -67,21 +67,7 @@ func (v *ElfMachineTemplateValidator) ValidateCreate(ctx goctx.Context, obj runt
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
 func (v *ElfMachineTemplateValidator) ValidateUpdate(ctx goctx.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldElfMachineTemplate, ok := oldObj.(*infrav1.ElfMachineTemplate) //nolint:forcetypeassert
-	if !ok {
-		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an ElfMachineTemplate but got a %T", oldObj))
-	}
-	elfMachineTemplate, ok := newObj.(*infrav1.ElfMachineTemplate) //nolint:forcetypeassert
-	if !ok {
-		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an ElfMachineTemplate but got a %T", newObj))
-	}
-
-	var allErrs field.ErrorList
-	if elfMachineTemplate.Spec.Template.Spec.DiskGiB < oldElfMachineTemplate.Spec.Template.Spec.DiskGiB {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), elfMachineTemplate.Spec.Template.Spec.DiskGiB, diskCapacityCanOnlyBeExpanded))
-	}
-
-	return nil, aggregateObjErrors(elfMachineTemplate.GroupVersionKind().GroupKind(), elfMachineTemplate.Name, allErrs)
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.

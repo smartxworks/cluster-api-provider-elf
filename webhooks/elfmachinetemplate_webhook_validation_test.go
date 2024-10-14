@@ -77,42 +77,6 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 	}
 }
 
-func TestElfMachineTemplateValidatorValidateUpdate(t *testing.T) {
-	g := NewWithT(t)
-
-	var tests []testCaseEMT
-	tests = append(tests, testCaseEMT{
-		Name: "Cannot reduce disk capacity",
-		OldEMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 2,
-				},
-			},
-		}},
-		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 1,
-				},
-			},
-		}},
-		Errs: field.ErrorList{
-			field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), 1, diskCapacityCanOnlyBeExpanded),
-		},
-	})
-
-	validator := &ElfMachineTemplateValidator{}
-
-	for _, tc := range tests {
-		t.Run(tc.Name, func(t *testing.T) {
-			warnings, err := validator.ValidateUpdate(goctx.Background(), tc.OldEMT, tc.EMT)
-			g.Expect(warnings).To(BeEmpty())
-			expectTestCase(g, tc, err)
-		})
-	}
-}
-
 func expectTestCase(g Gomega, tc testCaseEMT, err error) {
 	if tc.Errs != nil {
 		g.Expect(err).To(HaveOccurred())

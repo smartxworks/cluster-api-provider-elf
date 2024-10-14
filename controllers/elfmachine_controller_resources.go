@@ -38,15 +38,6 @@ import (
 func (r *ElfMachineReconciler) reconcileVMResources(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) (bool, error) {
 	log := ctrl.LoggerFrom(ctx)
 
-	hotUpdatedCondition := conditions.Get(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
-	if hotUpdatedCondition != nil &&
-		hotUpdatedCondition.Reason == infrav1.WaitingForResourcesHotUpdateReason &&
-		hotUpdatedCondition.Message != "" {
-		log.Info("Waiting for hot updating resources", "message", hotUpdatedCondition.Message)
-
-		return false, nil
-	}
-
 	if ok, err := r.reconcieVMVolume(ctx, machineCtx, vm, infrav1.ResourcesHotUpdatedCondition); err != nil || !ok {
 		return ok, err
 	}

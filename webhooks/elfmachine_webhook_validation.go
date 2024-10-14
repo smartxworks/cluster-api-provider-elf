@@ -29,7 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
-	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 )
 
 // Error messages.
@@ -71,28 +70,8 @@ func (v *ElfMachineValidator) ValidateUpdate(ctx goctx.Context, oldObj, newObj r
 
 	var allErrs field.ErrorList
 
-	elfMachineTemplateName := annotationsutil.GetTemplateClonedFromName(elfMachine)
-	if elfMachineTemplateName == "" {
-		if elfMachine.Spec.DiskGiB < oldElfMachine.Spec.DiskGiB {
-			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "diskGiB"), elfMachine.Spec.DiskGiB, diskCapacityCanOnlyBeExpanded))
-		}
-
-		return nil, aggregateObjErrors(elfMachine.GroupVersionKind().GroupKind(), elfMachine.Name, allErrs)
-	}
-
-	// If the ElfMachine was created using ElfMachineTemplate. ElfMachine's
-	// resources can only be modified through this ElfMachineTemplate.
-
-	var elfMachineTemplate infrav1.ElfMachineTemplate
-	if err := v.Client.Get(ctx, client.ObjectKey{
-		Namespace: elfMachine.Namespace,
-		Name:      annotationsutil.GetTemplateClonedFromName(elfMachine),
-	}, &elfMachineTemplate); err != nil {
-		return nil, apierrors.NewInternalError(err)
-	}
-
-	if elfMachine.Spec.DiskGiB != elfMachineTemplate.Spec.Template.Spec.DiskGiB {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "diskGiB"), elfMachine.Spec.DiskGiB, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplateName)))
+	if elfMachine.Spec.DiskGiB < oldElfMachine.Spec.DiskGiB {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "diskGiB"), elfMachine.Spec.DiskGiB, diskCapacityCanOnlyBeExpanded))
 	}
 
 	return nil, aggregateObjErrors(elfMachine.GroupVersionKind().GroupKind(), elfMachine.Name, allErrs)

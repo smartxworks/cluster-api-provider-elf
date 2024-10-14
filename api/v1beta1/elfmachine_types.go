@@ -259,6 +259,11 @@ func (m *ElfMachine) IsHotUpdating() bool {
 	return false
 }
 
+// IsResourcesUpToDate returns whether the machine resources are up to date.
+func (m *ElfMachine) IsResourcesUpToDate() bool {
+	return m.Spec.DiskGiB == m.Status.Resources.Disk
+}
+
 func (m *ElfMachine) SetVMDisconnectionTimestamp(timestamp *metav1.Time) {
 	if m.Annotations == nil {
 		m.Annotations = make(map[string]string)
