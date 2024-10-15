@@ -440,9 +440,22 @@ spec:
               resources:
                 description: Resources records the resources allocated for the machine.
                 properties:
+                  cpu:
+                    description: CPUCores is the total number of CPU cores allocated
+                      for the virtual machine.
+                    format: int32
+                    type: integer
                   disk:
                     format: int32
                     type: integer
+                  memory:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: Memory is the total number of memory in MiB allocated
+                      for the virtual machine.
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
                 type: object
               taskRef:
                 description: |-

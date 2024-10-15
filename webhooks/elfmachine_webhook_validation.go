@@ -33,7 +33,7 @@ import (
 
 // Error messages.
 const (
-	canOnlyModifiedThroughElfMachineTemplate = "virtual machine resources can only be modified through ElfMachineTemplate %s"
+	diskCapacityCanOnlyBeExpandedMsg = "the disk capacity can only be expanded"
 )
 
 func (v *ElfMachineValidator) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -71,7 +71,7 @@ func (v *ElfMachineValidator) ValidateUpdate(ctx goctx.Context, oldObj, newObj r
 	var allErrs field.ErrorList
 
 	if elfMachine.Spec.DiskGiB < oldElfMachine.Spec.DiskGiB {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "diskGiB"), elfMachine.Spec.DiskGiB, diskCapacityCanOnlyBeExpanded))
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "diskGiB"), elfMachine.Spec.DiskGiB, diskCapacityCanOnlyBeExpandedMsg))
 	}
 
 	return nil, aggregateObjErrors(elfMachine.GroupVersionKind().GroupKind(), elfMachine.Name, allErrs)

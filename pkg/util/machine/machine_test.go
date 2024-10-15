@@ -21,8 +21,6 @@ import (
 	"testing"
 
 	"github.com/onsi/gomega"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util/conditions"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
@@ -258,22 +256,6 @@ func TestGetControlPlaneMachinesForCluster(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Expect(machines).To(gomega.HaveLen(1))
 	g.Expect(machines[0].Name).To(gomega.Equal(machine.Name))
-}
-
-func TestIsUpdatingElfMachineResources(t *testing.T) {
-	g := gomega.NewGomegaWithT(t)
-
-	elfCluster, cluster := fake.NewClusterObjects()
-	emt := fake.NewElfMachineTemplate()
-	elfMachine, _ := fake.NewMachineObjects(elfCluster, cluster)
-	fake.SetElfMachineTemplateForElfMachine(elfMachine, emt)
-	g.Expect(IsUpdatingElfMachineResources(elfMachine)).To(gomega.BeFalse())
-
-	conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, "")
-	g.Expect(IsUpdatingElfMachineResources(elfMachine)).To(gomega.BeTrue())
-
-	conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, "xx")
-	g.Expect(IsUpdatingElfMachineResources(elfMachine)).To(gomega.BeTrue())
 }
 
 func toString(s string) *string {

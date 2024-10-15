@@ -19,6 +19,7 @@ package v1beta1
 import (
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
@@ -261,7 +262,10 @@ func (m *ElfMachine) IsHotUpdating() bool {
 
 // IsResourcesUpToDate returns whether the machine resources are up to date.
 func (m *ElfMachine) IsResourcesUpToDate() bool {
-	return m.Spec.DiskGiB == m.Status.Resources.Disk
+	specMemory := *resource.NewQuantity(m.Spec.MemoryMiB*1024*1024, resource.BinarySI)
+	return m.Spec.DiskGiB == m.Status.Resources.Disk &&
+		m.Spec.NumCPUs == m.Status.Resources.CPUCores &&
+		specMemory.Equal(m.Status.Resources.Memory)
 }
 
 func (m *ElfMachine) SetVMDisconnectionTimestamp(timestamp *metav1.Time) {

@@ -169,10 +169,6 @@ func IsMachineFailed(machine *clusterv1.Machine) bool {
 	return machine.Status.FailureReason != nil || machine.Status.FailureMessage != nil
 }
 
-func IsUpdatingElfMachineResources(elfMachine *infrav1.ElfMachine) bool {
-	return conditions.IsFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition)
-}
-
 func ConvertProviderIDToUUID(providerID *string) string {
 	if providerID == nil || *providerID == "" {
 		return ""

@@ -18,7 +18,6 @@ package webhooks
 
 import (
 	goctx "context"
-	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -26,7 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -38,17 +36,6 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 
 	var tests []elfMachineTestCase
 	scheme := newScheme(g)
-
-	elfMachineTemplate := &infrav1.ElfMachineTemplate{
-		ObjectMeta: metav1.ObjectMeta{Name: "test"},
-		Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 1,
-				},
-			},
-		},
-	}
 
 	tests = append(tests, elfMachineTestCase{
 		Name: "Cannot reduce disk capacity",
@@ -63,26 +50,7 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 			},
 		},
 		Errs: field.ErrorList{
-			field.Invalid(field.NewPath("spec", "diskGiB"), 1, diskCapacityCanOnlyBeExpanded),
-		},
-	})
-
-	tests = append(tests, elfMachineTestCase{
-		Name:  "Disk cannot be modified directly",
-		OldEM: nil,
-		EM: &infrav1.ElfMachine{
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{
-					clusterv1.TemplateClonedFromNameAnnotation: elfMachineTemplate.Name,
-				},
-			},
-			Spec: infrav1.ElfMachineSpec{
-				DiskGiB: 2,
-			},
-		},
-		Objs: []client.Object{elfMachineTemplate},
-		Errs: field.ErrorList{
-			field.Invalid(field.NewPath("spec", "diskGiB"), 2, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplate.Name)),
+			field.Invalid(field.NewPath("spec", "diskGiB"), 1, diskCapacityCanOnlyBeExpandedMsg),
 		},
 	})
 
