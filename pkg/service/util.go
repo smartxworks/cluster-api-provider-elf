@@ -207,7 +207,8 @@ func IsUpdateVMTask(task *models.Task) bool {
 }
 
 func IsUpdateVMDiskTask(task *models.Task, vmName string) bool {
-	return GetTowerString(task.Description) == fmt.Sprintf("Edit VM %s disk", vmName)
+	return GetTowerString(task.Description) == fmt.Sprintf("Edit VM %s disk", vmName) ||
+		strings.Contains(GetTowerString(task.Description), "Update virtual volume")
 }
 
 func IsVMColdMigrationTask(task *models.Task) bool {

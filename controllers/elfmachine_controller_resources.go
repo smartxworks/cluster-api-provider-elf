@@ -246,10 +246,6 @@ func (r *ElfMachineReconciler) reconcileVMCPUAndMemory(ctx goctx.Context, machin
 		return false, errors.Wrapf(err, "failed to trigger update CPU and memory for VM %s", *vm.Name)
 	}
 
-	if reason == infrav1.ExpandingVMResourcesFailedReason {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
-	}
-
 	machineCtx.ElfMachine.SetTask(*withTaskVM.TaskID)
 
 	log.Info("Waiting for the VM to be updated CPU and memory", "vmRef", machineCtx.ElfMachine.Status.VMRef, "taskRef", machineCtx.ElfMachine.Status.TaskRef)

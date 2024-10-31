@@ -73,7 +73,7 @@ func (v *ElfMachineTemplateValidator) ValidateCreate(ctx goctx.Context, obj runt
 	}
 
 	if elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket <= 0 {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "numCoresPerSocket"), elfMachineTemplate.Spec.Template.Spec.NumCPUs, numCoresPerSocketCannotLessThanZeroMsg))
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "template", "spec", "numCoresPerSocket"), elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket, numCoresPerSocketCannotLessThanZeroMsg))
 	}
 
 	return nil, aggregateObjErrors(elfMachineTemplate.GroupVersionKind().GroupKind(), elfMachineTemplate.Name, allErrs)

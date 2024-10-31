@@ -28,7 +28,6 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
@@ -141,16 +140,6 @@ func newMachineContext(
 	}
 }
 
-func newMachineTemplateContext(
-	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
-	emt *infrav1.ElfMachineTemplate) *context.MachineTemplateContext {
-	return &context.MachineTemplateContext{
-		Cluster:            cluster,
-		ElfCluster:         elfCluster,
-		ElfMachineTemplate: emt,
-	}
-}
-
 type conditionAssertion struct {
 	conditionType clusterv1.ConditionType
 	status        corev1.ConditionStatus
@@ -168,9 +157,4 @@ func expectConditions(getter conditions.Getter, expected []conditionAssertion) {
 		Expect(actual.Severity).To(Equal(c.severity))
 		Expect(actual.Reason).To(Equal(c.reason))
 	}
-}
-
-func intOrStrPtr(i int32) *intstr.IntOrString {
-	res := intstr.FromInt(int(i))
-	return &res
 }

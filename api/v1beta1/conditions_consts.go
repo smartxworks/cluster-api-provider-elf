@@ -125,9 +125,6 @@ const (
 	// ResourcesHotUpdatedCondition documents the status of the hot updating resources of a VM.
 	ResourcesHotUpdatedCondition = "ResourceHotUpdated"
 
-	// WaitingForResourcesHotUpdateReason (Severity=Info) documents an ElfMachine waiting for updating resources.
-	WaitingForResourcesHotUpdateReason = "WaitingForResourcesHotUpdate"
-
 	// ExpandingVMDiskReason documents (Severity=Info) ElfMachine currently executing the expand disk operation.
 	ExpandingVMDiskReason = "ExpandingVMDisk"
 

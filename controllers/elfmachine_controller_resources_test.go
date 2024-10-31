@@ -16,7 +16,6 @@ package controllers
 import (
 	"bytes"
 	goctx "context"
-	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -27,6 +26,7 @@ import (
 	agentv1 "github.com/smartxworks/host-config-agent-api/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -78,19 +78,6 @@ var _ = Describe("ElfMachineReconciler", func() {
 	})
 
 	Context("reconcileVMResources", func() {
-		It("should reconcile when WaitingForResourcesHotUpdateReason is not empty", func() {
-			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForResourcesHotUpdateReason, clusterv1.ConditionSeverityInfo, "xx")
-			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
-			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
-			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
-			vm := fake.NewTowerVMFromElfMachine(elfMachine)
-			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
-			ok, err := reconciler.reconcileVMResources(ctx, machineContext, vm)
-			Expect(ok).To(BeFalse())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Waiting for hot updating resources"))
-		})
-
 		It("should mark ResourcesHotUpdatedCondition to true", func() {
 			agentJob := newExpandRootPartitionJob(elfMachine)
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
@@ -113,9 +100,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMVolume(*vmVolume.ID).Return(vmVolume, nil)
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			ok, err := reconciler.reconcileVMResources(ctx, machineContext, vm)
-			Expect(ok).To(BeTrue())
-			Expect(err).NotTo(HaveOccurred())
 			expectConditions(elfMachine, []conditionAssertion{{conditionType: infrav1.ResourcesHotUpdatedCondition, status: corev1.ConditionTrue}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeTrue())
 		})
 	})
 
@@ -205,17 +192,29 @@ var _ = Describe("ElfMachineReconciler", func() {
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
 			vmVolume := fake.NewVMVolume(elfMachine)
-			mockVMService.EXPECT().ResizeVMVolume(*vmVolume.ID, int64(10)).Return(nil, unexpectedError)
-			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
-			err := reconciler.resizeVMVolume(ctx, machineContext, vmVolume, 10, infrav1.ResourcesHotUpdatedCondition)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to trigger expand size from"))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMDiskFailedReason}})
-
 			task := fake.NewTowerTask("")
 			withTaskVMVolume := fake.NewWithTaskVMVolume(vmVolume, task)
 			mockVMService.EXPECT().ResizeVMVolume(*vmVolume.ID, int64(10)).Return(withTaskVMVolume, nil)
-			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			err := reconciler.resizeVMVolume(ctx, machineContext, vmVolume, 10, infrav1.ResourcesHotUpdatedCondition)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the vm volume"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingVMDiskReason}})
+
+			mockVMService.EXPECT().ResizeVMVolume(*vmVolume.ID, int64(10)).Return(nil, unexpectedError)
+			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineContext = newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			err = reconciler.resizeVMVolume(ctx, machineContext, vmVolume, 10, infrav1.ResourcesHotUpdatedCondition)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to trigger expand size from"))
+			Expect(elfMachine.Status.TaskRef).To(Equal(*withTaskVMVolume.TaskID))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMDiskFailedReason}})
+
+			task = fake.NewTowerTask("")
+			withTaskVMVolume = fake.NewWithTaskVMVolume(vmVolume, task)
+			mockVMService.EXPECT().ResizeVMVolume(*vmVolume.ID, int64(10)).Return(withTaskVMVolume, nil)
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			machineContext = newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -224,7 +223,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the vm volume"))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*withTaskVMVolume.TaskID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingVMDiskReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMDiskFailedReason}})
 		})
 	})
 
@@ -470,7 +469,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeTrue())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(elfMachine.Status.Resources.CPUCores).To(Equal(*vm.Vcpu))
-			Expect(elfMachine.Status.Resources.Memory.String()).To(Equal(fmt.Sprintf("%dMi", service.ByteToMiB(*vm.Memory))))
+			specMemory := *resource.NewQuantity(service.ByteToMiB(*vm.Memory)*1024*1024, resource.BinarySI)
+			Expect(elfMachine.Status.Resources.Memory.Equal(specMemory)).To(BeTrue())
 		})
 
 		It("should save the conditionType first", func() {
@@ -493,18 +493,31 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			machineCtx := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
-			mockVMService.EXPECT().UpdateVM(vm, elfMachine).Return(nil, unexpectedError)
+			task := fake.NewTowerTask("")
+			withTaskVM := fake.NewWithTaskVM(vm, task)
+			mockVMService.EXPECT().UpdateVM(vm, elfMachine).Return(withTaskVM, nil)
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			ok, err := reconciler.reconcileVMCPUAndMemory(ctx, machineCtx, vm)
 			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be updated CPU and memory"))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingVMResourcesReason}})
+
+			logBuffer.Reset()
+			inMemoryCache.Flush()
+			mockVMService.EXPECT().UpdateVM(vm, elfMachine).Return(nil, unexpectedError)
+			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err = reconciler.reconcileVMCPUAndMemory(ctx, machineCtx, vm)
+			Expect(ok).To(BeFalse())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to trigger update CPU and memory for VM"))
+			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMResourcesFailedReason}})
 
 			logBuffer.Reset()
 			inMemoryCache.Flush()
-			task := fake.NewTowerTask("")
-			withTaskVM := fake.NewWithTaskVM(vm, task)
+			task = fake.NewTowerTask("")
+			withTaskVM = fake.NewWithTaskVM(vm, task)
 			mockVMService.EXPECT().UpdateVM(vm, elfMachine).Return(withTaskVM, nil)
 			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			ok, err = reconciler.reconcileVMCPUAndMemory(ctx, machineCtx, vm)
@@ -512,7 +525,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be updated CPU and memory"))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingVMResourcesReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMResourcesFailedReason}})
 		})
 	})
 })
@@ -521,7 +534,7 @@ func newExpandRootPartitionJob(elfMachine *infrav1.ElfMachine) *agentv1.HostOper
 	return &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      hostagent.GetExpandRootPartitionJobName(elfMachine),
-			Namespace: "sks-system",
+			Namespace: "default",
 		},
 		Spec: agentv1.HostOperationJobSpec{
 			NodeName: elfMachine.Name,
@@ -540,7 +553,7 @@ func newRestartKubelet(elfMachine *infrav1.ElfMachine) *agentv1.HostOperationJob
 	return &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      hostagent.GetRestartKubeletJobName(elfMachine),
-			Namespace: "sks-system",
+			Namespace: "default",
 		},
 		Spec: agentv1.HostOperationJobSpec{
 			NodeName: elfMachine.Name,
