@@ -256,7 +256,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.expandVMRootPartition(ctx, machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Waiting for node exists for host agent expand vm root partition"))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for node exists for host agent job"))
+			Expect(logBuffer.String()).To(ContainSubstring("expand-root-partition"))
 		})
 
 		It("should create agent job to expand root partition", func() {
@@ -270,7 +271,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.expandVMRootPartition(ctx, machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Waiting for expanding root partition"))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for job to complete"))
+			Expect(logBuffer.String()).To(ContainSubstring("expand-root-partition"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingRootPartitionReason}})
 			var agentJob *agentv1.HostOperationJob
 			Eventually(func() error {
@@ -293,7 +295,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.expandVMRootPartition(ctx, machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Waiting for expanding root partition job done"))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for HostJob done"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingRootPartitionReason}})
 
 			logBuffer.Reset()
@@ -304,7 +306,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err = reconciler.expandVMRootPartition(ctx, machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Expand root partition failed, will try again"))
+			Expect(logBuffer.String()).To(ContainSubstring("HostJob failed, will try again"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingRootPartitionFailedReason}})
 
 			Expect(testEnv.Get(ctx, client.ObjectKey{Namespace: agentJob.Namespace, Name: agentJob.Name}, agentJob)).NotTo(HaveOccurred())
@@ -337,7 +339,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.expandVMRootPartition(ctx, machineContext)
 			Expect(ok).To(BeTrue())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Expand root partition to root succeeded"))
+			Expect(logBuffer.String()).To(ContainSubstring("HostJob succeeded"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingRootPartitionReason}})
 		})
 	})
@@ -362,7 +364,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should wait for node exists", func() {
-			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -371,13 +373,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.restartKubelet(ctx, machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Waiting for node exists for host agent expand vm root partition"))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for node exists for host agent job"))
+			Expect(logBuffer.String()).To(ContainSubstring("restart-kubelet"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.RestartingKubeletReason}})
 		})
 
 		It("should create agent job to restart kubelet", func() {
 			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
-			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -386,7 +389,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.restartKubelet(ctx, machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Waiting for resting kubelet to expanding CPU and memory"))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for job to complete"))
+			Expect(logBuffer.String()).To(ContainSubstring("restart-kubelet"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.RestartingKubeletReason}})
 			var agentJob *agentv1.HostOperationJob
 			Eventually(func() error {
@@ -399,7 +403,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should retry when job failed", func() {
 			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
-			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
 			agentJob := newRestartKubelet(elfMachine)
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
@@ -409,7 +413,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.restartKubelet(ctx, machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Waiting for expanding CPU and memory job done"))
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for HostJob done"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.RestartingKubeletReason}})
 
 			logBuffer.Reset()
@@ -420,7 +424,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err = reconciler.restartKubelet(ctx, machineContext)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Expand CPU and memory failed, will try again after three minutes"))
+			Expect(logBuffer.String()).To(ContainSubstring("HostJob failed, will try again after three minutes"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.RestartingKubeletFailedReason}})
 
 			Expect(testEnv.Get(ctx, client.ObjectKey{Namespace: agentJob.Namespace, Name: agentJob.Name}, agentJob)).NotTo(HaveOccurred())
@@ -439,7 +443,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should record job succeeded", func() {
 			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
-			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
 			agentJob := newRestartKubelet(elfMachine)
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
 			Expect(testEnv.Get(ctx, client.ObjectKey{Namespace: agentJob.Namespace, Name: agentJob.Name}, agentJob)).NotTo(HaveOccurred())
@@ -453,7 +457,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.restartKubelet(ctx, machineContext)
 			Expect(ok).To(BeTrue())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuffer.String()).To(ContainSubstring("Expand CPU and memory succeeded"))
+			Expect(logBuffer.String()).To(ContainSubstring("HostJob succeeded"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.RestartingKubeletReason}})
 		})
 	})
@@ -483,13 +487,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.reconcileVMCPUAndMemory(ctx, machineCtx, vm)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingVMResourcesReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingVMComputeResourcesReason}})
 		})
 
 		It("should wait task done", func() {
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			elfMachine.Spec.MemoryMiB += 1
-			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			machineCtx := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -501,7 +505,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be updated CPU and memory"))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingVMResourcesReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingVMComputeResourcesReason}})
 
 			logBuffer.Reset()
 			inMemoryCache.Flush()
@@ -512,7 +516,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to trigger update CPU and memory for VM"))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMResourcesFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMComputeResourcesFailedReason}})
 
 			logBuffer.Reset()
 			inMemoryCache.Flush()
@@ -525,7 +529,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be updated CPU and memory"))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMResourcesFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMComputeResourcesFailedReason}})
 		})
 	})
 })

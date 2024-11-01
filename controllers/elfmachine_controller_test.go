@@ -3432,11 +3432,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			elfMachine.Status.TaskRef = *task.ID
 			elfMachine.Status.Conditions = nil
-			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
 			ok, err = reconciler.reconcileVMTask(ctx, machineContext, nil)
 			Expect(ok).Should(BeTrue())
 			Expect(err).ShouldNot(HaveOccurred())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMResourcesFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMComputeResourcesFailedReason}})
 
 			// GPU
 			gpuDeviceInfo := &service.GPUDeviceInfo{ID: "gpu", AllocatedCount: 0, AvailableCount: 1}

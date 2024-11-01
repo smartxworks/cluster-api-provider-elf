@@ -142,14 +142,14 @@ const (
 	// usually transient and failed updating are automatically re-tried by the controller.
 	ExpandingRootPartitionFailedReason = "ExpandingRootPartitionFailed"
 
-	// ExpandingVMResourcesReason documents (Severity=Info) ElfMachine currently executing the
+	// ExpandingVMComputeResourcesReason documents (Severity=Info) ElfMachine currently executing the
 	// expand resources(CPU/memory) operation.
-	ExpandingVMResourcesReason = "ExpandingVMResources"
+	ExpandingVMComputeResourcesReason = "ExpandingVMComputeResources"
 
-	// ExpandingVMResourcesFailedReason (Severity=Warning) documents an ElfMachine controller detecting
+	// ExpandingVMComputeResourcesFailedReason (Severity=Warning) documents an ElfMachine controller detecting
 	// an error while expanding resources(CPU/memory); those kind of errors are usually transient and
 	// failed updating are automatically re-tried by the controller.
-	ExpandingVMResourcesFailedReason = "ExpandingVMResourcesFailed"
+	ExpandingVMComputeResourcesFailedReason = "ExpandingVMComputeResourcesFailed"
 
 	// RestartingKubeletReason documents (Severity=Info) ElfMachine currently executing the restart kubelet operation.
 	RestartingKubeletReason = "RestartingKubelet"
