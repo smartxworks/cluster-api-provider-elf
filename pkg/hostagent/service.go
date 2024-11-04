@@ -32,8 +32,10 @@ type HostAgentJobType string
 const (
 	defaultTimeout = 1 * time.Minute
 
+	// HostAgentJobTypeExpandRootPartition is the job type for expanding the root partition.
 	HostAgentJobTypeExpandRootPartition HostAgentJobType = "expand-root-partition"
-	HostAgentJobTypeRestartKubelet      HostAgentJobType = "restart-kubelet"
+	// HostAgentJobTypeRestartKubelet is the job type for restarting the kubelet.
+	HostAgentJobTypeRestartKubelet HostAgentJobType = "restart-kubelet"
 )
 
 func GetHostJob(ctx goctx.Context, c client.Client, namespace, name string) (*agentv1.HostOperationJob, error) {
