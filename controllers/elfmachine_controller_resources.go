@@ -217,6 +217,13 @@ func (r *ElfMachineReconciler) restartKubelet(ctx goctx.Context, machineCtx *con
 
 func (r *ElfMachineReconciler) reconcileHostJob(ctx goctx.Context, machineCtx *context.MachineContext, jobType hostagent.HostAgentJobType) (bool, error) {
 	log := ctrl.LoggerFrom(ctx)
+	failReason := ""
+	switch jobType {
+	case hostagent.HostAgentJobTypeExpandRootPartition:
+		failReason = infrav1.ExpandingRootPartitionFailedReason
+	case hostagent.HostAgentJobTypeRestartKubelet:
+		failReason = infrav1.RestartingKubeletFailedReason
+	}
 
 	// Agent needs to wait for the node exists before it can run and execute commands.
 	if machineCtx.Machine.Status.NodeInfo == nil {
@@ -227,11 +234,13 @@ func (r *ElfMachineReconciler) reconcileHostJob(ctx goctx.Context, machineCtx *c
 
 	kubeClient, err := capiremote.NewClusterClient(ctx, "", r.Client, client.ObjectKey{Namespace: machineCtx.Cluster.Namespace, Name: machineCtx.Cluster.Name})
 	if err != nil {
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "failed to create kubeClient: "+err.Error())
 		return false, err
 	}
 
 	agentJob, err := hostagent.GetHostJob(ctx, kubeClient, machineCtx.ElfMachine.Namespace, hostagent.GetJobName(machineCtx.ElfMachine, jobType))
 	if err != nil && !apierrors.IsNotFound(err) {
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "failed to get HostOperationJob: "+err.Error())
 		return false, err
 	}
 
@@ -252,12 +261,7 @@ func (r *ElfMachineReconciler) reconcileHostJob(ctx goctx.Context, machineCtx *c
 	case agentv1.PhaseSucceeded:
 		log.Info("HostJob succeeded", "hostAgentJob", agentJob.Name)
 	case agentv1.PhaseFailed:
-		switch jobType {
-		case hostagent.HostAgentJobTypeExpandRootPartition:
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingRootPartitionFailedReason, clusterv1.ConditionSeverityWarning, agentJob.Status.FailureMessage)
-		case hostagent.HostAgentJobTypeRestartKubelet:
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.RestartingKubeletFailedReason, clusterv1.ConditionSeverityWarning, agentJob.Status.FailureMessage)
-		}
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, agentJob.Status.FailureMessage)
 		log.Info("HostJob failed, will try again after three minutes", "hostAgentJob", agentJob.Name, "failureMessage", agentJob.Status.FailureMessage)
 
 		lastExecutionTime := agentJob.Status.LastExecutionTime
