@@ -206,8 +206,8 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (r
 		// always update the readyCondition.
 		conditions.SetSummary(machineCtx.ElfMachine,
 			conditions.WithConditions(
-				infrav1.VMProvisionedCondition,
 				infrav1.ResourcesHotUpdatedCondition,
+				infrav1.VMProvisionedCondition,
 				infrav1.TowerAvailableCondition,
 			),
 		)
@@ -973,7 +973,7 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx goctx.Context, machineCtx *co
 			machineCtx.ElfMachine.SetVMFirstBootTimestamp(&now)
 		}
 
-		if service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) {
+		if service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task) {
 			releaseTicketForCreateVM(machineCtx.ElfMachine.Name)
 			recordElfClusterStorageInsufficient(machineCtx, false)
 			recordElfClusterMemoryInsufficient(machineCtx, false)
@@ -1024,7 +1024,12 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx goctx.Context, machineC
 	case service.IsUpdateVMDiskTask(task, machineCtx.ElfMachine.Name):
 		reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
 		if reason == infrav1.ExpandingVMDiskReason || reason == infrav1.ExpandingVMDiskFailedReason {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskFailedReason, clusterv1.ConditionSeverityInfo, errorMessage)
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskFailedReason, clusterv1.ConditionSeverityWarning, errorMessage)
+		}
+	case service.IsUpdateVMTask(task) && conditions.IsFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition):
+		reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+		if reason == infrav1.ExpandingVMComputeResourcesReason || reason == infrav1.ExpandingVMComputeResourcesFailedReason {
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesFailedReason, clusterv1.ConditionSeverityWarning, errorMessage)
 		}
 	case service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task) || service.IsVMColdMigrationTask(task):
 		if machineCtx.ElfMachine.RequiresGPUDevices() {

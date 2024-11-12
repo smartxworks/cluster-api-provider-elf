@@ -27,7 +27,16 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/hostagent/tasks"
 )
 
-const defaultTimeout = 1 * time.Minute
+type HostAgentJobType string
+
+const (
+	defaultTimeout = 1 * time.Minute
+
+	// HostAgentJobTypeExpandRootPartition is the job type for expanding the root partition.
+	HostAgentJobTypeExpandRootPartition HostAgentJobType = "expand-root-partition"
+	// HostAgentJobTypeRestartKubelet is the job type for restarting the kubelet.
+	HostAgentJobTypeRestartKubelet HostAgentJobType = "restart-kubelet"
+)
 
 func GetHostJob(ctx goctx.Context, c client.Client, namespace, name string) (*agentv1.HostOperationJob, error) {
 	var restartKubeletJob agentv1.HostOperationJob
@@ -47,8 +56,23 @@ func GetExpandRootPartitionJobName(elfMachine *infrav1.ElfMachine) string {
 	return fmt.Sprintf("cape-expand-root-partition-%s-%d", elfMachine.Name, elfMachine.Spec.DiskGiB)
 }
 
-func ExpandRootPartition(ctx goctx.Context, c client.Client, elfMachine *infrav1.ElfMachine) (*agentv1.HostOperationJob, error) {
-	agentJob := &agentv1.HostOperationJob{
+func GetRestartKubeletJobName(elfMachine *infrav1.ElfMachine) string {
+	return fmt.Sprintf("cape-restart-kubelet-%s-%d-%d-%d", elfMachine.Name, elfMachine.Spec.NumCPUs, elfMachine.Spec.NumCoresPerSocket, elfMachine.Spec.MemoryMiB)
+}
+
+func GetJobName(elfMachine *infrav1.ElfMachine, jobType HostAgentJobType) string {
+	switch jobType {
+	case HostAgentJobTypeExpandRootPartition:
+		return GetExpandRootPartitionJobName(elfMachine)
+	case HostAgentJobTypeRestartKubelet:
+		return GetRestartKubeletJobName(elfMachine)
+	default:
+		return ""
+	}
+}
+
+func GenerateExpandRootPartitionJob(elfMachine *infrav1.ElfMachine) *agentv1.HostOperationJob {
+	return &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetExpandRootPartitionJobName(elfMachine),
 			Namespace: "default",
@@ -65,10 +89,35 @@ func ExpandRootPartition(ctx goctx.Context, c client.Client, elfMachine *infrav1
 			},
 		},
 	}
+}
 
-	if err := c.Create(ctx, agentJob); err != nil {
-		return nil, err
+func GenerateRestartKubeletJob(elfMachine *infrav1.ElfMachine) *agentv1.HostOperationJob {
+	return &agentv1.HostOperationJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      GetRestartKubeletJobName(elfMachine),
+			Namespace: "default",
+		},
+		Spec: agentv1.HostOperationJobSpec{
+			NodeName: elfMachine.Name,
+			Operation: agentv1.Operation{
+				Ansible: &agentv1.Ansible{
+					LocalPlaybookText: &agentv1.YAMLText{
+						Inline: tasks.RestartKubeletTask,
+					},
+				},
+				Timeout: metav1.Duration{Duration: defaultTimeout},
+			},
+		},
 	}
+}
 
-	return agentJob, nil
+func GenerateJob(elfMachine *infrav1.ElfMachine, jobType HostAgentJobType) *agentv1.HostOperationJob {
+	switch jobType {
+	case HostAgentJobTypeExpandRootPartition:
+		return GenerateExpandRootPartitionJob(elfMachine)
+	case HostAgentJobTypeRestartKubelet:
+		return GenerateRestartKubeletJob(elfMachine)
+	default:
+		return nil
+	}
 }

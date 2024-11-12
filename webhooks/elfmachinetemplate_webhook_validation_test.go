@@ -37,7 +37,10 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: -1,
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           -1,
 				},
 			},
 		}},
@@ -49,7 +52,10 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 0,
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           0,
 				},
 			},
 		}},
@@ -59,46 +65,58 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 100,
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           100,
 				},
 			},
 		}},
 		Errs: nil,
-	})
-
-	validator := &ElfMachineTemplateValidator{}
-
-	for _, tc := range tests {
-		t.Run(tc.Name, func(t *testing.T) {
-			warnings, err := validator.ValidateCreate(goctx.Background(), tc.EMT)
-			g.Expect(warnings).To(BeEmpty())
-			expectTestCase(g, tc, err)
-		})
-	}
-}
-
-func TestElfMachineTemplateValidatorValidateUpdate(t *testing.T) {
-	g := NewWithT(t)
-
-	var tests []testCaseEMT
-	tests = append(tests, testCaseEMT{
-		Name: "Cannot reduce disk capacity",
-		OldEMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 2,
-				},
-			},
-		}},
+	}, testCaseEMT{
+		Name: "memory cannot be less than 0",
 		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 1,
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					DiskGiB:           100,
+					MemoryMiB:         0,
 				},
 			},
 		}},
 		Errs: field.ErrorList{
-			field.Invalid(field.NewPath("spec", "template", "spec", "diskGiB"), 1, diskCapacityCanOnlyBeExpanded),
+			field.Invalid(field.NewPath("spec", "template", "spec", "memoryMiB"), 0, memoryCannotLessThanZeroMsg),
+		},
+	}, testCaseEMT{
+		Name: "numCPUs cannot be less than 0",
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCoresPerSocket: 1,
+					DiskGiB:           100,
+					MemoryMiB:         1,
+					NumCPUs:           0,
+				},
+			},
+		}},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "template", "spec", "numCPUs"), 0, numCPUsCannotLessThanZeroMsg),
+		},
+	}, testCaseEMT{
+		Name: "numCoresPerSocket cannot be less than 0",
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCPUs:           1,
+					DiskGiB:           100,
+					MemoryMiB:         1,
+					NumCoresPerSocket: 0,
+				},
+			},
+		}},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "template", "spec", "numCoresPerSocket"), 0, numCoresPerSocketCannotLessThanZeroMsg),
 		},
 	})
 
@@ -106,7 +124,7 @@ func TestElfMachineTemplateValidatorValidateUpdate(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.Name, func(t *testing.T) {
-			warnings, err := validator.ValidateUpdate(goctx.Background(), tc.OldEMT, tc.EMT)
+			warnings, err := validator.ValidateCreate(goctx.Background(), tc.EMT)
 			g.Expect(warnings).To(BeEmpty())
 			expectTestCase(g, tc, err)
 		})

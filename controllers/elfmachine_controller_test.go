@@ -3418,11 +3418,30 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err = reconciler.reconcileVMTask(ctx, machineContext, nil)
 			Expect(ok).Should(BeTrue())
 			Expect(err).ShouldNot(HaveOccurred())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ExpandingVMDiskFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMDiskFailedReason}})
+
+			// Edit VM CPU/Memory
+			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
+			task.Description = service.TowerString("Edit VM")
+			task.ErrorMessage = service.TowerString(service.VMDuplicateError)
+			elfMachine.Status.TaskRef = *task.ID
+			ok, err = reconciler.reconcileVMTask(ctx, machineContext, nil)
+			Expect(ok).Should(BeTrue())
+			Expect(err).ShouldNot(HaveOccurred())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
+
+			elfMachine.Status.TaskRef = *task.ID
+			elfMachine.Status.Conditions = nil
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			ok, err = reconciler.reconcileVMTask(ctx, machineContext, nil)
+			Expect(ok).Should(BeTrue())
+			Expect(err).ShouldNot(HaveOccurred())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMComputeResourcesFailedReason}})
 
 			// GPU
 			gpuDeviceInfo := &service.GPUDeviceInfo{ID: "gpu", AllocatedCount: 0, AvailableCount: 1}
 			gpuDeviceInfos := []*service.GPUDeviceInfo{gpuDeviceInfo}
+			elfMachine.Status.Conditions = nil
 
 			tests := []struct {
 				description string
@@ -3447,7 +3466,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ok, err = reconciler.reconcileVMTask(ctx, machineContext, nil)
 				Expect(ok).Should(BeTrue())
 				Expect(err).ShouldNot(HaveOccurred())
-				Expect(getGPUDevicesLockedByVM(elfCluster.Spec.Cluster, elfMachine.Name)).To(BeNil())
+				Expect(getGPUDevicesLockedByVM(elfCluster.Spec.Cluster, elfMachine.Name)).To(BeNil(), tc.description)
 			}
 		})
 	})

@@ -34,7 +34,12 @@ import (
 
 // Error messages.
 const (
-	canOnlyModifiedThroughElfMachineTemplate = "virtual machine resources can only be modified through ElfMachineTemplate %s"
+	canOnlyModifiedThroughElfMachineTemplate = "virtual machine resources should be the same as ElfMachineTemplate %s"
+
+	diskCapacityCanOnlyBeExpandedMsg   = "the disk capacity can only be expanded"
+	vcpuCapacityCanOnlyBeExpandedMsg   = "the vcpu capacity can only be expanded"
+	memoryCapacityCanOnlyBeExpandedMsg = "the memory capacity can only be expanded"
+	numCoresPerSocketCannotBeChanged   = "the number of cores per socket cannot be changed"
 )
 
 func (v *ElfMachineValidator) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -72,27 +77,42 @@ func (v *ElfMachineValidator) ValidateUpdate(ctx goctx.Context, oldObj, newObj r
 	var allErrs field.ErrorList
 
 	elfMachineTemplateName := annotationsutil.GetTemplateClonedFromName(elfMachine)
-	if elfMachineTemplateName == "" {
-		if elfMachine.Spec.DiskGiB < oldElfMachine.Spec.DiskGiB {
-			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "diskGiB"), elfMachine.Spec.DiskGiB, diskCapacityCanOnlyBeExpanded))
+	if elfMachineTemplateName != "" {
+		// If the ElfMachine was created using ElfMachineTemplate. ElfMachine's
+		// resources should be the same as this ElfMachineTemplate.
+		var elfMachineTemplate infrav1.ElfMachineTemplate
+		if err := v.Client.Get(ctx, client.ObjectKey{
+			Namespace: elfMachine.Namespace,
+			Name:      annotationsutil.GetTemplateClonedFromName(elfMachine),
+		}, &elfMachineTemplate); err != nil {
+			return nil, apierrors.NewInternalError(err)
 		}
 
-		return nil, aggregateObjErrors(elfMachine.GroupVersionKind().GroupKind(), elfMachine.Name, allErrs)
+		if elfMachine.Spec.DiskGiB != elfMachineTemplate.Spec.Template.Spec.DiskGiB {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "diskGiB"), elfMachine.Spec.DiskGiB, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplateName)))
+		}
+		if elfMachine.Spec.NumCPUs != elfMachineTemplate.Spec.Template.Spec.NumCPUs {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "numCPUs"), elfMachine.Spec.NumCPUs, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplateName)))
+		}
+		if elfMachine.Spec.NumCoresPerSocket != elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "numCoresPerSocket"), elfMachine.Spec.NumCoresPerSocket, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplateName)))
+		}
+		if elfMachine.Spec.MemoryMiB != elfMachineTemplate.Spec.Template.Spec.MemoryMiB {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "memoryMiB"), elfMachine.Spec.MemoryMiB, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplateName)))
+		}
 	}
 
-	// If the ElfMachine was created using ElfMachineTemplate. ElfMachine's
-	// resources can only be modified through this ElfMachineTemplate.
-
-	var elfMachineTemplate infrav1.ElfMachineTemplate
-	if err := v.Client.Get(ctx, client.ObjectKey{
-		Namespace: elfMachine.Namespace,
-		Name:      annotationsutil.GetTemplateClonedFromName(elfMachine),
-	}, &elfMachineTemplate); err != nil {
-		return nil, apierrors.NewInternalError(err)
+	if elfMachine.Spec.DiskGiB < oldElfMachine.Spec.DiskGiB {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "diskGiB"), elfMachine.Spec.DiskGiB, diskCapacityCanOnlyBeExpandedMsg))
 	}
-
-	if elfMachine.Spec.DiskGiB != elfMachineTemplate.Spec.Template.Spec.DiskGiB {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "diskGiB"), elfMachine.Spec.DiskGiB, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplateName)))
+	if elfMachine.Spec.NumCPUs < oldElfMachine.Spec.NumCPUs {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "numCPUs"), elfMachine.Spec.NumCPUs, vcpuCapacityCanOnlyBeExpandedMsg))
+	}
+	if elfMachine.Spec.MemoryMiB < oldElfMachine.Spec.MemoryMiB {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "memoryMiB"), elfMachine.Spec.MemoryMiB, memoryCapacityCanOnlyBeExpandedMsg))
+	}
+	if oldElfMachine.Spec.NumCoresPerSocket != 0 && elfMachine.Spec.NumCoresPerSocket != oldElfMachine.Spec.NumCoresPerSocket {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "numCoresPerSocket"), elfMachine.Spec.NumCoresPerSocket, numCoresPerSocketCannotBeChanged))
 	}
 
 	return nil, aggregateObjErrors(elfMachine.GroupVersionKind().GroupKind(), elfMachine.Name, allErrs)

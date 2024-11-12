@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -168,40 +167,6 @@ func IsNodeHealthyConditionUnknown(machine *clusterv1.Machine) bool {
 
 func IsMachineFailed(machine *clusterv1.Machine) bool {
 	return machine.Status.FailureReason != nil || machine.Status.FailureMessage != nil
-}
-
-func IsUpdatingElfMachineResources(elfMachine *infrav1.ElfMachine) bool {
-	condition := conditions.Get(elfMachine, infrav1.ResourcesHotUpdatedCondition)
-	if condition != nil &&
-		condition.Status == corev1.ConditionFalse {
-		if condition.Reason == infrav1.WaitingForResourcesHotUpdateReason && condition.Message != "" {
-			return false
-		}
-
-		return true
-	}
-
-	return false
-}
-
-func IsResourcesUpToDate(elfMachineTemplate *infrav1.ElfMachineTemplate, elfMachine *infrav1.ElfMachine) bool {
-	return elfMachineTemplate.Spec.Template.Spec.DiskGiB <= elfMachine.Spec.DiskGiB
-}
-
-func NeedUpdateElfMachineResources(elfMachineTemplate *infrav1.ElfMachineTemplate, elfMachine *infrav1.ElfMachine) bool {
-	if !IsResourcesUpToDate(elfMachineTemplate, elfMachine) {
-		return true
-	}
-
-	condition := conditions.Get(elfMachine, infrav1.ResourcesHotUpdatedCondition)
-	if condition != nil &&
-		condition.Status == corev1.ConditionFalse {
-		if condition.Reason == infrav1.WaitingForResourcesHotUpdateReason && condition.Message != "" {
-			return true
-		}
-	}
-
-	return false
 }
 
 func ConvertProviderIDToUUID(providerID *string) string {

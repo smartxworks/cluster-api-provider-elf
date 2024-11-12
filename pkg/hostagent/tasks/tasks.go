@@ -21,3 +21,8 @@ import (
 //
 //go:embed expand_root_partition.yaml
 var ExpandRootPartitionTask string
+
+// RestartKubeletTask is the task to restart kubelet.
+//
+//go:embed restart_kubelet.yaml
+var RestartKubeletTask string

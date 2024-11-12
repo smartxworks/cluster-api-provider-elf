@@ -44,7 +44,9 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 		Spec: infrav1.ElfMachineTemplateSpec{
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
-					DiskGiB: 1,
+					DiskGiB:   1,
+					NumCPUs:   1,
+					MemoryMiB: 1,
 				},
 			},
 		},
@@ -63,13 +65,81 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 			},
 		},
 		Errs: field.ErrorList{
-			field.Invalid(field.NewPath("spec", "diskGiB"), 1, diskCapacityCanOnlyBeExpanded),
+			field.Invalid(field.NewPath("spec", "diskGiB"), 1, diskCapacityCanOnlyBeExpandedMsg),
+		},
+	})
+	tests = append(tests, elfMachineTestCase{
+		Name: "Cannot reduce vcpu capacity",
+		OldEM: &infrav1.ElfMachine{
+			Spec: infrav1.ElfMachineSpec{
+				NumCPUs: 2,
+			},
+		},
+		EM: &infrav1.ElfMachine{
+			Spec: infrav1.ElfMachineSpec{
+				NumCPUs: 1,
+			},
+		},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "numCPUs"), 1, vcpuCapacityCanOnlyBeExpandedMsg),
+		},
+	})
+	tests = append(tests, elfMachineTestCase{
+		Name: "Cannot reduce memory capacity",
+		OldEM: &infrav1.ElfMachine{
+			Spec: infrav1.ElfMachineSpec{
+				MemoryMiB: 2,
+			},
+		},
+		EM: &infrav1.ElfMachine{
+			Spec: infrav1.ElfMachineSpec{
+				MemoryMiB: 1,
+			},
+		},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "memoryMiB"), 1, memoryCapacityCanOnlyBeExpandedMsg),
+		},
+	})
+	tests = append(tests, elfMachineTestCase{
+		Name: "Can update the default numCoresPerSocket",
+		OldEM: &infrav1.ElfMachine{
+			Spec: infrav1.ElfMachineSpec{
+				NumCoresPerSocket: 0,
+			},
+		},
+		EM: &infrav1.ElfMachine{
+			Spec: infrav1.ElfMachineSpec{
+				NumCoresPerSocket: 1,
+			},
+		},
+		Errs: nil,
+	})
+	tests = append(tests, elfMachineTestCase{
+		Name: "Cannot update numCoresPerSocket",
+		OldEM: &infrav1.ElfMachine{
+			Spec: infrav1.ElfMachineSpec{
+				NumCoresPerSocket: 1,
+			},
+		},
+		EM: &infrav1.ElfMachine{
+			Spec: infrav1.ElfMachineSpec{
+				NumCoresPerSocket: 2,
+			},
+		},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "numCoresPerSocket"), 2, numCoresPerSocketCannotBeChanged),
 		},
 	})
 
 	tests = append(tests, elfMachineTestCase{
-		Name:  "Disk cannot be modified directly",
-		OldEM: nil,
+		Name: "Disk cannot be modified directly",
+		OldEM: &infrav1.ElfMachine{
+			Spec: infrav1.ElfMachineSpec{
+				DiskGiB:   1,
+				NumCPUs:   1,
+				MemoryMiB: 1,
+			},
+		},
 		EM: &infrav1.ElfMachine{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
@@ -77,12 +147,66 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 				},
 			},
 			Spec: infrav1.ElfMachineSpec{
-				DiskGiB: 2,
+				DiskGiB:   2,
+				NumCPUs:   1,
+				MemoryMiB: 1,
 			},
 		},
 		Objs: []client.Object{elfMachineTemplate},
 		Errs: field.ErrorList{
 			field.Invalid(field.NewPath("spec", "diskGiB"), 2, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplate.Name)),
+		},
+	})
+	tests = append(tests, elfMachineTestCase{
+		Name: "vcpu cannot be modified directly",
+		OldEM: &infrav1.ElfMachine{
+			Spec: infrav1.ElfMachineSpec{
+				DiskGiB:   1,
+				NumCPUs:   1,
+				MemoryMiB: 1,
+			},
+		},
+		EM: &infrav1.ElfMachine{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					clusterv1.TemplateClonedFromNameAnnotation: elfMachineTemplate.Name,
+				},
+			},
+			Spec: infrav1.ElfMachineSpec{
+				DiskGiB:   1,
+				NumCPUs:   2,
+				MemoryMiB: 1,
+			},
+		},
+		Objs: []client.Object{elfMachineTemplate},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "numCPUs"), 2, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplate.Name)),
+		},
+	})
+	tests = append(tests, elfMachineTestCase{
+		Name: "memory cannot be modified directly",
+		OldEM: &infrav1.ElfMachine{
+			Spec: infrav1.ElfMachineSpec{
+				DiskGiB:   1,
+				NumCPUs:   1,
+				MemoryMiB: 1,
+			},
+		},
+		EM: &infrav1.ElfMachine{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					clusterv1.TemplateClonedFromNameAnnotation: elfMachineTemplate.Name,
+				},
+			},
+			Spec: infrav1.ElfMachineSpec{
+				DiskGiB:   1,
+				NumCPUs:   1,
+				MemoryMiB: 2,
+			},
+		},
+		Objs: []client.Object{elfMachineTemplate},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "memoryMiB"), 2, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplate.Name)),
 		},
 	})
 
