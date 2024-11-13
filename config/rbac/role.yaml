@@ -129,3 +129,13 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - elfmachinetemplates
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
