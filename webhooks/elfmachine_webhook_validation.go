@@ -94,7 +94,8 @@ func (v *ElfMachineValidator) ValidateUpdate(ctx goctx.Context, oldObj, newObj r
 		if elfMachine.Spec.NumCPUs != elfMachineTemplate.Spec.Template.Spec.NumCPUs {
 			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "numCPUs"), elfMachine.Spec.NumCPUs, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplateName)))
 		}
-		if elfMachine.Spec.NumCoresPerSocket != elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket {
+		if elfMachine.Spec.NumCoresPerSocket != 0 && elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket != 0 &&
+			elfMachine.Spec.NumCoresPerSocket != elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket {
 			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "numCoresPerSocket"), elfMachine.Spec.NumCoresPerSocket, fmt.Sprintf(canOnlyModifiedThroughElfMachineTemplate, elfMachineTemplateName)))
 		}
 		if elfMachine.Spec.MemoryMiB != elfMachineTemplate.Spec.Template.Spec.MemoryMiB {

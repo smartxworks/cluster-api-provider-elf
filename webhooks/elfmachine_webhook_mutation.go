@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/version"
 )
 
@@ -64,7 +65,22 @@ func (m *ElfMachineMutation) Handle(ctx goctx.Context, request admission.Request
 	}
 
 	if elfMachine.Spec.NumCoresPerSocket <= 0 {
-		elfMachine.Spec.NumCoresPerSocket = elfMachine.Spec.NumCPUs
+		// Prefer to set the value to be the same as elfMachineTemplate
+		elfMachineTemplateName := annotationsutil.GetTemplateClonedFromName(&elfMachine)
+		if elfMachineTemplateName != "" {
+			var elfMachineTemplate infrav1.ElfMachineTemplate
+			if err := m.Get(ctx, client.ObjectKey{
+				Namespace: elfMachine.Namespace,
+				Name:      annotationsutil.GetTemplateClonedFromName(&elfMachine),
+			}, &elfMachineTemplate); err != nil {
+				return admission.Errored(http.StatusBadRequest, err)
+			}
+			elfMachine.Spec.NumCoresPerSocket = elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket
+		}
+		// If elfMachineTemplate also has no value, set it to be the same as NumCPUs
+		if elfMachine.Spec.NumCoresPerSocket <= 0 {
+			elfMachine.Spec.NumCoresPerSocket = elfMachine.Spec.NumCPUs
+		}
 	}
 
 	if marshaledElfMachine, err := json.Marshal(elfMachine); err != nil {
