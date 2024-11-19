@@ -45,7 +45,7 @@ func (m *ElfMachineMutation) SetupWebhookWithManager(mgr ctrl.Manager) error {
 }
 
 //+kubebuilder:object:generate=false
-//+kubebuilder:webhook:verbs=create,path=/mutate-infrastructure-cluster-x-k8s-io-v1beta1-elfmachine,mutating=true,failurePolicy=fail,sideEffects=None,groups=infrastructure.cluster.x-k8s.io,resources=elfmachines,versions=v1beta1,name=mutation.elfmachine.infrastructure.x-k8s.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:verbs=create;update,path=/mutate-infrastructure-cluster-x-k8s-io-v1beta1-elfmachine,mutating=true,failurePolicy=fail,sideEffects=None,groups=infrastructure.cluster.x-k8s.io,resources=elfmachines,versions=v1beta1,name=mutation.elfmachine.infrastructure.x-k8s.io,admissionReviewVersions=v1
 
 type ElfMachineMutation struct {
 	client.Client
