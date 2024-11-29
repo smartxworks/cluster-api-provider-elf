@@ -26,10 +26,13 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/version"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
@@ -46,6 +49,7 @@ var (
 
 func TestElfMachineMutation(t *testing.T) {
 	g := NewWithT(t)
+	scheme := newScheme(g)
 	tests := []testCase{}
 
 	elfMachine := fake.NewElfMachine(nil)
@@ -54,7 +58,7 @@ func TestElfMachineMutation(t *testing.T) {
 	raw, err := marshal(elfMachine)
 	g.Expect(err).NotTo(HaveOccurred())
 	tests = append(tests, testCase{
-		name: "should set CAPE version",
+		name: "should set CAPE version and numCoresPerSocket",
 		admissionRequest: admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{
 			Kind:      metav1.GroupVersionKind{Group: infrav1.GroupVersion.Group, Version: infrav1.GroupVersion.Version, Kind: "ElfMachine"},
 			Operation: admissionv1.Create,
@@ -67,9 +71,30 @@ func TestElfMachineMutation(t *testing.T) {
 		},
 	})
 
+	elfMachineTemplate := fake.NewElfMachineTemplate()
+	elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket = 2
+	elfMachine = fake.NewElfMachine(nil)
+	annotations.AddAnnotations(elfMachine, map[string]string{clusterv1.TemplateClonedFromNameAnnotation: elfMachineTemplate.Name})
+	elfMachine.Spec.NumCoresPerSocket = 0
+	raw, err = marshal(elfMachine)
+	g.Expect(err).NotTo(HaveOccurred())
+	tests = append(tests, testCase{
+		name: "should set NumCoresPerSocket from elfMachineTemplate",
+		admissionRequest: admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{
+			Kind:      metav1.GroupVersionKind{Group: infrav1.GroupVersion.Group, Version: infrav1.GroupVersion.Version, Kind: "ElfMachine"},
+			Operation: admissionv1.Update,
+			Object:    runtime.RawExtension{Raw: raw},
+		}},
+		expectRespAllowed: true,
+		expectPatchs: []jsonpatch.Operation{
+			{Operation: "add", Path: "/spec/numCoresPerSocket", Value: float64(elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket)},
+		},
+		client: fakeclient.NewClientBuilder().WithScheme(scheme).WithObjects(elfMachineTemplate).Build(),
+	})
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			mutation := ElfMachineMutation{}
+			mutation := ElfMachineMutation{Client: tc.client}
 			mutation.InjectDecoder(admission.NewDecoder(scheme))
 
 			resp := mutation.Handle(context.Background(), tc.admissionRequest)
@@ -92,4 +117,5 @@ type testCase struct {
 	admissionRequest  admission.Request
 	expectRespAllowed bool
 	expectPatchs      []jsonpatch.Operation
+	client            client.Client
 }
