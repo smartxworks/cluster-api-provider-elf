@@ -18,7 +18,7 @@ package config
 
 const (
 	// VMDescription is the default description in a VM.
-	VMDescription = "Automatically created Kubernetes node by CloudTower %s."
+	VMDescription = "Automatically created Kubernetes node by server %s."
 
 	// VMNumCPUs is the default virtual processors in a VM.
 	VMNumCPUs = 2
