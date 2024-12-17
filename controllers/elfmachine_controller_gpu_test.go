@@ -134,8 +134,9 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			logBuffer.Reset()
 			removeGPUVMInfosCache(gpuIDs)
 			gpuVMInfo.Vms = []*models.GpuVMDetail{{ID: service.TowerString("id"), Name: service.TowerString("vm"), Status: models.NewVMStatus(models.VMStatusRUNNING)}}
-			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(nil, nil)
+			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host), nil)
 			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByIDs([]string{*gpuVMInfo.ID}).Return(gpuVMInfos, nil)
+			mockVMService.EXPECT().GetGPUDevicesAllocationInfoByHostIDs([]string{*host.ID}, models.GpuDeviceUsagePASSTHROUGH).Return(service.NewGPUVMInfos(), nil)
 			hostID, gpus, err = reconciler.selectHostAndGPUsForVM(ctx, machineContext, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(hostID).To(BeNil())
@@ -268,7 +269,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			Expect(elfMachine.Status.GPUDevices).To(Equal([]infrav1.GPUStatus{{GPUID: *vm.GpuDevices[0].ID, Name: *vm.GpuDevices[0].Name}}))
 		})
 
-		It("should add GPU devices to VM when the VM without GPU devices", func() {
+		It("should add GPU devices to VM when without available hosts", func() {
 			host := fake.NewTowerHost()
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vm.Host = &models.NestedHost{ID: host.ID}
@@ -282,7 +283,13 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			ok, err := reconciler.reconcileGPUDevices(ctx, machineContext, vm)
 			Expect(err).To(HaveOccurred())
 			Expect(ok).To(BeFalse())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForAvailableHostWithEnoughGPUsReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityError, infrav1.SelectingGPUFailedReason}})
+
+			mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.Hosts{}, nil)
+			ok, err = reconciler.reconcileGPUDevices(ctx, machineContext, vm)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeFalse())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.WaitingForAvailableHostWithSufficientMemoryReason}})
 		})
 
 		It("should remove GPU devices to VM when detect host are not sufficient", func() {

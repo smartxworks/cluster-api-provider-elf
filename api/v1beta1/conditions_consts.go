@@ -118,6 +118,15 @@ const (
 	// waiting for an available host required by placement group to create VM.
 	WaitingForAvailableHostRequiredByPlacementGroupReason = "WaitingForAvailableHostRequiredByPlacementGroup"
 
+	// SelectingGPUFailedReason (Severity=Warning) documents an ElfMachine controller detecting
+	// an error while selecting GPU; those kind of errors are usually transient and failed updating
+	// are automatically re-tried by the controller.
+	SelectingGPUFailedReason = "SelectingGPUFailed"
+
+	// WaitingForAvailableHostWithSufficientMemoryReason (Severity=Info) documents an ElfMachine
+	// waiting for an available host with sufficient memory to create VM.
+	WaitingForAvailableHostWithSufficientMemoryReason = "WaitingForAvailableHostWithSufficientMemory"
+
 	// WaitingForAvailableHostWithEnoughGPUsReason (Severity=Info) documents an ElfMachine
 	// waiting for an available host with enough GPUs to create VM.
 	WaitingForAvailableHostWithEnoughGPUsReason = "WaitingForAvailableHostWithEnoughGPUs"

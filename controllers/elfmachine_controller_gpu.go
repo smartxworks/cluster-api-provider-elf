@@ -53,11 +53,18 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 		return ptr.To(""), nil, nil
 	}
 
+	var availableHosts service.Hosts
 	defer func() {
-		if rethost == nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForAvailableHostWithEnoughGPUsReason, clusterv1.ConditionSeverityInfo, "")
-
-			log.V(1).Info("No host with the required GPU devices for the virtual machine, so wait for enough available hosts")
+		if reterr != nil {
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.SelectingGPUFailedReason, clusterv1.ConditionSeverityError, reterr.Error())
+		} else if rethost == nil {
+			if availableHosts.Len() == 0 {
+				conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForAvailableHostWithSufficientMemoryReason, clusterv1.ConditionSeverityWarning, "")
+				log.V(1).Info("Waiting for enough available hosts")
+			} else {
+				conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForAvailableHostWithEnoughGPUsReason, clusterv1.ConditionSeverityInfo, "")
+				log.V(1).Info("No host with the required GPU devices for the virtual machine, so wait for enough available hosts")
+			}
 		}
 	}()
 
@@ -83,9 +90,8 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 		return nil, nil, err
 	}
 
-	availableHosts := hosts.FilterAvailableHostsWithEnoughMemory(*service.TowerMemory(machineCtx.ElfMachine.Spec.MemoryMiB))
+	availableHosts = hosts.FilterAvailableHostsWithEnoughMemory(*service.TowerMemory(machineCtx.ElfMachine.Spec.MemoryMiB))
 	if len(availableHosts) == 0 {
-		log.V(2).Info("Waiting for enough available hosts")
 		return nil, nil, nil
 	}
 
