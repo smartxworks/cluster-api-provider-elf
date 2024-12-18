@@ -59,7 +59,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.SelectingGPUFailedReason, clusterv1.ConditionSeverityError, reterr.Error())
 		} else if rethost == nil {
 			if availableHosts.Len() == 0 {
-				conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForAvailableHostWithSufficientMemoryReason, clusterv1.ConditionSeverityWarning, "")
+				conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForELFClusterWithSufficientMemoryReason, clusterv1.ConditionSeverityWarning, "")
 				log.V(1).Info("Waiting for enough available hosts")
 			} else {
 				conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForAvailableHostWithEnoughGPUsReason, clusterv1.ConditionSeverityInfo, "")

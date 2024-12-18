@@ -123,10 +123,6 @@ const (
 	// are automatically re-tried by the controller.
 	SelectingGPUFailedReason = "SelectingGPUFailed"
 
-	// WaitingForAvailableHostWithSufficientMemoryReason (Severity=Info) documents an ElfMachine
-	// waiting for an available host with sufficient memory to create VM.
-	WaitingForAvailableHostWithSufficientMemoryReason = "WaitingForAvailableHostWithSufficientMemory"
-
 	// WaitingForAvailableHostWithEnoughGPUsReason (Severity=Info) documents an ElfMachine
 	// waiting for an available host with enough GPUs to create VM.
 	WaitingForAvailableHostWithEnoughGPUsReason = "WaitingForAvailableHostWithEnoughGPUs"
