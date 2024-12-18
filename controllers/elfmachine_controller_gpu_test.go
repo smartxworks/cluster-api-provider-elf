@@ -289,7 +289,7 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 			ok, err = reconciler.reconcileGPUDevices(ctx, machineContext, vm)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ok).To(BeFalse())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.WaitingForAvailableHostWithSufficientMemoryReason}})
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.WaitingForELFClusterWithSufficientMemoryReason}})
 		})
 
 		It("should remove GPU devices to VM when detect host are not sufficient", func() {
