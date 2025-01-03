@@ -104,13 +104,10 @@ spec:
       #! to the system disk through Tower API. These commands will add the new
       #! capacity of the system disk to the root partition.
       #! - |
-      #!   . /etc/os-release
-      #!   rootpath="/dev/mapper/rl-root"
-      #!   if [[ $ID == 'openEuler' ]]; then
-      #!     rootpath="/dev/mapper/openeuler-root"
-      #!   fi
+      #!   rootdevice=$(lsblk -pnro MOUNTPOINT,NAME | awk '$1 ~ /^\/$/ { print $2 }')
+      #!   rootpartition=$(lsblk -pnro MOUNTPOINT,PKNAME | awk '$1 ~ /^\/$/ { print $2 }')
       #! - |
-      #!   result=$(growpart /dev/vda 2)
+      #!   result=$(growpart ${rootpartition%[0-9]*} ${rootpartition##*[a-z]})
       #!   if [[ $? == 0 ]]; then
       #!     echo "$result"
       #!   elif [[ $result == NOCHANGE* ]]; then
@@ -119,9 +116,9 @@ spec:
       #!     echo "$result"
       #!     exit 1
       #!   fi
-      #! - "pvresize /dev/vda2"
+      #! - "pvresize $rootpartition"
       #! - |
-      #!   result=$(lvextend -l+100%FREE -n $rootpath 2>&1)
+      #!   result=$(lvextend -l+100%FREE -n $rootdevice 2>&1)
       #!   if [[ $? == 0 ]]; then
       #!     echo "$result"
       #!   elif [[ $result == *'matches existing size'* ]]; then
@@ -277,13 +274,10 @@ spec:
       #! to the system disk through Tower API. These commands will add the new
       #! capacity of the system disk to the root partition.
       #! - |
-      #!   . /etc/os-release
-      #!   rootpath="/dev/mapper/rl-root"
-      #!   if [[ $ID == 'openEuler' ]]; then
-      #!     rootpath="/dev/mapper/openeuler-root"
-      #!   fi
+      #!   rootdevice=$(lsblk -pnro MOUNTPOINT,NAME | awk '$1 ~ /^\/$/ { print $2 }')
+      #!   rootpartition=$(lsblk -pnro MOUNTPOINT,PKNAME | awk '$1 ~ /^\/$/ { print $2 }')
       #! - |
-      #!   result=$(growpart /dev/vda 2)
+      #!   result=$(growpart ${rootpartition%[0-9]*} ${rootpartition##*[a-z]})
       #!   if [[ $? == 0 ]]; then
       #!     echo "$result"
       #!   elif [[ $result == NOCHANGE* ]]; then
@@ -292,9 +286,9 @@ spec:
       #!     echo "$result"
       #!     exit 1
       #!   fi
-      #! - "pvresize /dev/vda2"
+      #! - "pvresize $rootpartition"
       #! - |
-      #!   result=$(lvextend -l+100%FREE -n $rootpath 2>&1)
+      #!   result=$(lvextend -l+100%FREE -n $rootdevice 2>&1)
       #!   if [[ $? == 0 ]]; then
       #!     echo "$result"
       #!   elif [[ $result == *'matches existing size'* ]]; then
