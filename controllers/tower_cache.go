@@ -19,10 +19,10 @@ package controllers
 import (
 	goctx "context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
+	"k8s.io/apimachinery/pkg/api/resource"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,15 +37,18 @@ const (
 	resourceSilenceTime = 5 * time.Minute
 	// resourceDuration is the lifespan of clusterResource.
 	resourceDuration = 10 * time.Minute
-)
 
-var lock sync.Mutex
+	// defaultStorageAmount is the default storage amount. now we use 200GB.
+	defaultStorageAmount = 200
+)
 
 type clusterResource struct {
 	// LastDetected records the last resource detection time
 	LastDetected time.Time
 	// LastRetried records the time of the last attempt to detect resource
 	LastRetried time.Time
+	// RequestAmount records the amount of cluster resource requests
+	RequestAmount int64
 }
 
 // isELFScheduleVMErrorRecorded returns whether the ELF cluster has failed scheduling virtual machine errors.
@@ -55,17 +58,12 @@ type clusterResource struct {
 // 2. ELF cluster has insufficient storage.
 // 3. Cannot satisfy the PlacementGroup policy.
 func isELFScheduleVMErrorRecorded(ctx goctx.Context, machineCtx *context.MachineContext, ctrlClient client.Client) (bool, string, error) {
-	lock.Lock()
-	defer lock.Unlock()
-
-	if resource := getClusterResource(getKeyForInsufficientMemoryError(machineCtx.ElfCluster.Spec.Cluster)); resource != nil {
+	if insufficient, msg := isELFClusterMemoryInsufficient(machineCtx); insufficient {
 		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForELFClusterWithSufficientMemoryReason, clusterv1.ConditionSeverityInfo, "")
-
-		return true, "Insufficient memory detected for the ELF cluster " + machineCtx.ElfCluster.Spec.Cluster, nil
-	} else if resource := getClusterResource(getKeyForInsufficientStorageError(machineCtx.ElfCluster.Spec.Cluster)); resource != nil {
+		return true, msg, nil
+	} else if insufficient, msg := isELFClusterStorageInsufficient(machineCtx); insufficient {
 		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForELFClusterWithSufficientStorageReason, clusterv1.ConditionSeverityInfo, "")
-
-		return true, "Insufficient storage detected for the ELF cluster " + machineCtx.ElfCluster.Spec.Cluster, nil
+		return true, msg, nil
 	}
 
 	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, ctrlClient, machineCtx.Machine, machineCtx.Cluster)
@@ -82,11 +80,25 @@ func isELFScheduleVMErrorRecorded(ctx goctx.Context, machineCtx *context.Machine
 	return false, "", nil
 }
 
+func isELFClusterMemoryInsufficient(machineCtx *context.MachineContext) (bool, string) {
+	if resource := getClusterResource(getKeyForInsufficientMemoryError(machineCtx.ElfCluster.Spec.Cluster)); resource != nil {
+		return true, "Insufficient memory detected for the ELF cluster " + machineCtx.ElfCluster.Spec.Cluster
+	}
+	return false, ""
+}
+
+func isELFClusterStorageInsufficient(machineCtx *context.MachineContext) (bool, string) {
+	if resource := getClusterResource(getKeyForInsufficientStorageError(machineCtx.ElfCluster.Spec.Cluster)); resource != nil {
+		return true, "Insufficient storage detected for the ELF cluster " + machineCtx.ElfCluster.Spec.Cluster
+	}
+	return false, ""
+}
+
 // recordElfClusterMemoryInsufficient records whether the memory is insufficient.
-func recordElfClusterMemoryInsufficient(ctrlMgrCtx *context.MachineContext, isInsufficient bool) {
-	key := getKeyForInsufficientMemoryError(ctrlMgrCtx.ElfCluster.Spec.Cluster)
+func recordElfClusterMemoryInsufficient(machineCtx *context.MachineContext, isInsufficient bool) {
+	key := getKeyForInsufficientMemoryError(machineCtx.ElfCluster.Spec.Cluster)
 	if isInsufficient {
-		inMemoryCache.Set(key, newClusterResource(), resourceDuration)
+		inMemoryCache.Set(key, newClusterResource(getMemoryRequestAmount(machineCtx)), resourceDuration)
 	} else {
 		inMemoryCache.Delete(key)
 	}
@@ -96,7 +108,7 @@ func recordElfClusterMemoryInsufficient(ctrlMgrCtx *context.MachineContext, isIn
 func recordElfClusterStorageInsufficient(machineCtx *context.MachineContext, isError bool) {
 	key := getKeyForInsufficientStorageError(machineCtx.ElfCluster.Spec.Cluster)
 	if isError {
-		inMemoryCache.Set(key, newClusterResource(), resourceDuration)
+		inMemoryCache.Set(key, newClusterResource(getStorageRequestAmount(machineCtx)), resourceDuration)
 	} else {
 		inMemoryCache.Delete(key)
 	}
@@ -111,7 +123,7 @@ func recordPlacementGroupPolicyNotSatisfied(ctx goctx.Context, machineCtx *conte
 
 	key := getKeyForDuplicatePlacementGroupError(placementGroupName)
 	if isPGPolicyNotSatisfied {
-		inMemoryCache.Set(key, newClusterResource(), resourceDuration)
+		inMemoryCache.Set(key, newClusterResource(0), resourceDuration)
 	} else {
 		inMemoryCache.Delete(key)
 	}
@@ -119,23 +131,33 @@ func recordPlacementGroupPolicyNotSatisfied(ctx goctx.Context, machineCtx *conte
 	return nil
 }
 
-func newClusterResource() *clusterResource {
+func newClusterResource(requestAmount int64) *clusterResource {
 	now := time.Now()
 	return &clusterResource{
-		LastDetected: now,
-		LastRetried:  now,
+		LastDetected:  now,
+		LastRetried:   now,
+		RequestAmount: requestAmount,
 	}
+}
+
+func getMemoryRequestAmount(machineCtx *context.MachineContext) int64 {
+	specMemory := *resource.NewQuantity(machineCtx.ElfMachine.Spec.MemoryMiB*1024*1024, resource.BinarySI)
+	return specMemory.Value() - machineCtx.ElfMachine.Status.Resources.Memory.Value()
+}
+
+func getStorageRequestAmount(machineCtx *context.MachineContext) int64 {
+	if specDisk := machineCtx.ElfMachine.Spec.DiskGiB; specDisk == 0 {
+		return defaultStorageAmount
+	}
+	return int64(machineCtx.ElfMachine.Spec.DiskGiB - machineCtx.ElfMachine.Status.Resources.Disk)
 }
 
 // canRetryVMOperation returns whether virtual machine operations(Create/PowerOn)
 // can be performed.
 func canRetryVMOperation(ctx goctx.Context, machineCtx *context.MachineContext, ctrlClient client.Client) (bool, error) {
-	lock.Lock()
-	defer lock.Unlock()
-
-	if ok := canRetry(getKeyForInsufficientStorageError(machineCtx.ElfCluster.Spec.Cluster)); ok {
+	if ok := canRetryMemoryAllocation(machineCtx); ok {
 		return true, nil
-	} else if ok := canRetry(getKeyForInsufficientMemoryError(machineCtx.ElfCluster.Spec.Cluster)); ok {
+	} else if ok := canRetryStorageAllocation(machineCtx); ok {
 		return true, nil
 	}
 
@@ -144,11 +166,22 @@ func canRetryVMOperation(ctx goctx.Context, machineCtx *context.MachineContext, 
 		return false, err
 	}
 
-	return canRetry(getKeyForDuplicatePlacementGroupError(placementGroupName)), nil
+	return canRetry(getKeyForDuplicatePlacementGroupError(placementGroupName), 0), nil
 }
 
-func canRetry(key string) bool {
+func canRetryMemoryAllocation(machineCtx *context.MachineContext) bool {
+	return canRetry(getKeyForInsufficientMemoryError(machineCtx.ElfCluster.Spec.Cluster), getMemoryRequestAmount(machineCtx))
+}
+
+func canRetryStorageAllocation(machineCtx *context.MachineContext) bool {
+	return canRetry(getKeyForInsufficientStorageError(machineCtx.ElfCluster.Spec.Cluster), getStorageRequestAmount(machineCtx))
+}
+
+func canRetry(key string, requestAmount int64) bool {
 	if resource := getClusterResource(key); resource != nil {
+		if requestAmount < resource.RequestAmount {
+			return true
+		}
 		if time.Now().Before(resource.LastDetected.Add(resourceSilenceTime)) {
 			return false
 		} else {
