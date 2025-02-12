@@ -19,6 +19,7 @@ package controllers
 import (
 	goctx "context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
@@ -42,12 +43,14 @@ const (
 	defaultStorageAmount = 200
 )
 
+var lock sync.Mutex
+
 type clusterResource struct {
 	// LastDetected records the last resource detection time
 	LastDetected time.Time
 	// LastRetried records the time of the last attempt to detect resource
 	LastRetried time.Time
-	// RequestAmount records the amount of cluster resource requests
+	// RequestAmount records the amount of resources requested when cluster resource insufficiency is detected
 	RequestAmount int64
 }
 
@@ -58,6 +61,9 @@ type clusterResource struct {
 // 2. ELF cluster has insufficient storage.
 // 3. Cannot satisfy the PlacementGroup policy.
 func isELFScheduleVMErrorRecorded(ctx goctx.Context, machineCtx *context.MachineContext, ctrlClient client.Client) (bool, string, error) {
+	lock.Lock()
+	defer lock.Unlock()
+
 	if insufficient, msg := isELFClusterMemoryInsufficient(machineCtx); insufficient {
 		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForELFClusterWithSufficientMemoryReason, clusterv1.ConditionSeverityInfo, "")
 		return true, msg, nil
@@ -154,7 +160,12 @@ func getStorageRequestAmount(machineCtx *context.MachineContext) int64 {
 
 // canRetryVMOperation returns whether virtual machine operations(Create/PowerOn)
 // can be performed.
+// For insufficient memory and storage resources, if the requested amount
+// of resources is less than the recorded request amount, retry is allowed.
 func canRetryVMOperation(ctx goctx.Context, machineCtx *context.MachineContext, ctrlClient client.Client) (bool, error) {
+	lock.Lock()
+	defer lock.Unlock()
+
 	if ok := canRetryMemoryAllocation(machineCtx); ok {
 		return true, nil
 	} else if ok := canRetryStorageAllocation(machineCtx); ok {
