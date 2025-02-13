@@ -68,12 +68,14 @@ var _ = Describe("TowerCache", func() {
 			Expect(found).To(BeTrue())
 			resource := getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
+			checkResourceRequestAmount(machineCtx, name, resource)
 
 			recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, name, true)
 			lastDetected := resource.LastDetected
 			resource = getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
 			Expect(resource.LastDetected.After(lastDetected)).To(BeTrue())
+			checkResourceRequestAmount(machineCtx, name, resource)
 
 			recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, name, false)
 			resource = getClusterResource(key)
@@ -98,6 +100,7 @@ var _ = Describe("TowerCache", func() {
 			Expect(found).To(BeTrue())
 			resource = getClusterResource(key)
 			Expect(resource.LastDetected).To(Equal(resource.LastRetried))
+			checkResourceRequestAmount(machineCtx, name, resource)
 		}
 	})
 
@@ -138,6 +141,8 @@ var _ = Describe("TowerCache", func() {
 			ok, err = canRetryVMOperation(ctx, machineCtx, ctrlMgrCtx.Client)
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
+
+			checkOtherRequestAmount(ctx, machineCtx, ctrlMgrCtx.Client, name)
 		}
 	})
 
@@ -264,4 +269,46 @@ func expireELFScheduleVMError(ctx goctx.Context, machineCtx *context.MachineCont
 	resource.LastDetected = resource.LastDetected.Add(-resourceSilenceTime)
 	resource.LastRetried = resource.LastRetried.Add(-resourceSilenceTime)
 	inMemoryCache.Set(key, resource, resourceDuration)
+}
+
+func checkResourceRequestAmount(machineCtx *context.MachineContext, key string, resource *clusterResource) {
+	if strings.Contains(key, clusterInsufficientMemoryKey) {
+		Expect(resource.RequestAmount).To(Equal(getMemoryRequestAmount(machineCtx)))
+		return
+	} else if strings.Contains(key, clusterInsufficientStorageKey) {
+		Expect(resource.RequestAmount).To(Equal(getStorageRequestAmount(machineCtx)))
+		return
+	}
+
+	Expect(resource.RequestAmount).To(BeZero())
+}
+
+func checkOtherRequestAmount(ctx goctx.Context, machineCtx *context.MachineContext, c client.Client, key string) {
+	if strings.Contains(key, clusterInsufficientMemoryKey) {
+		recordOrClearError(ctx, machineCtx, c, key, true)
+		memory := machineCtx.ElfMachine.Spec.MemoryMiB
+
+		machineCtx.ElfMachine.Spec.MemoryMiB = memory + 1
+		ok, err := canRetryVMOperation(ctx, machineCtx, c)
+		Expect(ok).To(BeFalse())
+		Expect(err).ShouldNot(HaveOccurred())
+
+		machineCtx.ElfMachine.Spec.MemoryMiB = memory - 1
+		ok, err = canRetryVMOperation(ctx, machineCtx, c)
+		Expect(ok).To(BeTrue())
+		Expect(err).ShouldNot(HaveOccurred())
+	} else if strings.Contains(key, clusterInsufficientStorageKey) {
+		recordOrClearError(ctx, machineCtx, c, key, true)
+		disk := machineCtx.ElfMachine.Spec.DiskGiB
+
+		machineCtx.ElfMachine.Spec.DiskGiB = disk + 1
+		ok, err := canRetryVMOperation(ctx, machineCtx, c)
+		Expect(ok).To(BeFalse())
+		Expect(err).ShouldNot(HaveOccurred())
+
+		machineCtx.ElfMachine.Spec.DiskGiB = disk - 1
+		ok, err = canRetryVMOperation(ctx, machineCtx, c)
+		Expect(ok).To(BeTrue())
+		Expect(err).ShouldNot(HaveOccurred())
+	}
 }

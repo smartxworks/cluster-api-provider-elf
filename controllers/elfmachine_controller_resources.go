@@ -115,6 +115,16 @@ func (r *ElfMachineReconciler) resizeVMVolume(ctx goctx.Context, machineCtx *con
 		return nil
 	}
 
+	if insufficient, message := isELFClusterStorageInsufficient(machineCtx); insufficient {
+		if canRetry := canRetryStorageAllocation(machineCtx); !canRetry {
+			conditions.MarkFalse(machineCtx.ElfMachine, conditionType, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "Waiting for the ELF cluster with sufficient storage")
+			log.V(1).Info(message + ", skip updating VM volume size")
+			return nil
+		}
+
+		log.V(1).Info(message + " and the retry silence period passes, will try to update the VM volume size")
+	}
+
 	if service.IsTowerResourcePerformingAnOperation(vmVolume.EntityAsyncStatus) {
 		log.Info("Waiting for vm volume task done", "volume", fmt.Sprintf("%s/%s", *vmVolume.ID, *vmVolume.Name))
 
@@ -176,6 +186,16 @@ func (r *ElfMachineReconciler) reconcileVMCPUAndMemory(ctx goctx.Context, machin
 	}
 
 	log := ctrl.LoggerFrom(ctx)
+
+	if insufficient, message := isELFClusterMemoryInsufficient(machineCtx); insufficient {
+		if canRetry := canRetryMemoryAllocation(machineCtx); !canRetry {
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "Waiting for the ELF cluster with sufficient memory")
+			log.V(1).Info(message + ", skip updating VM CPU and memory")
+			return false, nil
+		}
+
+		log.V(1).Info(message + " and the retry silence period passes, will try to update the VM CPU and memory")
+	}
 
 	if ok := acquireTicketForUpdatingVM(machineCtx.ElfMachine.Name); !ok {
 		log.V(1).Info(fmt.Sprintf("The VM operation reaches rate limit, skip updating VM %s CPU and memory", machineCtx.ElfMachine.Status.VMRef))
