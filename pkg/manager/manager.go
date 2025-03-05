@@ -30,7 +30,7 @@ import (
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/vendor"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/product"
 )
 
 // Manager is a CAPE controller manager.
@@ -51,7 +51,7 @@ func New(ctx goctx.Context, opts Options) (Manager, error) {
 	utilruntime.Must(infrav1.AddToScheme(opts.Scheme))
 	utilruntime.Must(bootstrapv1.AddToScheme(opts.Scheme))
 	utilruntime.Must(controlplanev1.AddToScheme(opts.Scheme))
-	vendor.InitHostAgentAPIGroup(&agentv1.GroupVersion, agentv1.SchemeBuilder)
+	product.InitHostAgentAPIGroup(&agentv1.GroupVersion, agentv1.SchemeBuilder)
 	utilruntime.Must(agentv1.AddToScheme(opts.Scheme))
 	// +kubebuilder:scaffold:scheme
 
