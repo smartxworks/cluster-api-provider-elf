@@ -267,7 +267,7 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx goctx.Context, mach
 	}
 
 	elfMachineMap := make(map[string]*infrav1.ElfMachine)
-	for i := range len(elfMachines) {
+	for i := range elfMachines {
 		if typesutil.IsUUID(elfMachines[i].Status.VMRef) {
 			elfMachineMap[elfMachines[i].Name] = elfMachines[i]
 		}
@@ -324,7 +324,7 @@ func (r *ElfMachineReconciler) getHostsInPlacementGroup(machineCtx *context.Mach
 	}
 
 	hostSet := sets.Set[string]{}
-	for i := range len(vms) {
+	for i := range vms {
 		hostSet.Insert(*vms[i].Host.ID)
 	}
 
@@ -508,7 +508,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx goctx.Context, machineCtx 
 
 			usedHostsByPG := sets.Set[string]{}
 			cpElfMachineNames := make([]string, 0, len(cpElfMachines))
-			for i := range len(cpElfMachines) {
+			for i := range cpElfMachines {
 				cpElfMachineNames = append(cpElfMachineNames, cpElfMachines[i].Name)
 				if machineCtx.ElfMachine.Name != cpElfMachines[i].Name &&
 					cpElfMachines[i].Status.PlacementGroupRef == *placementGroup.ID {

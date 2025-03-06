@@ -194,7 +194,7 @@ func (svr *TowerVMService) Clone(
 	cpuSockets := TowerCPUSockets(*vCPU, *cpuSocketCores)
 
 	gpuDevices := make([]*models.VMGpuOperationParams, len(gpuDeviceInfos))
-	for i := range len(gpuDeviceInfos) {
+	for i := range gpuDeviceInfos {
 		gpuDevices[i] = &models.VMGpuOperationParams{
 			GpuID:  TowerString(gpuDeviceInfos[i].ID),
 			Amount: TowerInt32(int(gpuDeviceInfos[i].AllocatedCount)),
@@ -463,7 +463,7 @@ func (svr *TowerVMService) RemoveGPUDevices(id string, gpus []*models.VMGpuOpera
 
 func (svr *TowerVMService) AddGPUDevices(id string, gpuDeviceInfos []*GPUDeviceInfo) (*models.Task, error) {
 	gpus := make([]*models.VMGpuOperationParams, len(gpuDeviceInfos))
-	for i := range len(gpuDeviceInfos) {
+	for i := range gpuDeviceInfos {
 		gpus[i] = &models.VMGpuOperationParams{
 			GpuID:  TowerString(gpuDeviceInfos[i].ID),
 			Amount: TowerInt32(int(gpuDeviceInfos[i].AllocatedCount)),
@@ -706,7 +706,7 @@ func (svr *TowerVMService) GetVMTemplate(template string) (*models.ContentLibrar
 		return nil, errors.New(VMTemplateNotFound)
 	}
 
-	for i := range len(vmTemplates) {
+	for i := range vmTemplates {
 		// Match SKSVMTemplateUIDLabel.
 		if template != *vmTemplates[i].ID && template != *vmTemplates[i].Name {
 			return vmTemplates[i], nil

@@ -279,7 +279,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				var err error
 				agentJob, err = hostagent.GetHostJob(ctx, testEnv.Client, elfMachine.Namespace, hostagent.GetExpandRootPartitionJobName(elfMachine))
 				return err
-			}, timeout).Should(BeNil())
+			}, timeout).Should(Succeed())
 			Expect(agentJob.Name).To(Equal(hostagent.GetExpandRootPartitionJobName(elfMachine)))
 		})
 
@@ -397,7 +397,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				var err error
 				agentJob, err = hostagent.GetHostJob(ctx, testEnv.Client, elfMachine.Namespace, hostagent.GetRestartKubeletJobName(elfMachine))
 				return err
-			}, timeout).Should(BeNil())
+			}, timeout).Should(Succeed())
 			Expect(agentJob.Name).To(Equal(hostagent.GetRestartKubeletJobName(elfMachine)))
 		})
 

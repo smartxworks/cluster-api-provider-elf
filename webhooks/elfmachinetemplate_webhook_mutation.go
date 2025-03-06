@@ -53,7 +53,7 @@ func (m *ElfMachineTemplateMutation) SetupWebhookWithManager(mgr ctrl.Manager) e
 
 type ElfMachineTemplateMutation struct {
 	client.Client
-	decoder *admission.Decoder
+	decoder admission.Decoder
 	logr.Logger
 }
 
@@ -68,7 +68,7 @@ func (m *ElfMachineTemplateMutation) Handle(ctx goctx.Context, request admission
 	}
 
 	devices := elfMachineTemplate.Spec.Template.Spec.Network.Devices
-	for i := range len(devices) {
+	for i := range devices {
 		for j := range len(devices[i].AddressesFromPools) {
 			if devices[i].AddressesFromPools[j].APIGroup == nil || *devices[i].AddressesFromPools[j].APIGroup == "" {
 				devices[i].AddressesFromPools[j].APIGroup = ptr.To(defaultIPPoolAPIGroup)
@@ -87,7 +87,7 @@ func (m *ElfMachineTemplateMutation) Handle(ctx goctx.Context, request admission
 }
 
 // InjectDecoder injects the decoder.
-func (m *ElfMachineTemplateMutation) InjectDecoder(d *admission.Decoder) error {
+func (m *ElfMachineTemplateMutation) InjectDecoder(d admission.Decoder) error {
 	m.decoder = d
 	return nil
 }

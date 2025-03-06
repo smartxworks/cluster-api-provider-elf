@@ -67,8 +67,7 @@ var (
 	elfMachineConcurrency         int
 	elfMachineTemplateConcurrency int
 
-	tlsOptions         = capiflags.TLSOptions{}
-	diagnosticsOptions = capiflags.DiagnosticsOptions{}
+	managerOptions = capiflags.ManagerOptions{}
 
 	defaultProfilerAddr     = os.Getenv("PROFILER_ADDR")
 	defaultSyncPeriod       = manager.DefaultSyncPeriod
@@ -149,8 +148,7 @@ func InitFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&managerOpts.HealthProbeBindAddress, "health-addr", ":9440",
 		"The address the health endpoint binds to.")
 
-	capiflags.AddTLSOptions(fs, &tlsOptions)
-	capiflags.AddDiagnosticsOptions(fs, &diagnosticsOptions)
+	capiflags.AddManagerOptions(fs, &managerOptions)
 	feature.MutableGates.AddFlag(fs)
 }
 
@@ -238,15 +236,15 @@ func main() {
 		return nil
 	}
 
-	tlsOptionOverrides, err := capiflags.GetTLSOptionOverrideFuncs(tlsOptions)
+	tlsOptions, metricsOptions, err := capiflags.GetManagerOptions(managerOptions)
 	if err != nil {
-		setupLog.Error(err, "unable to add TLS settings to the webhook server")
+		setupLog.Error(err, "Unable to start manager: invalid flags")
 		os.Exit(1)
 	}
-	webhookOpts.TLSOpts = tlsOptionOverrides
+	webhookOpts.TLSOpts = tlsOptions
 	managerOpts.WebhookServer = webhook.NewServer(webhookOpts)
 	managerOpts.AddToManager = addToManager
-	managerOpts.Metrics = capiflags.GetDiagnosticsOptions(diagnosticsOptions)
+	managerOpts.Metrics = *metricsOptions
 
 	setupLog.Info("Creating controller manager", "capeVersion", version.CAPEVersion(), "version", version.Get().String())
 	// Set up the context that's going to be used in controllers and for the manager.
