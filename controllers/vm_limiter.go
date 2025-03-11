@@ -246,7 +246,7 @@ func lockGPUDevicesForVM(clusterID, vmName, hostID string, gpuDeviceInfos []*ser
 
 	availableCountMap := make(map[string]int32)
 	lockedGPUs := lockedVMGPUs{HostID: hostID, LockedAt: time.Now(), GPUDevices: make([]lockedGPUDevice, len(gpuDeviceInfos))}
-	for i := range len(gpuDeviceInfos) {
+	for i := range gpuDeviceInfos {
 		availableCountMap[gpuDeviceInfos[i].ID] = gpuDeviceInfos[i].AvailableCount - gpuDeviceInfos[i].AllocatedCount
 		lockedGPUs.GPUDevices[i] = lockedGPUDevice{ID: gpuDeviceInfos[i].ID, Count: gpuDeviceInfos[i].AllocatedCount}
 	}

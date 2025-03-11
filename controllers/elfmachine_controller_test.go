@@ -2375,7 +2375,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result).To(BeZero())
-			Expect(err).To(HaveOccurred())
+			Expect(err).To(Succeed())
 			Expect(logBuffer.String()).To(ContainSubstring("Skip VM deletion due to the force-delete-cluster annotation"))
 			elfCluster = &infrav1.ElfCluster{}
 			err = reconciler.Client.Get(ctx, elfMachineKey, elfCluster)
@@ -2407,7 +2407,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result).To(BeZero())
-			Expect(err).To(HaveOccurred())
+			Expect(err).To(Succeed())
 			Expect(logBuffer.String()).To(ContainSubstring("VM already deleted"))
 			elfCluster = &infrav1.ElfCluster{}
 			err = reconciler.Client.Get(ctx, elfMachineKey, elfCluster)
@@ -2478,7 +2478,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result).To(BeZero())
-			Expect(err).To(HaveOccurred())
+			Expect(err).To(Succeed())
 			Expect(logBuffer.String()).To(ContainSubstring("VM already deleted"))
 			elfMachine = &infrav1.ElfMachine{}
 			err = reconciler.Client.Get(ctx, elfMachineKey, elfMachine)

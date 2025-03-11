@@ -248,7 +248,7 @@ func setPGCache(pg *models.VMPlacementGroup) {
 
 // delPGCaches deletes the specified placement group caches.
 func delPGCaches(pgNames []string) {
-	for i := range len(pgNames) {
+	for i := range pgNames {
 		inMemoryCache.Delete(getKeyForPGCache(pgNames[i]))
 	}
 }
@@ -319,7 +319,7 @@ func setGPUVMInfosCache(gpuVMInfos service.GPUVMInfos) {
 // setGPUDeviceInfosCache gets the specified GPU device infos from the memory.
 func getGPUVMInfosFromCache(gpuIDs []string) service.GPUVMInfos {
 	gpuVMInfos := service.NewGPUVMInfos()
-	for i := range len(gpuIDs) {
+	for i := range gpuIDs {
 		key := getKeyForGPUVMInfo(gpuIDs[i])
 		if val, found := inMemoryCache.Get(key); found {
 			if gpuVMInfo, ok := val.(models.GpuVMInfo); ok {

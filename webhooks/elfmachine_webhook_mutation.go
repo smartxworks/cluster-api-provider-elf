@@ -50,7 +50,7 @@ func (m *ElfMachineMutation) SetupWebhookWithManager(mgr ctrl.Manager) error {
 
 type ElfMachineMutation struct {
 	client.Client
-	decoder *admission.Decoder
+	decoder admission.Decoder
 	logr.Logger
 }
 
@@ -91,7 +91,7 @@ func (m *ElfMachineMutation) Handle(ctx goctx.Context, request admission.Request
 }
 
 // InjectDecoder injects the decoder.
-func (m *ElfMachineMutation) InjectDecoder(d *admission.Decoder) error {
+func (m *ElfMachineMutation) InjectDecoder(d admission.Decoder) error {
 	m.decoder = d
 	return nil
 }
