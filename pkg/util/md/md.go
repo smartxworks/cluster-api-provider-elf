@@ -91,5 +91,5 @@ func ResolveFenceposts(maxSurge, maxUnavailable *intstrutil.IntOrString, desired
 		unavailable = 1
 	}
 
-	return int32(surge), int32(unavailable), nil
+	return int32(surge), int32(unavailable), nil //nolint:gosec
 }

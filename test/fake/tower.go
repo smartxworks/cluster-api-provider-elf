@@ -54,7 +54,7 @@ func NewTowerHost() *models.Host {
 		LocalID:                &localID,
 		Name:                   &id,
 		Status:                 models.NewHostStatus(models.HostStatusCONNECTEDHEALTHY),
-		AllocatableMemoryBytes: ptr.To[int64](7 * 1024 * 1024 * 1024),
+		AllocatableMemoryBytes: ptr.To[int64](7 * service.GiB),
 	}
 }
 
@@ -140,7 +140,7 @@ func NewVMPlacementGroup(vmIDs []string) *models.VMPlacementGroup {
 	id := ID()
 	localID := UUID()
 	vms := make([]*models.NestedVM, 0, len(vmIDs))
-	for i := range len(vmIDs) {
+	for i := range vmIDs {
 		vms = append(vms, &models.NestedVM{ID: &vmIDs[i]})
 	}
 

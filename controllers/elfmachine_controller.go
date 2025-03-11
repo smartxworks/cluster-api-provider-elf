@@ -1190,7 +1190,7 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx goctx.Context, machineCtx *c
 		return false, err
 	}
 
-	for i := range len(nics) {
+	for i := range nics {
 		nic := nics[i]
 		ip := service.GetTowerString(nic.IPAddress)
 
@@ -1434,14 +1434,14 @@ func (r *ElfMachineReconciler) deleteDuplicateVMs(ctx goctx.Context, machineCtx 
 
 	if machineCtx.ElfMachine.Status.VMRef == "" {
 		vmIDs := make([]string, 0, len(vms))
-		for i := range len(vms) {
+		for i := range vms {
 			vmIDs = append(vmIDs, *vms[i].ID)
 		}
 		log.Info("Waiting for ElfMachine to select one of the duplicate VMs before deleting the other", "vms", vmIDs)
 		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
 	}
 
-	for i := range len(vms) {
+	for i := range vms {
 		// Do not delete already running virtual machines to avoid deleting already used virtual machines.
 		if *vms[i].ID == machineCtx.ElfMachine.Status.VMRef ||
 			*vms[i].LocalID == machineCtx.ElfMachine.Status.VMRef ||
