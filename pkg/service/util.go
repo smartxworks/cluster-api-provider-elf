@@ -29,6 +29,13 @@ import (
 	typesutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/types"
 )
 
+// Memory units.
+const (
+	KiB = 1024
+	MiB = KiB * 1024
+	GiB = MiB * 1024
+)
+
 // GetUpdatedVMRestrictedFields returns the updated restricted fields of the VM compared to ElfMachine.
 // restricted fields: vcpu/cpuCores/cpuSockets.
 func GetUpdatedVMRestrictedFields(vm *models.VM, elfMachine *infrav1.ElfMachine) map[string]string {
@@ -94,18 +101,18 @@ func TowerMemory(memoryMiB int64) *int64 {
 		memory = config.VMMemoryMiB
 	}
 
-	return ptr.To[int64](memory * 1024 * 1024)
+	return ptr.To[int64](memory * MiB)
 }
 
 func TowerDisk(diskGiB int32) *int64 {
 	disk := int64(diskGiB)
-	disk = disk * 1024 * 1024 * 1024
+	disk *= GiB
 
 	return &disk
 }
 
 func TowerInt32(v int) *int32 {
-	val := int32(v)
+	val := int32(v) //nolint:gosec
 
 	return &val
 }
@@ -151,11 +158,11 @@ func TowerCPUSockets(vCPU, cpuSocketCores int32) *int32 {
 }
 
 func ByteToGiB(bytes int64) int32 {
-	return int32(bytes / 1024 / 1024 / 1024)
+	return int32(bytes / GiB) //nolint:gosec
 }
 
 func ByteToMiB(bytes int64) int64 {
-	return bytes / 1024 / 1024
+	return bytes / MiB
 }
 
 func IsVMInRecycleBin(vm *models.VM) bool {
@@ -260,7 +267,7 @@ func HasGPUsCanNotBeUsedForVM(gpuVMInfos GPUVMInfos, elfMachine *infrav1.ElfMach
 	}
 
 	vGPUDevices := elfMachine.Spec.VGPUDevices
-	for i := range len(vGPUDevices) {
+	for i := range vGPUDevices {
 		if count, ok := availableCountMap[vGPUDevices[i].Type]; !ok || vGPUDevices[i].Count > count {
 			return true
 		}
@@ -286,7 +293,7 @@ func GetAvailableCountFromGPUVMInfo(gpuVMInfo *models.GpuVMInfo) int32 {
 // getVMsOccupyingGPU finds the virtual machines in the given list which are actually occupying the GPU devices.
 func getVMsOccupyingGPU(gpuVMs []*models.GpuVMDetail) []*models.GpuVMDetail {
 	var vms []*models.GpuVMDetail
-	for i := range len(gpuVMs) {
+	for i := range gpuVMs {
 		if (gpuVMs[i].InRecycleBin == nil || !*gpuVMs[i].InRecycleBin) &&
 			*gpuVMs[i].Status != models.VMStatusSTOPPED {
 			vms = append(vms, gpuVMs[i])
@@ -333,7 +340,7 @@ func GetVMSystemDisk(disks []*models.VMDisk) *models.VMDisk {
 	}
 
 	systemDisk := disks[0]
-	for i := range len(disks) {
+	for i := range disks {
 		if *disks[i].Boot < *systemDisk.Boot {
 			systemDisk = disks[i]
 		}

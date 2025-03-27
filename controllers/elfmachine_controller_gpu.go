@@ -135,7 +135,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 		unsortedHostIDs = hostIDSet.UnsortedList()
 	}
 
-	for i := range len(unsortedHostIDs) {
+	for i := range unsortedHostIDs {
 		hostGPUVMInfos, ok := hostGPUVMInfoMap[unsortedHostIDs[i]]
 		if !ok {
 			continue
@@ -179,14 +179,14 @@ func selectGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredGPUDevices
 	})
 
 	var selectedGPUDeviceInfos []*service.GPUDeviceInfo
-	for i := range len(requiredGPUDevices) {
+	for i := range requiredGPUDevices {
 		gpuVMInfos, ok := modelGPUVMInfoMap[requiredGPUDevices[i].Model]
 		if !ok || len(gpuVMInfos) < int(requiredGPUDevices[i].Count) {
 			return nil
 		}
 
 		gpuInfos := gpuVMInfos[:int(requiredGPUDevices[i].Count)]
-		for j := range len(gpuInfos) {
+		for j := range gpuInfos {
 			selectedGPUDeviceInfos = append(selectedGPUDeviceInfos, &service.GPUDeviceInfo{ID: *gpuInfos[j].ID, AllocatedCount: 1, AvailableCount: 1})
 		}
 	}
@@ -208,7 +208,7 @@ func selectVGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredVGPUDevic
 	})
 
 	var selectedGPUDeviceInfos []*service.GPUDeviceInfo
-	for i := range len(requiredVGPUDevices) {
+	for i := range requiredVGPUDevices {
 		gpuVMInfos, ok := typeVGPUVMInfoMap[requiredVGPUDevices[i].Type]
 		if !ok {
 			return nil
@@ -216,7 +216,7 @@ func selectVGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredVGPUDevic
 
 		var gpuInfos []*service.GPUDeviceInfo
 		requiredCount := requiredVGPUDevices[i].Count
-		for j := range len(gpuVMInfos) {
+		for j := range gpuVMInfos {
 			availableCount := service.GetAvailableCountFromGPUVMInfo(gpuVMInfos[j])
 			if availableCount <= 0 {
 				continue
