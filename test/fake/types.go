@@ -65,7 +65,9 @@ func NewClusterObjects() (*infrav1.ElfCluster, *clusterv1.Cluster) {
 			Name:      names.SimpleNameGenerator.GenerateName("elfcluster-"),
 			Namespace: Namespace,
 		},
-		Spec:   infrav1.ElfClusterSpec{},
+		Spec: infrav1.ElfClusterSpec{
+			ClusterType: infrav1.ElfClusterTypeStandard,
+		},
 		Status: infrav1.ElfClusterStatus{},
 	}
 

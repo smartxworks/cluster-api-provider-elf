@@ -45,6 +45,28 @@ func NewTowerCluster() *models.Cluster {
 	}
 }
 
+func NewTowerPreferredZone() *models.Zone {
+	id := ID()
+	localID := UUID()
+
+	return &models.Zone{
+		ID:          &id,
+		LocalID:     &localID,
+		IsPreferred: ptr.To(true),
+	}
+}
+
+func NewTowerSecondaryZone() *models.Zone {
+	id := ID()
+	localID := UUID()
+
+	return &models.Zone{
+		ID:          &id,
+		LocalID:     &localID,
+		IsPreferred: ptr.To(false),
+	}
+}
+
 func NewTowerHost() *models.Host {
 	id := ID()
 	localID := UUID()

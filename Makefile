@@ -271,7 +271,7 @@ build: generate ## Build manager binary.
 
 .PHONY: run
 run: generate ## Run a controller from your host.
-	go run ./main.go --leader-election-namespace default -v 2
+	TOWER_RESOURCE_PREFIX=sks go run ./main.go --leader-election-namespace default -v 2 --kubeconfig .vscode/kubeconfig/kube2374
 
 .PHONY: install
 install: generate kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.

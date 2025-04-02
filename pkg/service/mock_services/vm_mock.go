@@ -263,6 +263,21 @@ func (mr *MockVMServiceMockRecorder) GetCluster(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCluster", reflect.TypeOf((*MockVMService)(nil).GetCluster), id)
 }
 
+// GetClusterZones mocks base method.
+func (m *MockVMService) GetClusterZones(id string) ([]*models.Zone, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetClusterZones", id)
+	ret0, _ := ret[0].([]*models.Zone)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetClusterZones indicates an expected call of GetClusterZones.
+func (mr *MockVMServiceMockRecorder) GetClusterZones(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterZones", reflect.TypeOf((*MockVMService)(nil).GetClusterZones), id)
+}
+
 // GetGPUDevicesAllocationInfoByHostIDs mocks base method.
 func (m *MockVMService) GetGPUDevicesAllocationInfoByHostIDs(hostIDs []string, gpuDeviceUsage models.GpuDeviceUsage) (service.GPUVMInfos, error) {
 	m.ctrl.T.Helper()

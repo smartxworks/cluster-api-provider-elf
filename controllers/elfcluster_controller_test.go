@@ -282,4 +282,53 @@ var _ = Describe("ElfClusterReconciler", func() {
 			Expect(logBuffer.String()).NotTo(ContainSubstring(fmt.Sprintf("Cleaning orphan labels in Tower %s created by CAPE", elfCluster.Spec.Tower.Server)))
 		})
 	})
+
+	Context("reconcileElfCluster", func() {
+		It("should not reconcile when clusterType is not empty", func() {
+			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStretched
+			ctrlMgrCtx := fake.NewControllerManagerContext(cluster, elfCluster)
+			fake.InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
+			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			err := reconciler.reconcileElfCluster(ctx, &context.ClusterContext{
+				Cluster:    cluster,
+				ElfCluster: elfCluster,
+				Logger:     ctrllog.Log,
+				VMService:  mockVMService,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(elfCluster.Spec.ClusterType).To(Equal(infrav1.ElfClusterTypeStretched))
+		})
+
+		It("should set clusterType to standard when the cluster is not stretched", func() {
+			elfCluster.Spec.ClusterType = ""
+			ctrlMgrCtx := fake.NewControllerManagerContext(cluster, elfCluster)
+			fake.InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(&models.Cluster{Stretch: service.TowerBool(false)}, nil)
+			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			err := reconciler.reconcileElfCluster(ctx, &context.ClusterContext{
+				Cluster:    cluster,
+				ElfCluster: elfCluster,
+				Logger:     ctrllog.Log,
+				VMService:  mockVMService,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(elfCluster.Spec.ClusterType).To(Equal(infrav1.ElfClusterTypeStandard))
+		})
+
+		It("should set clusterType to stretched when the cluster is stretched", func() {
+			elfCluster.Spec.ClusterType = ""
+			ctrlMgrCtx := fake.NewControllerManagerContext(cluster, elfCluster)
+			fake.InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
+			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(&models.Cluster{Stretch: service.TowerBool(true)}, nil)
+			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			err := reconciler.reconcileElfCluster(ctx, &context.ClusterContext{
+				Cluster:    cluster,
+				ElfCluster: elfCluster,
+				Logger:     ctrllog.Log,
+				VMService:  mockVMService,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(elfCluster.Spec.ClusterType).To(Equal(infrav1.ElfClusterTypeStretched))
+		})
+	})
 })

@@ -988,26 +988,123 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 	})
 
+	Context("reconcileHostAndZone", func() {
+		var (
+			vm         *models.VM
+			host       *models.Host
+			nestedHost *models.NestedHost
+		)
+
+		BeforeEach(func() {
+			vm = fake.NewTowerVM()
+			host = fake.NewTowerHost()
+			nestedHost = &models.NestedHost{
+				ID:   service.TowerString(*host.ID),
+				Name: service.TowerString(*host.Name),
+			}
+			vm.Host = nestedHost
+		})
+
+		It("should update host for standard cluster", func() {
+			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineCtx := &context.MachineContext{
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+				VMService:  mockVMService,
+			}
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(elfMachine.Status.HostServerRef).To(Equal(*host.ID))
+			Expect(elfMachine.Status.HostServerName).To(Equal(*host.Name))
+		})
+
+		It("should update zone status for stretched cluster", func() {
+			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStretched
+			zone := fake.NewTowerPreferredZone()
+			zone.Hosts = []*models.NestedHost{nestedHost}
+			mockVMService.EXPECT().GetClusterZones(elfCluster.Spec.Cluster).Return([]*models.Zone{zone}, nil)
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineCtx := &context.MachineContext{
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+				VMService:  mockVMService,
+			}
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(elfMachine.Status.HostServerRef).To(Equal(*host.ID))
+			Expect(elfMachine.Status.HostServerName).To(Equal(*host.Name))
+			Expect(elfMachine.Status.Zone.ZoneID).To(Equal(*zone.ID))
+			Expect(elfMachine.Status.Zone.Type).To(Equal(infrav1.ElfClusterZoneTypePreferred))
+		})
+
+		It("should update zone status for host in secondary zone", func() {
+			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStretched
+			zone := fake.NewTowerSecondaryZone()
+			zone.Hosts = []*models.NestedHost{nestedHost}
+			mockVMService.EXPECT().GetClusterZones(elfCluster.Spec.Cluster).Return([]*models.Zone{zone}, nil)
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineCtx := &context.MachineContext{
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+				VMService:  mockVMService,
+			}
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(elfMachine.Status.HostServerRef).To(Equal(*host.ID))
+			Expect(elfMachine.Status.HostServerName).To(Equal(*host.Name))
+			Expect(elfMachine.Status.Zone.ZoneID).To(Equal(*zone.ID))
+			Expect(elfMachine.Status.Zone.Type).To(Equal(infrav1.ElfClusterZoneTypeSecondary))
+		})
+
+		It("should return error when host zone not found", func() {
+			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStretched
+			mockVMService.EXPECT().GetClusterZones(elfCluster.Spec.Cluster).Return([]*models.Zone{}, nil)
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineCtx := &context.MachineContext{
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+				VMService:  mockVMService,
+			}
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get zone for the host"))
+			Expect(elfMachine.Status.HostServerRef).To(Equal(*host.ID))
+			Expect(elfMachine.Status.HostServerName).To(Equal(*host.Name))
+		})
+
+		It("should return error when GetClusterZones failed", func() {
+			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStretched
+			mockVMService.EXPECT().GetClusterZones(elfCluster.Spec.Cluster).Return(nil, errors.New("failed to get zones"))
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineCtx := &context.MachineContext{
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+				VMService:  mockVMService,
+			}
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get zones"))
+			Expect(elfMachine.Status.HostServerRef).To(Equal(*host.ID))
+			Expect(elfMachine.Status.HostServerName).To(Equal(*host.Name))
+		})
+	})
+
 	Context("Reconcile Join Placement Group", func() {
 		BeforeEach(func() {
 			cluster.Status.InfrastructureReady = true
 			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
-		})
-
-		It("should skip adding VM to the placement group when capeVersion of ElfMachine is lower than v1.2.0", func() {
-			fake.ToCPMachine(machine, kcp)
-			fake.ToCPMachine(elfMachine, kcp)
-			delete(elfMachine.Annotations, infrav1.CAPEVersionAnnotation)
-			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
-			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
-			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
-
-			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
-			ok, err := reconciler.joinPlacementGroup(ctx, machineContext, nil)
-			Expect(ok).To(BeTrue())
-			Expect(err).To(BeZero())
-			Expect(logBuffer.String()).To(ContainSubstring("The capeVersion of ElfMachine is lower than"))
 		})
 
 		It("should add vm to the placement group", func() {
@@ -3481,6 +3578,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should set providerID and labels for node", func() {
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
+			elfMachine.Status.Zone = infrav1.ZoneStatus{
+				ZoneID: fake.UUID(),
+				Type:   infrav1.ElfClusterZoneTypePreferred,
+			}
 			vm := fake.NewTowerVM()
 			ctrlMgrCtx := &context.ControllerManagerContext{
 				Client:                  testEnv.Client,
@@ -3516,6 +3617,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				return node.Spec.ProviderID == machineutil.ConvertUUIDToProviderID(*vm.LocalID) &&
 					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
 					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName &&
+					node.Labels[infrav1.ZoneIDLabel] == elfMachine.Status.Zone.ZoneID &&
+					node.Labels[infrav1.ZoneTypeLabel] == elfMachine.Status.Zone.Type.ToLower() &&
 					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID &&
 					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine)
 			}, timeout).Should(BeTrue())
@@ -3524,6 +3627,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 		It("should update labels but not update providerID", func() {
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
+			elfMachine.Status.Zone = infrav1.ZoneStatus{
+				ZoneID: fake.UUID(),
+				Type:   infrav1.ElfClusterZoneTypePreferred,
+			}
 			vm := fake.NewTowerVM()
 			ctrlMgrCtx := &context.ControllerManagerContext{
 				Client:                  testEnv.Client,
@@ -3545,6 +3652,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 					Labels: map[string]string{
 						infrav1.HostServerIDLabel:   "old-host-id",
 						infrav1.HostServerNameLabel: "old-host-name",
+						infrav1.ZoneIDLabel:         "old-zone-id",
+						infrav1.ZoneTypeLabel:       "old-zone-type",
 						infrav1.TowerVMIDLabel:      "old-vm-id",
 					},
 				},
@@ -3565,7 +3674,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 				return node.Spec.ProviderID == providerID &&
 					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
-					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName
+					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName &&
+					node.Labels[infrav1.ZoneIDLabel] == elfMachine.Status.Zone.ZoneID &&
+					node.Labels[infrav1.ZoneTypeLabel] == elfMachine.Status.Zone.Type.ToLower()
 			}, timeout).Should(BeTrue())
 		})
 	})
