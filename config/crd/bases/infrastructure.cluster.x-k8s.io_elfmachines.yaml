@@ -262,6 +262,19 @@ spec:
                       type: string
                   type: object
                 type: array
+              zone:
+                description: Zone is the status of the zone.
+                properties:
+                  type:
+                    description: Type is the type of the zone.
+                    enum:
+                    - Preferred
+                    - Secondary
+                    type: string
+                  zoneId:
+                    description: ZoneID is the ID of the zone.
+                    type: string
+                type: object
             required:
             - template
             type: object
@@ -469,6 +482,19 @@ spec:
                   This value is set automatically at runtime and should not be set or
                   modified by users.
                 type: string
+              zone:
+                description: Zone is the status of the zone.
+                properties:
+                  type:
+                    description: Type is the type of the zone.
+                    enum:
+                    - Preferred
+                    - Secondary
+                    type: string
+                  zoneId:
+                    description: ZoneID is the ID of the zone.
+                    type: string
+                type: object
             type: object
         type: object
     served: true

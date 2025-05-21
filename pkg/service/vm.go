@@ -35,6 +35,7 @@ import (
 	clientvmnic "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_nic"
 	clientvmplacementgroup "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_placement_group"
 	clientvmvolume "github.com/smartxworks/cloudtower-go-sdk/v2/client/vm_volume"
+	clientzone "github.com/smartxworks/cloudtower-go-sdk/v2/client/zone"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -67,6 +68,7 @@ type VMService interface {
 	GetTask(id string) (*models.Task, error)
 	WaitTask(ctx goctx.Context, id string, timeout, interval time.Duration) (*models.Task, error)
 	GetCluster(id string) (*models.Cluster, error)
+	GetClusterZones(clusterID string) ([]*models.Zone, error)
 	GetHost(id string) (*models.Host, error)
 	GetHostsByCluster(clusterID string) (Hosts, error)
 	GetVlan(id string) (*models.Vlan, error)
@@ -189,6 +191,24 @@ func (svr *TowerVMService) Clone(
 		return nil, err
 	}
 
+	createVMFromTemplateParams, err := svr.createVMFromTemplateParams(elfCluster, elfMachine, bootstrapData, host, gpuDeviceInfos, cluster, template)
+	if err != nil {
+		return nil, err
+	}
+
+	createVMFromContentLibraryTemplateParams := clientvm.NewCreateVMFromContentLibraryTemplateParams()
+	createVMFromContentLibraryTemplateParams.RequestBody = []*models.VMCreateVMFromContentLibraryTemplateParams{createVMFromTemplateParams}
+	createVMFromTemplateResp, err := svr.Session.VM.CreateVMFromContentLibraryTemplate(createVMFromContentLibraryTemplateParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return createVMFromTemplateResp.Payload[0], nil
+}
+
+func (svr *TowerVMService) createVMFromTemplateParams(
+	elfCluster *infrav1.ElfCluster, elfMachine *infrav1.ElfMachine, bootstrapData,
+	host string, gpuDeviceInfos []*GPUDeviceInfo, cluster *models.Cluster, template *models.ContentLibraryVMTemplate) (*models.VMCreateVMFromContentLibraryTemplateParams, error) {
 	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
 	cpuSocketCores := TowerCPUSocketCores(elfMachine.Spec.NumCoresPerSocket, *vCPU)
 	cpuSockets := TowerCPUSockets(*vCPU, *cpuSocketCores)
@@ -259,13 +279,34 @@ func (svr *TowerVMService) Clone(
 			})
 		}
 
-		networks = append(networks, &models.CloudInitNetWork{
-			NicIndex:  TowerInt32(i),
-			Type:      &networkType,
-			IPAddress: TowerString(ipAddress),
-			Netmask:   TowerString(device.Netmask),
-			Routes:    routes,
-		})
+		network := &models.CloudInitNetWork{
+			NicIndex: TowerInt32(i),
+			Type:     &networkType,
+		}
+		if ipAddress != "" {
+			network.IPAddress = TowerString(ipAddress)
+		}
+		if device.Netmask != "" {
+			network.Netmask = TowerString(device.Netmask)
+		}
+		if len(routes) > 0 {
+			network.Routes = routes
+		}
+
+		networks = append(networks, network)
+	}
+
+	cloudInit := &models.TemplateCloudInit{
+		Hostname:    TowerString(elfMachine.Name),
+		UserData:    TowerString(bootstrapData),
+		Networks:    networks,
+		Nameservers: elfMachine.Spec.Network.Nameservers,
+	}
+	if len(elfMachine.Spec.Network.Nameservers) == 0 {
+		cloudInit.Nameservers = nil
+	}
+	if len(networks) == 0 {
+		cloudInit = nil
 	}
 
 	isFullCopy := false
@@ -294,7 +335,34 @@ func (svr *TowerVMService) Clone(
 		}
 	}
 
-	vmCreateVMFromTemplateParams := &models.VMCreateVMFromContentLibraryTemplateParams{
+	var diskOperate *models.VMDiskOperate
+	if elfCluster.IsStretched() {
+		// https://gist.github.com/Sczlog/f89763d27711fb2bbe28182f05b99334
+		diskOperate = &models.VMDiskOperate{
+			RemoveDisks: &models.VMDiskOperateRemoveDisks{},
+			NewDisks:    &models.VMDiskParams{},
+		}
+		for _, disk := range template.VMDisks {
+			if *disk.Type != models.VMDiskTypeDISK {
+				continue
+			}
+
+			diskOperate.RemoveDisks.DiskIndex = append(diskOperate.RemoveDisks.DiskIndex, *disk.Index)
+
+			diskOperate.NewDisks.MountNewCreateDisks = append(diskOperate.NewDisks.MountNewCreateDisks, &models.MountNewCreateDisksParams{
+				Boot:  disk.Boot,
+				Bus:   disk.Bus,
+				Index: disk.Index,
+				VMVolume: &models.MountNewCreateDisksParamsVMVolume{
+					Name:             TowerString(fmt.Sprintf("%s-%d", elfMachine.Name, *disk.Index+1)),
+					Size:             disk.Size,
+					ElfStoragePolicy: models.NewVMVolumeElfStoragePolicyType(models.VMVolumeElfStoragePolicyTypeREPLICA3THINPROVISION),
+				},
+			})
+		}
+	}
+
+	return &models.VMCreateVMFromContentLibraryTemplateParams{
 		ClusterID:   cluster.ID,
 		HostID:      TowerString(hostID),
 		Name:        TowerString(elfMachine.Name),
@@ -311,23 +379,9 @@ func (svr *TowerVMService) Clone(
 		TemplateID:  template.ID,
 		GuestOsType: models.NewVMGuestsOperationSystem(models.VMGuestsOperationSystem(elfMachine.Spec.OSType)),
 		VMNics:      nics,
-		DiskOperate: &models.VMDiskOperate{},
-		CloudInit: &models.TemplateCloudInit{
-			Hostname:    TowerString(elfMachine.Name),
-			UserData:    TowerString(bootstrapData),
-			Networks:    networks,
-			Nameservers: elfMachine.Spec.Network.Nameservers,
-		},
-	}
-
-	createVMFromTemplateParams := clientvm.NewCreateVMFromContentLibraryTemplateParams()
-	createVMFromTemplateParams.RequestBody = []*models.VMCreateVMFromContentLibraryTemplateParams{vmCreateVMFromTemplateParams}
-	createVMFromTemplateResp, err := svr.Session.VM.CreateVMFromContentLibraryTemplate(createVMFromTemplateParams)
-	if err != nil {
-		return nil, err
-	}
-
-	return createVMFromTemplateResp.Payload[0], nil
+		DiskOperate: diskOperate,
+		CloudInit:   cloudInit,
+	}, nil
 }
 
 func (svr *TowerVMService) Migrate(vmID, hostID string) (*models.WithTaskVM, error) {
@@ -612,6 +666,24 @@ func (svr *TowerVMService) GetCluster(id string) (*models.Cluster, error) {
 	}
 
 	return getClustersResp.Payload[0], nil
+}
+
+func (svr *TowerVMService) GetClusterZones(clusterID string) ([]*models.Zone, error) {
+	getZonesParams := clientzone.NewGetZonesParams()
+	getZonesParams.RequestBody = &models.GetZonesRequestBody{
+		Where: &models.ZoneWhereInput{
+			Cluster: &models.ClusterWhereInput{
+				OR: []*models.ClusterWhereInput{{LocalID: TowerString(clusterID)}, {ID: TowerString(clusterID)}},
+			},
+		},
+	}
+
+	getZonesResp, err := svr.Session.Zone.GetZones(getZonesParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return getZonesResp.Payload, nil
 }
 
 func (svr *TowerVMService) GetHost(id string) (*models.Host, error) {
