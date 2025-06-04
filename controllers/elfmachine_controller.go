@@ -620,14 +620,6 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 		return vm, false, nil
 	}
 
-	// The host of the virtual machine may change, such as rescheduling caused by HA.
-	if vm.Host != nil && machineCtx.ElfMachine.Status.HostServerName != *vm.Host.Name {
-		hostName := machineCtx.ElfMachine.Status.HostServerName
-		machineCtx.ElfMachine.Status.HostServerRef = *vm.Host.ID
-		machineCtx.ElfMachine.Status.HostServerName = *vm.Host.Name
-		log.V(1).Info(fmt.Sprintf("Updated VM hostServerName from %s to %s", hostName, *vm.Host.Name))
-	}
-
 	vmRef := util.GetVMRef(vm)
 	// If vmRef is in UUID format, it means that the ELF VM created.
 	if !typesutil.IsUUID(vmRef) {
@@ -639,6 +631,10 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 	// When ELF VM created, set UUID to VMRef
 	if !typesutil.IsUUID(machineCtx.ElfMachine.Status.VMRef) {
 		machineCtx.ElfMachine.SetVM(vmRef)
+	}
+
+	if err := r.reconcileHostAndZone(ctx, machineCtx, vm); err != nil {
+		return nil, false, err
 	}
 
 	// The VM was moved to the recycle bin. Treat the VM as deleted, and will not reconganize it even if it's moved back from the recycle bin.
@@ -1066,6 +1062,50 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx goctx.Context, machineC
 	return nil
 }
 
+// reconcileHostAndZone reconciles the host and zone of the virtual machine.
+func (r *ElfMachineReconciler) reconcileHostAndZone(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) error {
+	log := ctrl.LoggerFrom(ctx)
+
+	// The host of the virtual machine may change, such as rescheduling caused by HA.
+	if vm.Host != nil && machineCtx.ElfMachine.Status.HostServerName != *vm.Host.Name {
+		hostName := machineCtx.ElfMachine.Status.HostServerName
+		machineCtx.ElfMachine.Status.HostServerRef = *vm.Host.ID
+		machineCtx.ElfMachine.Status.HostServerName = *vm.Host.Name
+		log.V(1).Info(fmt.Sprintf("Updated VM hostServerName from %s to %s", hostName, *vm.Host.Name))
+	}
+
+	if !machineCtx.ElfCluster.IsStretched() {
+		return nil
+	}
+
+	zones, err := machineCtx.VMService.GetClusterZones(machineCtx.ElfCluster.Spec.Cluster)
+	if err != nil {
+		return err
+	}
+
+	zone := service.GetHostZone(zones, machineCtx.ElfMachine.Status.HostServerRef)
+	if zone == nil {
+		return errors.New("failed to get zone for the host %s" + machineCtx.ElfMachine.Status.HostServerRef)
+	}
+
+	zoneType := infrav1.ElfClusterZoneTypeSecondary
+	if *zone.IsPreferred {
+		zoneType = infrav1.ElfClusterZoneTypePreferred
+	}
+
+	zoneStatus := infrav1.ZoneStatus{
+		ZoneID: *zone.ID,
+		Type:   zoneType,
+	}
+
+	if !zoneStatus.Equal(&machineCtx.ElfMachine.Status.Zone) {
+		machineCtx.ElfMachine.Status.Zone = zoneStatus
+		log.V(1).Info(fmt.Sprintf("Updated VM zone from %s to %s", machineCtx.ElfMachine.Status.Zone, zoneStatus))
+	}
+
+	return nil
+}
+
 func (r *ElfMachineReconciler) reconcileProviderID(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) error {
 	log := ctrl.LoggerFrom(ctx)
 
@@ -1115,8 +1155,14 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 	nodeHostID := labelsutil.GetHostServerIDLabel(node)
 	nodeHostName := labelsutil.GetHostServerNameLabel(node)
 	towerVMID := labelsutil.GetTowerVMIDLabel(node)
-	if node.Spec.ProviderID != "" && nodeHostID == machineCtx.ElfMachine.Status.HostServerRef &&
-		nodeHostName == machineCtx.ElfMachine.Status.HostServerName && towerVMID == *vm.ID {
+	nodeZoneID := labelsutil.GetZoneIDLabel(node)
+	nodeZoneType := labelsutil.GetZoneTypeLabel(node)
+	if node.Spec.ProviderID != "" &&
+		nodeHostID == machineCtx.ElfMachine.Status.HostServerRef &&
+		nodeHostName == machineCtx.ElfMachine.Status.HostServerName &&
+		nodeZoneID == machineCtx.ElfMachine.Status.Zone.ZoneID &&
+		nodeZoneType == machineCtx.ElfMachine.Status.Zone.Type.ToLower() &&
+		towerVMID == *vm.ID {
 		return true, nil
 	}
 
@@ -1124,6 +1170,8 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 	labels := map[string]string{
 		infrav1.HostServerIDLabel:   machineCtx.ElfMachine.Status.HostServerRef,
 		infrav1.HostServerNameLabel: machineCtx.ElfMachine.Status.HostServerName,
+		infrav1.ZoneIDLabel:         machineCtx.ElfMachine.Status.Zone.ZoneID,
+		infrav1.ZoneTypeLabel:       machineCtx.ElfMachine.Status.Zone.Type.ToLower(),
 		infrav1.TowerVMIDLabel:      *vm.ID,
 		infrav1.NodeGroupLabel:      nodeGroupName,
 	}

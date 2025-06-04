@@ -52,6 +52,14 @@ const (
 	// It is the name of host server where the virtual machine runs on.
 	HostServerNameLabel = "cape.infrastructure.cluster.x-k8s.io/host-server-name"
 
+	// ZoneIDLabel is the label set on nodes.
+	// It is the Tower ID of zone where the virtual machine runs on.
+	ZoneIDLabel = "cape.infrastructure.cluster.x-k8s.io/zone-id"
+
+	// ZoneTypeLabel is the label set on nodes.
+	// It is the type of zone where the virtual machine runs on.
+	ZoneTypeLabel = "cape.infrastructure.cluster.x-k8s.io/zone-type"
+
 	// TowerVMIDLabel is the label set on nodes.
 	// It is the Tower VM ID.
 	TowerVMIDLabel = "cape.infrastructure.cluster.x-k8s.io/tower-vm-id"

@@ -96,6 +96,11 @@ type ElfMachineSpec struct {
 	// +optional
 	HA bool `json:"ha,omitempty"`
 
+	// +kubebuilder:validation:Enum=LOW;MEDIUM;HIGH
+	// Defaults to MEDIUM.
+	// +optional
+	HAPriority string `json:"haPriority,omitempty"`
+
 	// +optional
 	CloneMode CloneMode `json:"cloneMode,omitempty"`
 
@@ -104,6 +109,10 @@ type ElfMachineSpec struct {
 	// Defaults to AUTO_SCHEDULE.
 	// +optional
 	Host string `json:"host,omitempty"`
+
+	// Zone is the status of the zone.
+	// +optional
+	Zone ZoneStatus `json:"zone,omitempty"`
 }
 
 // ElfMachineStatus defines the observed state of ElfMachine.
@@ -200,6 +209,10 @@ type ElfMachineStatus struct {
 	// modified by users.
 	// +optional
 	PlacementGroupRef string `json:"placementGroupRef,omitempty"`
+
+	// Zone is the status of the zone.
+	// +optional
+	Zone ZoneStatus `json:"zone,omitempty"`
 }
 
 //+kubebuilder:object:root=true

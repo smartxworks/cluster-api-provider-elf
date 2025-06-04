@@ -17,6 +17,9 @@ limitations under the License.
 package v1beta1
 
 import (
+	"fmt"
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -45,6 +48,32 @@ const (
 	NetworkTypeIPV4     NetworkType = "IPV4"
 	NetworkTypeIPV4DHCP NetworkType = "IPV4_DHCP"
 )
+
+// ElfClusterType is the type of the ELF cluster.
+type ElfClusterType string
+
+// ElfCluster types.
+const (
+	ElfClusterTypeStretched ElfClusterType = "Stretched"
+	ElfClusterTypeStandard  ElfClusterType = "Standard"
+)
+
+func (t ElfClusterType) ToLower() string {
+	return strings.ToLower(string(t))
+}
+
+// ElfClusterZoneType is the type of the zone.
+type ElfClusterZoneType string
+
+// ElfClusterZone types.
+const (
+	ElfClusterZoneTypePreferred ElfClusterZoneType = "Preferred"
+	ElfClusterZoneTypeSecondary ElfClusterZoneType = "Secondary"
+)
+
+func (z ElfClusterZoneType) ToLower() string {
+	return strings.ToLower(string(z))
+}
 
 type Tower struct {
 	// Server is address of the tower server.
@@ -204,6 +233,30 @@ type ResourcesStatus struct {
 	CPUCores int32 `json:"cpu,omitempty"`
 	// Memory is the total number of memory in MiB allocated for the virtual machine.
 	Memory resource.Quantity `json:"memory,omitempty"`
+}
+
+// ZoneStatus is the status of a zone.
+type ZoneStatus struct {
+	// ZoneID is the ID of the zone.
+	ZoneID string `json:"zoneId,omitempty"`
+
+	// Type is the type of the zone.
+	// +kubebuilder:validation:Enum=Preferred;Secondary
+	Type ElfClusterZoneType `json:"type,omitempty"`
+}
+
+// String returns a string representation of this ZoneStatus.
+func (z *ZoneStatus) String() string {
+	return fmt.Sprintf("%s:%s", z.ZoneID, z.Type)
+}
+
+func (z *ZoneStatus) Equal(other *ZoneStatus) bool {
+	return z.ZoneID == other.ZoneID && z.Type == other.Type
+}
+
+// IsZero returns true if both ZoneID and Type are zero values.
+func (z *ZoneStatus) IsZero() bool {
+	return z.ZoneID == "" && z.Type == ""
 }
 
 //+kubebuilder:object:generate=false
