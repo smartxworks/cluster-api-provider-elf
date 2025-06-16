@@ -60,6 +60,14 @@ spec:
               cluster:
                 description: Cluster is a unique identifier for a ELF cluster.
                 type: string
+              clusterType:
+                description: |-
+                  ClusterType is the type of the ELF cluster.
+                  If ClusterType is empty, it will be automatically set.
+                enum:
+                - Standard
+                - Stretched
+                type: string
               controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to
                   communicate with the control plane.

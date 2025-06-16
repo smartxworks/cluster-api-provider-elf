@@ -302,6 +302,10 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx goctx.Context, clusterCtx *co
 	// If the ElfCluster doesn't have our finalizer, add it.
 	ctrlutil.AddFinalizer(clusterCtx.ElfCluster, infrav1.ClusterFinalizer)
 
+	if err := r.reconcileElfCluster(ctx, clusterCtx); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// If the cluster already has ControlPlaneEndpoint set then there is nothing to do.
 	if ok := r.reconcileControlPlaneEndpoint(ctx, clusterCtx); !ok {
 		return reconcile.Result{}, nil
@@ -323,6 +327,30 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx goctx.Context, clusterCtx *co
 	}
 
 	return reconcile.Result{}, nil
+}
+
+// reconcileElfCluster reconciles the Elf cluster.
+// If clusterType is empty, the clusterType will be automatically detected.
+func (r *ElfClusterReconciler) reconcileElfCluster(ctx goctx.Context, clusterCtx *context.ClusterContext) error {
+	if clusterCtx.ElfCluster.Spec.ClusterType != "" {
+		return nil
+	}
+
+	elfCluster, err := clusterCtx.VMService.GetCluster(clusterCtx.ElfCluster.Spec.Cluster)
+	if err != nil {
+		return err
+	}
+
+	log := ctrl.LoggerFrom(ctx)
+	if *elfCluster.Stretch {
+		clusterCtx.ElfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStretched
+		log.V(1).Info("Stretched cluster detected, so set the clusterType to stretched")
+	} else {
+		clusterCtx.ElfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
+		log.V(1).Info("Standard cluster detected, so set the clusterType to standard")
+	}
+
+	return nil
 }
 
 func (r *ElfClusterReconciler) reconcileControlPlaneEndpoint(ctx goctx.Context, clusterCtx *context.ClusterContext) bool {

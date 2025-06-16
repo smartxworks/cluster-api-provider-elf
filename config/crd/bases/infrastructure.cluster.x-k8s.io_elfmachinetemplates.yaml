@@ -82,6 +82,13 @@ spec:
                         type: array
                       ha:
                         type: boolean
+                      haPriority:
+                        description: Defaults to MEDIUM.
+                        enum:
+                        - LOW
+                        - MEDIUM
+                        - HIGH
+                        type: string
                       host:
                         description: |-
                           Host is a unique identifier for a ELF host.
@@ -249,6 +256,19 @@ spec:
                               type: string
                           type: object
                         type: array
+                      zone:
+                        description: Zone is the status of the zone.
+                        properties:
+                          type:
+                            description: Type is the type of the zone.
+                            enum:
+                            - Preferred
+                            - Secondary
+                            type: string
+                          zoneId:
+                            description: ZoneID is the ID of the zone.
+                            type: string
+                        type: object
                     required:
                     - template
                     type: object
