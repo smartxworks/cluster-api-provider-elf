@@ -37,6 +37,12 @@ type ElfClusterSpec struct {
 	// Cluster is a unique identifier for a ELF cluster.
 	Cluster string `json:"cluster,omitempty"`
 
+	// ClusterType is the type of the ELF cluster.
+	// If ClusterType is empty, it will be automatically set.
+	// +kubebuilder:validation:Enum=Standard;Stretched
+	// +optional
+	ClusterType ElfClusterType `json:"clusterType,omitempty"`
+
 	// Tower is the config of tower.
 	Tower Tower `json:"tower,omitempty"`
 
@@ -74,6 +80,10 @@ type ElfCluster struct {
 
 	Spec   ElfClusterSpec   `json:"spec,omitempty"`
 	Status ElfClusterStatus `json:"status,omitempty"`
+}
+
+func (c *ElfCluster) IsStretched() bool {
+	return c.Spec.ClusterType == ElfClusterTypeStretched
 }
 
 func (c *ElfCluster) GetConditions() clusterv1.Conditions {
