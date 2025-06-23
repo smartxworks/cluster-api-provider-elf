@@ -321,7 +321,7 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 		cloudInit.Nameservers = nil
 	}
 	if len(networks) == 0 {
-		cloudInit = nil
+		cloudInit.Networks = nil
 	}
 
 	isFullCopy := false
