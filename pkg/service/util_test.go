@@ -316,3 +316,18 @@ func TestGetVMSystemDisk(t *testing.T) {
 		g.Expect(GetVMSystemDisk([]*models.VMDisk{disk20, disk11, disk10})).To(gomega.Equal(disk11))
 	})
 }
+
+func TestGetHostZone(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	t.Run("GetHostZone", func(t *testing.T) {
+		zones := []*models.Zone{}
+		g.Expect(GetHostZone(zones, "host1")).To(gomega.BeNil())
+
+		zones = []*models.Zone{{Hosts: []*models.NestedHost{{ID: TowerString("host1")}}}}
+		g.Expect(GetHostZone(zones, "host1")).To(gomega.Equal(zones[0]))
+
+		zones = []*models.Zone{{Hosts: []*models.NestedHost{{ID: TowerString("host1")}}}}
+		g.Expect(GetHostZone(zones, "host2")).To(gomega.BeNil())
+	})
+}

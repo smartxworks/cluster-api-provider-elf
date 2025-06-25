@@ -302,6 +302,10 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx goctx.Context, clusterCtx *co
 	// If the ElfCluster doesn't have our finalizer, add it.
 	ctrlutil.AddFinalizer(clusterCtx.ElfCluster, infrav1.ClusterFinalizer)
 
+	if ok := r.reconcileElfCluster(ctx, clusterCtx); !ok {
+		return reconcile.Result{}, nil
+	}
+
 	// If the cluster already has ControlPlaneEndpoint set then there is nothing to do.
 	if ok := r.reconcileControlPlaneEndpoint(ctx, clusterCtx); !ok {
 		return reconcile.Result{}, nil
@@ -323,6 +327,18 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx goctx.Context, clusterCtx *co
 	}
 
 	return reconcile.Result{}, nil
+}
+
+// reconcileElfCluster reconciles the Elf cluster.
+func (r *ElfClusterReconciler) reconcileElfCluster(ctx goctx.Context, clusterCtx *context.ClusterContext) bool {
+	if clusterCtx.ElfCluster.Spec.ClusterType != "" {
+		return true
+	}
+
+	log := ctrl.LoggerFrom(ctx)
+	log.Info("Waiting for the clusterType to be set")
+
+	return false
 }
 
 func (r *ElfClusterReconciler) reconcileControlPlaneEndpoint(ctx goctx.Context, clusterCtx *context.ClusterContext) bool {

@@ -282,4 +282,34 @@ var _ = Describe("ElfClusterReconciler", func() {
 			Expect(logBuffer.String()).NotTo(ContainSubstring(fmt.Sprintf("Cleaning orphan labels in Tower %s created by CAPE", elfCluster.Spec.Tower.Server)))
 		})
 	})
+
+	Context("reconcileElfCluster", func() {
+		It("should return true when clusterType is stretched", func() {
+			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStretched
+			ctrlMgrCtx := fake.NewControllerManagerContext(cluster, elfCluster)
+			fake.InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
+			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok := reconciler.reconcileElfCluster(ctx, &context.ClusterContext{
+				Cluster:    cluster,
+				ElfCluster: elfCluster,
+				Logger:     ctrllog.Log,
+				VMService:  mockVMService,
+			})
+			Expect(ok).To(BeTrue())
+		})
+
+		It("should return false when clusterType is not set", func() {
+			elfCluster.Spec.ClusterType = ""
+			ctrlMgrCtx := fake.NewControllerManagerContext(cluster, elfCluster)
+			fake.InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
+			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok := reconciler.reconcileElfCluster(ctx, &context.ClusterContext{
+				Cluster:    cluster,
+				ElfCluster: elfCluster,
+				Logger:     ctrllog.Log,
+				VMService:  mockVMService,
+			})
+			Expect(ok).To(BeFalse())
+		})
+	})
 })

@@ -348,3 +348,16 @@ func GetVMSystemDisk(disks []*models.VMDisk) *models.VMDisk {
 
 	return systemDisk
 }
+
+// GetHostZone returns the zone of the host.
+func GetHostZone(zones []*models.Zone, hostID string) *models.Zone {
+	for i := range zones {
+		for j := range zones[i].Hosts {
+			if *zones[i].Hosts[j].ID == hostID {
+				return zones[i]
+			}
+		}
+	}
+
+	return nil
+}

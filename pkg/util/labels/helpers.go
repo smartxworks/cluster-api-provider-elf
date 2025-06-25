@@ -44,6 +44,14 @@ func GetHostServerNameLabel(o metav1.Object) string {
 	return GetLabelValue(o, infrav1.HostServerNameLabel)
 }
 
+func GetZoneIDLabel(o metav1.Object) string {
+	return GetLabelValue(o, infrav1.ZoneIDLabel)
+}
+
+func GetZoneTypeLabel(o metav1.Object) string {
+	return GetLabelValue(o, infrav1.ZoneTypeLabel)
+}
+
 func GetTowerVMIDLabel(o metav1.Object) string {
 	return GetLabelValue(o, infrav1.TowerVMIDLabel)
 }
@@ -76,6 +84,15 @@ func GetLabelValue(o metav1.Object, label string) string {
 	}
 
 	return val
+}
+
+func SetLabelValue(o metav1.Object, label string, value string) {
+	labels := o.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[label] = value
+	o.SetLabels(labels)
 }
 
 // ConvertToLabelValue converts a string to a valid label value.

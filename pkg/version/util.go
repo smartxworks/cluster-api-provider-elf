@@ -46,17 +46,6 @@ func SetCurrentCAPEVersion(o metav1.Object) {
 	SetCAPEVersion(o, CAPEVersion())
 }
 
-// IsCompatibleWithPlacementGroup returns whether the current object can use a placement group.
-func IsCompatibleWithPlacementGroup(o metav1.Object) bool {
-	capeVersion := GetCAPEVersion(o)
-	if (capeVersion == CAPEVersionLatest) ||
-		(IsSemanticVersion(capeVersion) && capeVersion >= CAPEVersion1_2_0) {
-		return true
-	}
-
-	return false
-}
-
 // IsSemanticVersion returns whether the version is an valid Semantic Version.
 func IsSemanticVersion(version string) bool {
 	if _, err := semver.NewVersion(version); err != nil {
