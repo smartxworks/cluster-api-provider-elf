@@ -109,10 +109,6 @@ type ElfMachineSpec struct {
 	// Defaults to AUTO_SCHEDULE.
 	// +optional
 	Host string `json:"host,omitempty"`
-
-	// Zone is the status of the zone.
-	// +optional
-	Zone ZoneStatus `json:"zone,omitempty"`
 }
 
 // ElfMachineStatus defines the observed state of ElfMachine.
