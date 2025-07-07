@@ -1152,38 +1152,69 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 		return false, errors.Wrapf(err, "failed to get node %s for setting providerID and labels", machineCtx.ElfMachine.Name)
 	}
 
-	nodeHostID := labelsutil.GetHostServerIDLabel(node)
-	nodeHostName := labelsutil.GetHostServerNameLabel(node)
-	towerVMID := labelsutil.GetTowerVMIDLabel(node)
-	nodeZoneID := labelsutil.GetZoneIDLabel(node)
-	nodeZoneType := labelsutil.GetZoneTypeLabel(node)
-	if node.Spec.ProviderID != "" &&
-		nodeHostID == machineCtx.ElfMachine.Status.HostServerRef &&
-		nodeHostName == machineCtx.ElfMachine.Status.HostServerName &&
-		nodeZoneID == machineCtx.ElfMachine.Status.Zone.ZoneID &&
-		nodeZoneType == machineCtx.ElfMachine.Status.Zone.Type.ToLower() &&
-		towerVMID == *vm.ID {
-		return true, nil
+	keys := []string{
+		infrav1.HostServerIDLabel,
+		infrav1.HostServerNameLabel,
+		infrav1.TowerVMIDLabel,
+		infrav1.NodeGroupLabel,
+		infrav1.ZoneIDLabel,
+		infrav1.ZoneTypeLabel,
+		labelsutil.ClusterAutoscalerCAPIGPULabel,
 	}
 
-	nodeGroupName := machineutil.GetNodeGroupName(machineCtx.Machine)
-	labels := map[string]string{
+	nodeLabels := node.GetLabels()
+	if nodeLabels == nil {
+		nodeLabels = make(map[string]string)
+	}
+
+	actualLabels := map[string]interface{}{}
+	for _, key := range keys {
+		val, ok := nodeLabels[key]
+		if ok {
+			actualLabels[key] = val
+		} else {
+			actualLabels[key] = nil
+		}
+	}
+
+	expectedLabels := map[string]interface{}{
 		infrav1.HostServerIDLabel:   machineCtx.ElfMachine.Status.HostServerRef,
 		infrav1.HostServerNameLabel: machineCtx.ElfMachine.Status.HostServerName,
-		infrav1.ZoneIDLabel:         machineCtx.ElfMachine.Status.Zone.ZoneID,
-		infrav1.ZoneTypeLabel:       machineCtx.ElfMachine.Status.Zone.Type.ToLower(),
 		infrav1.TowerVMIDLabel:      *vm.ID,
-		infrav1.NodeGroupLabel:      nodeGroupName,
+		infrav1.NodeGroupLabel:      machineutil.GetNodeGroupName(machineCtx.Machine),
 	}
+
+	if machineCtx.ElfMachine.Status.Zone.Type != "" {
+		expectedLabels[infrav1.ZoneTypeLabel] = machineCtx.ElfMachine.Status.Zone.Type.ToLower()
+	} else {
+		expectedLabels[infrav1.ZoneTypeLabel] = nil
+	}
+
+	if machineCtx.ElfMachine.Status.Zone.ZoneID != "" {
+		expectedLabels[infrav1.ZoneIDLabel] = machineCtx.ElfMachine.Status.Zone.ZoneID
+	} else {
+		expectedLabels[infrav1.ZoneIDLabel] = nil
+	}
+
+	autoscalerCAPIGPULabel := ""
 	if len(machineCtx.ElfMachine.Spec.GPUDevices) > 0 {
-		labels[labelsutil.ClusterAutoscalerCAPIGPULabel] = labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Spec.GPUDevices[0].Model)
+		autoscalerCAPIGPULabel = labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Spec.GPUDevices[0].Model)
 	} else if len(machineCtx.ElfMachine.Spec.VGPUDevices) > 0 {
-		labels[labelsutil.ClusterAutoscalerCAPIGPULabel] = labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Spec.VGPUDevices[0].Type)
+		autoscalerCAPIGPULabel = labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Spec.VGPUDevices[0].Type)
+	}
+	if autoscalerCAPIGPULabel != "" {
+		expectedLabels[labelsutil.ClusterAutoscalerCAPIGPULabel] = autoscalerCAPIGPULabel
+	} else {
+		expectedLabels[labelsutil.ClusterAutoscalerCAPIGPULabel] = nil
+	}
+
+	if node.Spec.ProviderID != "" && reflect.DeepEqual(actualLabels, expectedLabels) {
+		return true, nil
 	}
 
 	payloads := map[string]interface{}{
 		"metadata": map[string]interface{}{
-			"labels": labels,
+			"labels": expectedLabels,
 		},
 	}
 	// providerID cannot be modified after setting a valid value.
@@ -1203,9 +1234,7 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 		return false, err
 	}
 
-	log.Info("Setting node providerID and labels succeeded",
-		"cluster", machineCtx.Cluster.Name, "node", node.Name,
-		"providerID", providerID, "hostID", machineCtx.ElfMachine.Status.HostServerRef, "hostName", machineCtx.ElfMachine.Status.HostServerName)
+	log.Info("Setting node providerID and labels succeeded", "providerID", providerID, "labels", expectedLabels, "oldLabels", actualLabels)
 
 	return true, nil
 }
