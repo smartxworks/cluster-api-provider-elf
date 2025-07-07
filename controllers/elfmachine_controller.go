@@ -1157,28 +1157,51 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 	towerVMID := labelsutil.GetTowerVMIDLabel(node)
 	nodeZoneID := labelsutil.GetZoneIDLabel(node)
 	nodeZoneType := labelsutil.GetZoneTypeLabel(node)
+	nodeGroup := labelsutil.GetNodeGroupLabel(node)
+	autoscalerCAPIGPU := labelsutil.GetClusterAutoscalerCAPIGPULabel(node)
+
+	nodeGroupLabel := machineutil.GetNodeGroupName(machineCtx.Machine)
+	autoscalerCAPIGPULabel := ""
+	if len(machineCtx.ElfMachine.Spec.GPUDevices) > 0 {
+		autoscalerCAPIGPULabel = labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Spec.GPUDevices[0].Model)
+	} else if len(machineCtx.ElfMachine.Spec.VGPUDevices) > 0 {
+		autoscalerCAPIGPULabel = labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Spec.VGPUDevices[0].Type)
+	}
+
 	if node.Spec.ProviderID != "" &&
 		nodeHostID == machineCtx.ElfMachine.Status.HostServerRef &&
 		nodeHostName == machineCtx.ElfMachine.Status.HostServerName &&
 		nodeZoneID == machineCtx.ElfMachine.Status.Zone.ZoneID &&
 		nodeZoneType == machineCtx.ElfMachine.Status.Zone.Type.ToLower() &&
-		towerVMID == *vm.ID {
+		towerVMID == *vm.ID &&
+		nodeGroup == nodeGroupLabel &&
+		autoscalerCAPIGPU == autoscalerCAPIGPULabel {
 		return true, nil
 	}
 
-	nodeGroupName := machineutil.GetNodeGroupName(machineCtx.Machine)
-	labels := map[string]string{
+	labels := map[string]interface{}{
 		infrav1.HostServerIDLabel:   machineCtx.ElfMachine.Status.HostServerRef,
 		infrav1.HostServerNameLabel: machineCtx.ElfMachine.Status.HostServerName,
-		infrav1.ZoneIDLabel:         machineCtx.ElfMachine.Status.Zone.ZoneID,
-		infrav1.ZoneTypeLabel:       machineCtx.ElfMachine.Status.Zone.Type.ToLower(),
 		infrav1.TowerVMIDLabel:      *vm.ID,
-		infrav1.NodeGroupLabel:      nodeGroupName,
+		infrav1.NodeGroupLabel:      nodeGroupLabel,
 	}
-	if len(machineCtx.ElfMachine.Spec.GPUDevices) > 0 {
-		labels[labelsutil.ClusterAutoscalerCAPIGPULabel] = labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Spec.GPUDevices[0].Model)
-	} else if len(machineCtx.ElfMachine.Spec.VGPUDevices) > 0 {
-		labels[labelsutil.ClusterAutoscalerCAPIGPULabel] = labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Spec.VGPUDevices[0].Type)
+
+	if machineCtx.ElfMachine.Status.Zone.Type != "" {
+		labels[infrav1.ZoneTypeLabel] = machineCtx.ElfMachine.Status.Zone.Type.ToLower()
+	} else {
+		labels[infrav1.ZoneTypeLabel] = nil
+	}
+
+	if machineCtx.ElfMachine.Status.Zone.ZoneID != "" {
+		labels[infrav1.ZoneIDLabel] = machineCtx.ElfMachine.Status.Zone.ZoneID
+	} else {
+		labels[infrav1.ZoneIDLabel] = nil
+	}
+
+	if autoscalerCAPIGPULabel != "" {
+		labels[labelsutil.ClusterAutoscalerCAPIGPULabel] = autoscalerCAPIGPULabel
+	} else {
+		labels[labelsutil.ClusterAutoscalerCAPIGPULabel] = nil
 	}
 
 	payloads := map[string]interface{}{
@@ -1203,9 +1226,7 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 		return false, err
 	}
 
-	log.Info("Setting node providerID and labels succeeded",
-		"cluster", machineCtx.Cluster.Name, "node", node.Name,
-		"providerID", providerID, "hostID", machineCtx.ElfMachine.Status.HostServerRef, "hostName", machineCtx.ElfMachine.Status.HostServerName)
+	log.Info("Setting node providerID and labels succeeded", "providerID", providerID, "labels", labels)
 
 	return true, nil
 }

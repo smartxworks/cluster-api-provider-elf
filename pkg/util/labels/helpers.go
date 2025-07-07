@@ -36,6 +36,17 @@ var (
 	noLabelCharReg = regexp.MustCompile(`[^-a-zA-Z0-9-.]`)
 )
 
+func HasLabel(o metav1.Object, label string) bool {
+	labels := o.GetLabels()
+	if labels == nil {
+		return false
+	}
+
+	_, ok := labels[label]
+
+	return ok
+}
+
 func GetHostServerIDLabel(o metav1.Object) string {
 	return GetLabelValue(o, infrav1.HostServerIDLabel)
 }
@@ -54,6 +65,10 @@ func GetZoneTypeLabel(o metav1.Object) string {
 
 func GetTowerVMIDLabel(o metav1.Object) string {
 	return GetLabelValue(o, infrav1.TowerVMIDLabel)
+}
+
+func GetClusterAutoscalerCAPIGPULabel(o metav1.Object) string {
+	return GetLabelValue(o, ClusterAutoscalerCAPIGPULabel)
 }
 
 func GetNodeGroupLabel(o metav1.Object) string {
