@@ -52,6 +52,7 @@ import (
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service/mock_services"
+	labelsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 	patchutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/patch"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
@@ -3576,6 +3577,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should set providerID and labels for node", func() {
+			elfMachine.Spec.GPUDevices = []infrav1.GPUPassthroughDeviceSpec{{Model: "H100"}}
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
 			elfMachine.Status.Zone = infrav1.ZoneStatus{
@@ -3620,11 +3622,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 					node.Labels[infrav1.ZoneIDLabel] == elfMachine.Status.Zone.ZoneID &&
 					node.Labels[infrav1.ZoneTypeLabel] == elfMachine.Status.Zone.Type.ToLower() &&
 					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID &&
-					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine)
+					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine) &&
+					node.Labels[labelsutil.ClusterAutoscalerCAPIGPULabel] == "H100"
 			}, timeout).Should(BeTrue())
 		})
 
 		It("should update labels but not update providerID", func() {
+			elfMachine.Spec.VGPUDevices = []infrav1.VGPUDeviceSpec{{Type: "H300"}}
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
 			elfMachine.Status.Zone = infrav1.ZoneStatus{
@@ -3650,11 +3654,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: elfMachine.Name,
 					Labels: map[string]string{
-						infrav1.HostServerIDLabel:   "old-host-id",
-						infrav1.HostServerNameLabel: "old-host-name",
-						infrav1.ZoneIDLabel:         "old-zone-id",
-						infrav1.ZoneTypeLabel:       "old-zone-type",
-						infrav1.TowerVMIDLabel:      "old-vm-id",
+						infrav1.HostServerIDLabel:                "old-host-id",
+						infrav1.HostServerNameLabel:              "old-host-name",
+						infrav1.ZoneIDLabel:                      "old-zone-id",
+						infrav1.ZoneTypeLabel:                    "old-zone-type",
+						infrav1.TowerVMIDLabel:                   "old-vm-id",
+						infrav1.NodeGroupLabel:                   "old-node-group",
+						labelsutil.ClusterAutoscalerCAPIGPULabel: "old-gpu",
 					},
 				},
 				Spec: corev1.NodeSpec{ProviderID: providerID},
@@ -3676,7 +3682,67 @@ var _ = Describe("ElfMachineReconciler", func() {
 					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
 					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName &&
 					node.Labels[infrav1.ZoneIDLabel] == elfMachine.Status.Zone.ZoneID &&
-					node.Labels[infrav1.ZoneTypeLabel] == elfMachine.Status.Zone.Type.ToLower()
+					node.Labels[infrav1.ZoneTypeLabel] == elfMachine.Status.Zone.Type.ToLower() &&
+					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine) &&
+					node.Labels[labelsutil.ClusterAutoscalerCAPIGPULabel] == "H300" &&
+					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID
+			}, timeout).Should(BeTrue())
+		})
+
+		It("should remove unused labels", func() {
+			elfMachine.Status.HostServerRef = fake.UUID()
+			elfMachine.Status.HostServerName = fake.UUID()
+			vm := fake.NewTowerVM()
+			ctrlMgrCtx := &context.ControllerManagerContext{
+				Client:                  testEnv.Client,
+				Name:                    fake.ControllerManagerName,
+				LeaderElectionNamespace: fake.LeaderElectionNamespace,
+				LeaderElectionID:        fake.LeaderElectionID,
+			}
+			machineContext := &context.MachineContext{
+				Cluster:    cluster,
+				Machine:    machine,
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+			}
+
+			providerID := machineutil.ConvertUUIDToProviderID(fake.UUID())
+			node = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: elfMachine.Name,
+					Labels: map[string]string{
+						infrav1.HostServerIDLabel:                elfMachine.Status.HostServerRef,
+						infrav1.HostServerNameLabel:              elfMachine.Status.HostServerName,
+						infrav1.TowerVMIDLabel:                   *vm.ID,
+						infrav1.NodeGroupLabel:                   machineutil.GetNodeGroupName(machine),
+						infrav1.ZoneIDLabel:                      "",
+						infrav1.ZoneTypeLabel:                    "",
+						labelsutil.ClusterAutoscalerCAPIGPULabel: "",
+					},
+				},
+				Spec: corev1.NodeSpec{ProviderID: providerID},
+			}
+			Expect(testEnv.CreateAndWait(ctx, node)).To(Succeed())
+			Expect(helpers.CreateKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)).To(Succeed())
+
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcileNode(ctx, machineContext, vm)
+			Expect(ok).Should(BeTrue())
+			Expect(err).ToNot(HaveOccurred())
+
+			Eventually(func() bool {
+				if err := testEnv.Get(ctx, client.ObjectKey{Namespace: node.Namespace, Name: node.Name}, node); err != nil {
+					return false
+				}
+
+				return node.Spec.ProviderID == providerID &&
+					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
+					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName &&
+					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine) &&
+					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID &&
+					!labelsutil.HasLabel(node, infrav1.ZoneIDLabel) &&
+					!labelsutil.HasLabel(node, infrav1.ZoneTypeLabel) &&
+					!labelsutil.HasLabel(node, labelsutil.ClusterAutoscalerCAPIGPULabel)
 			}, timeout).Should(BeTrue())
 		})
 	})
