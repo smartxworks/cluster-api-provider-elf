@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: elfmachinetemplates.infrastructure.cluster.x-k8s.io
 spec:
   group: infrastructure.cluster.x-k8s.io
@@ -254,6 +254,8 @@ spec:
                               description: Type is the type name of a virtual GPU,
                                 e.g. 'NVIDIA A16-16A'.
                               type: string
+                          required:
+                          - type
                           type: object
                         type: array
                     required:

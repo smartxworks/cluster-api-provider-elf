@@ -105,9 +105,9 @@ linters-settings:
       - pkg: github.com/smartxworks/cluster-api-provider-elf/api/v1beta1
         alias: infrav1
   staticcheck:
-    go: "1.22"
+    go: "1.23"
   stylecheck:
-    go: "1.22"
+    go: "1.23"
 issues:
   max-same-issues: 0
   max-issues-per-linter: 0
@@ -167,6 +167,14 @@ issues:
       text: should not use dot imports
     - path: _test\.go
       text: cyclomatic complexity
+    # Deprecations for FailureReason
+    - linters:
+      - staticcheck
+      text: "SA1019: \"sigs.k8s.io/cluster-api/errors\" is deprecated:"
+    # Deprecations for FailureMessage, FailureReason, UnavailableReplicas
+    - linters:
+        - staticcheck
+      text: "SA1019: .*\\.Status\\.(FailureMessage|FailureReason|UnavailableReplicas) is deprecated: This field is deprecated and is going to be removed in the next apiVersion. Please see https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20240916-improve-status-in-CAPI-resources.md for more details."
 
 run:
   timeout: 10m

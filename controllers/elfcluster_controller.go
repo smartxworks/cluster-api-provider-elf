@@ -67,6 +67,7 @@ func AddClusterControllerToManager(ctx goctx.Context, ctrlMgrCtx *context.Contro
 		ControllerManagerContext: ctrlMgrCtx,
 		NewVMService:             service.NewVMService,
 	}
+	predicateLog := ctrl.LoggerFrom(ctx).WithValues("controller", "elfcluster")
 
 	return ctrl.NewControllerManagedBy(mgr).
 		// Watch the controlled, infrastructure resource.
@@ -76,7 +77,7 @@ func AddClusterControllerToManager(ctx goctx.Context, ctrlMgrCtx *context.Contro
 			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(capiutil.ClusterToInfrastructureMapFunc(ctx, clusterControlledTypeGVK, mgr.GetClient(), &infrav1.ElfCluster{})),
 		).
-		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(ctrl.LoggerFrom(ctx), ctrlMgrCtx.WatchFilterValue)).
+		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(mgr.GetScheme(), predicateLog, ctrlMgrCtx.WatchFilterValue)).
 		WithOptions(options).
 		Complete(reconciler)
 }

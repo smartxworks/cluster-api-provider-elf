@@ -90,6 +90,7 @@ func AddMachineControllerToManager(ctx goctx.Context, ctrlMgrCtx *context.Contro
 		ControllerManagerContext: ctrlMgrCtx,
 		NewVMService:             service.NewVMService,
 	}
+	predicateLog := ctrl.LoggerFrom(ctx).WithValues("controller", "elfmachine")
 
 	return ctrl.NewControllerManagedBy(mgr).
 		// Watch the controlled, infrastructure resource.
@@ -100,7 +101,7 @@ func AddMachineControllerToManager(ctx goctx.Context, ctrlMgrCtx *context.Contro
 			handler.EnqueueRequestsFromMapFunc(capiutil.MachineToInfrastructureMapFunc(controlledTypeGVK)),
 		).
 		WithOptions(options).
-		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(ctrl.LoggerFrom(ctx), ctrlMgrCtx.WatchFilterValue)).
+		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(mgr.GetScheme(), predicateLog, ctrlMgrCtx.WatchFilterValue)).
 		Complete(reconciler)
 }
 
