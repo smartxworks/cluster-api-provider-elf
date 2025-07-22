@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -99,15 +100,20 @@ func GetOrCreate(ctx goctx.Context, tower infrav1.Tower) (*TowerSession, error) 
 }
 
 func createTowerClient(tlsOpts httptransport.TLSClientOptions, clientConfig towerclient.ClientConfig, userConfig towerclient.UserConfig) (*towerclient.Cloudtower, error) {
-	rt := httptransport.New(clientConfig.Host, clientConfig.BasePath, clientConfig.Schemes)
-	var err error
-	rt.Transport, err = httptransport.TLSTransport(tlsOpts)
+	transport := httptransport.New(clientConfig.Host, clientConfig.BasePath, clientConfig.Schemes)
+	roundTripper, err := httptransport.TLSTransport(tlsOpts)
 	if err != nil {
 		return nil, err
 	}
 
-	client := towerclient.New(rt, strfmt.Default)
+	// For Arcfra vendor, we need to bypass the whitelist for AOC(CloudTower)
+	rtWithHeader := NewWithHeaderRoundTripper(roundTripper)
+	rtWithHeader.Set("x-bypass-whitelist", "true") //nolint:canonicalheader
+	transport.Transport = rtWithHeader
+
+	client := towerclient.New(transport, strfmt.Default)
 	params := user.NewLoginParams()
+	params.WithTimeout(10 * time.Second)
 	params.RequestBody = &models.LoginInput{
 		Username: &userConfig.Name,
 		Password: &userConfig.Password,
@@ -117,7 +123,7 @@ func createTowerClient(tlsOpts httptransport.TLSClientOptions, clientConfig towe
 	if err != nil {
 		return nil, err
 	}
-	rt.DefaultAuthentication = httptransport.APIKeyAuth("Authorization", "header", *resp.Payload.Data.Token)
+	transport.DefaultAuthentication = httptransport.APIKeyAuth("Authorization", "header", *resp.Payload.Data.Token)
 	return client, nil
 }
 
@@ -139,4 +145,31 @@ func getSessionKey(tower *infrav1.Tower) string {
 	encryptedTower.Password = hex.EncodeToString(sum256[:])
 
 	return fmt.Sprintf("%v", encryptedTower)
+}
+
+type withHeaderRoundTripper struct {
+	http.Header
+
+	rt http.RoundTripper
+}
+
+func NewWithHeaderRoundTripper(rt http.RoundTripper) withHeaderRoundTripper {
+	if rt == nil {
+		rt = http.DefaultTransport
+	}
+
+	return withHeaderRoundTripper{Header: make(http.Header), rt: rt}
+}
+
+func (h withHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if len(h.Header) == 0 {
+		return h.rt.RoundTrip(req)
+	}
+
+	req = req.Clone(req.Context())
+	for k, v := range h.Header {
+		req.Header[k] = v
+	}
+
+	return h.rt.RoundTrip(req)
 }
