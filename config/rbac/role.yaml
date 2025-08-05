@@ -16,10 +16,21 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
   - cluster.x-k8s.io
   resources:
   - clusters
   - clusters/status
+  - machinedeployments/status
   verbs:
   - get
   - list
@@ -35,15 +46,6 @@ rules:
   - list
   - patch
   - update
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
-  - machinedeployments
-  - machinedeployments/status
-  verbs:
-  - get
-  - list
   - watch
 - apiGroups:
   - cluster.x-k8s.io
@@ -68,44 +70,9 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - watch
-- apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
   - elfclusters
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
-  - elfclusters/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
-  - elfclusters/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
   - elfmachines
   verbs:
   - create
@@ -118,12 +85,14 @@ rules:
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
+  - elfclusters/finalizers
   - elfmachines/finalizers
   verbs:
   - update
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
+  - elfclusters/status
   - elfmachines/status
   verbs:
   - get
