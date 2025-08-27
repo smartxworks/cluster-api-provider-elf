@@ -26,3 +26,8 @@ var ExpandRootPartitionTask string
 //
 //go:embed restart_kubelet.yaml
 var RestartKubeletTask string
+
+// SetNetworkDeviceConfig is the task to set network device configuration.
+//
+//go:embed set_network_device_config.yaml
+var SetNetworkDeviceConfig string

@@ -228,3 +228,17 @@ func NewVMDisk(vmVolume *models.VMVolume) *models.VMDisk {
 		VMVolume: &models.NestedVMVolume{ID: vmVolume.ID},
 	}
 }
+
+func NewVMNic() *models.VMNic {
+	return &models.VMNic{
+		ID:         ptr.To(ID()),
+		MacAddress: ptr.To(ID()),
+		IPAddress:  ptr.To("127.0.0.1"),
+	}
+}
+
+func NewVlan() *models.Vlan {
+	return &models.Vlan{
+		ID: ptr.To(ID()),
+	}
+}

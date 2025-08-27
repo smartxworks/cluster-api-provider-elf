@@ -169,6 +169,10 @@ GOLANGCI_LINT := $(shell pwd)/bin/golangci-lint
 golangci-lint: ## Download golangci-lint locally if necessary.
 	$(call go-get-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8)
 
+MOCKGEN := $(shell pwd)/bin/mockgen
+mockgen: ## Download golangci-lint locally if necessary.
+	$(call go-get-tool,$(MOCKGEN),github.com/golang/mock/mockgen@v1.6.0)
+
 ## --------------------------------------
 ## Linting and fixing linter errors
 ## --------------------------------------
@@ -289,6 +293,10 @@ deploy: generate kustomize ## Deploy controller to the K8s cluster specified in 
 .PHONY: undeploy
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
+
+.PHONY: gen-mock
+gen-mock:
+	$(MOCKGEN) -source=./pkg/service/vm.go -destination=./pkg/service/mock_services/vm_mock.go -package=mock_services
 
 ## --------------------------------------
 ## Docker

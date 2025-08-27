@@ -36,6 +36,8 @@ const (
 	HostAgentJobTypeExpandRootPartition HostAgentJobType = "expand-root-partition"
 	// HostAgentJobTypeRestartKubelet is the job type for restarting the kubelet.
 	HostAgentJobTypeRestartKubelet HostAgentJobType = "restart-kubelet"
+	// HostAgentJobTypeSetNetworkDeviceConfig is the job type for setting the network device configuration.
+	HostAgentJobTypeSetNetworkDeviceConfig HostAgentJobType = "set-network-device-config"
 )
 
 func GetHostJob(ctx goctx.Context, c client.Client, namespace, name string) (*agentv1.HostOperationJob, error) {
@@ -60,12 +62,18 @@ func GetRestartKubeletJobName(elfMachine *infrav1.ElfMachine) string {
 	return fmt.Sprintf("cape-restart-kubelet-%s-%d-%d-%d", elfMachine.Name, elfMachine.Spec.NumCPUs, elfMachine.Spec.NumCoresPerSocket, elfMachine.Spec.MemoryMiB)
 }
 
+func GetSetNetworkDeviceConfigJobName(elfMachine *infrav1.ElfMachine, index int) string {
+	return fmt.Sprintf("cape-set-network-device-config-%s-%d", elfMachine.Name, index)
+}
+
 func GetJobName(elfMachine *infrav1.ElfMachine, jobType HostAgentJobType) string {
 	switch jobType {
 	case HostAgentJobTypeExpandRootPartition:
 		return GetExpandRootPartitionJobName(elfMachine)
 	case HostAgentJobTypeRestartKubelet:
 		return GetRestartKubeletJobName(elfMachine)
+	case HostAgentJobTypeSetNetworkDeviceConfig:
+		return GetSetNetworkDeviceConfigJobName(elfMachine, len(elfMachine.Spec.Network.Devices))
 	default:
 		return ""
 	}
@@ -111,12 +119,34 @@ func GenerateRestartKubeletJob(elfMachine *infrav1.ElfMachine) *agentv1.HostOper
 	}
 }
 
+func GenerateSetNetworkDeviceConfigJob(elfMachine *infrav1.ElfMachine) *agentv1.HostOperationJob {
+	return &agentv1.HostOperationJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      GetSetNetworkDeviceConfigJobName(elfMachine, len(elfMachine.Spec.Network.Devices)),
+			Namespace: "default",
+		},
+		Spec: agentv1.HostOperationJobSpec{
+			NodeName: elfMachine.Name,
+			Operation: agentv1.Operation{
+				Ansible: &agentv1.Ansible{
+					LocalPlaybookText: &agentv1.YAMLText{
+						Inline: tasks.SetNetworkDeviceConfig,
+					},
+				},
+				Timeout: metav1.Duration{Duration: defaultTimeout},
+			},
+		},
+	}
+}
+
 func GenerateJob(elfMachine *infrav1.ElfMachine, jobType HostAgentJobType) *agentv1.HostOperationJob {
 	switch jobType {
 	case HostAgentJobTypeExpandRootPartition:
 		return GenerateExpandRootPartitionJob(elfMachine)
 	case HostAgentJobTypeRestartKubelet:
 		return GenerateRestartKubeletJob(elfMachine)
+	case HostAgentJobTypeSetNetworkDeviceConfig:
+		return GenerateSetNetworkDeviceConfigJob(elfMachine)
 	default:
 		return nil
 	}

@@ -1,0 +1,25 @@
+---
+- name: Set network device configuration
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+  - name: Set network configuration for unconfigured nics
+    shell: |
+      all_ens_nics=($(ls /sys/class/net | grep -E '^ens[0-9]+$'))
+
+      unconfigured_nics=()
+      for nic in "${all_ens_nics[@]}"; do
+        if ! ls /etc/sysconfig/network-scripts/ifcfg-$nic* 1>/dev/null 2>&1; then
+          unconfigured_nics+=("$nic")
+        fi
+      done
+
+      for nic in "${unconfigured_nics[@]}"; do
+        echo "set network configuration for nic $nic"
+        nmcli device connect $nic
+        connection_name=$(nmcli -g GENERAL.CONNECTION device show "$nic")
+        nmcli connection modify "$connection_name" ipv4.never-default yes ipv6.never-default yes
+        echo PEERDNS=no | tee -a /etc/sysconfig/network-scripts/ifcfg-* > /dev/null
+        nmcli conn up "$connection_name"
+      done

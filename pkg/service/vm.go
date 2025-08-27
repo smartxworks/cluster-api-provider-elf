@@ -68,6 +68,7 @@ type VMService interface {
 	GetByName(name string) (*models.VM, error)
 	FindByIDs(ids []string) ([]*models.VM, error)
 	FindVMsByName(name string) ([]*models.VM, error)
+	AddVMNics(vmID string, nics []*models.VMNicParams) (*models.WithTaskVM, error)
 	GetVMNics(vmID string) ([]*models.VMNic, error)
 	GetVMDisks(vmDiskIDs []string) ([]*models.VMDisk, error)
 	GetVMVolume(vmVolumeID string) (*models.VMVolume, error)
@@ -661,6 +662,29 @@ func (svr *TowerVMService) GetVMNics(vmID string) ([]*models.VMNic, error) {
 	}
 
 	return getVMNicsResp.Payload, nil
+}
+
+func (svr *TowerVMService) AddVMNics(vmID string, nics []*models.VMNicParams) (*models.WithTaskVM, error) {
+	addVMNicParams := clientvm.NewAddVMNicParams()
+	addVMNicParams.RequestBody = &models.VMAddNicParams{
+		Data: &models.VMAddNicParamsData{
+			VMNics: nics,
+		},
+		Where: &models.VMWhereInput{
+			OR: []*models.VMWhereInput{{LocalID: TowerString(vmID)}, {ID: TowerString(vmID)}},
+		},
+	}
+
+	addVMNicResp, err := svr.Session.VM.AddVMNic(addVMNicParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(addVMNicResp.Payload) == 0 {
+		return nil, errors.New(VMNicFound)
+	}
+
+	return addVMNicResp.Payload[0], nil
 }
 
 // GetCluster searches for a cluster.
