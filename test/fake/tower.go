@@ -17,6 +17,7 @@ limitations under the License.
 package fake
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -119,10 +120,13 @@ func NewTowerVMNic(order int) *models.VMNic {
 	localID := UUID()
 
 	return &models.VMNic{
-		ID:        &id,
-		LocalID:   &localID,
-		IPAddress: service.TowerString("192.168.0.1"),
-		Order:     service.TowerInt32(order),
+		ID:         &id,
+		LocalID:    &localID,
+		Order:      service.TowerInt32(order),
+		IPAddress:  service.TowerString("192.168.1." + strconv.Itoa(order+1)),
+		MacAddress: service.TowerString("00:00:00:00:00:00"),
+		Gateway:    service.TowerString("192.168.0.1"),
+		SubnetMask: service.TowerString("255.255.255.0"),
 	}
 }
 
@@ -226,5 +230,19 @@ func NewVMDisk(vmVolume *models.VMVolume) *models.VMDisk {
 		ID:       ptr.To(ID()),
 		Boot:     ptr.To[int32](0),
 		VMVolume: &models.NestedVMVolume{ID: vmVolume.ID},
+	}
+}
+
+func NewVMNic() *models.VMNic {
+	return &models.VMNic{
+		ID:         ptr.To(ID()),
+		MacAddress: ptr.To(ID()),
+		IPAddress:  ptr.To("127.0.0.1"),
+	}
+}
+
+func NewVlan() *models.Vlan {
+	return &models.Vlan{
+		ID: ptr.To(ID()),
 	}
 }

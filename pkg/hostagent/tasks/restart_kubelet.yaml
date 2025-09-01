@@ -1,9 +1,0 @@
----
-- name: Kubelet | restart kubelet
-  hosts: all
-  become: true
-  gather_facts: false
-  tasks:
-  - ansible.builtin.service:
-      name: kubelet
-      state: restarted

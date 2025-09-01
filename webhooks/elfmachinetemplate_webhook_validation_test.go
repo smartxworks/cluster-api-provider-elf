@@ -131,6 +131,132 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 	}
 }
 
+func TestElfMachineTemplateValidatorValidateUpdate(t *testing.T) {
+	g := NewWithT(t)
+
+	var tests []testCaseEMT
+	tests = append(tests, testCaseEMT{
+		Name: "Can add new network device",
+		OldEMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           1,
+					Network: infrav1.NetworkSpec{
+						Devices: []infrav1.NetworkDeviceSpec{{
+							Vlan: "vlan1",
+						}},
+					},
+				},
+			},
+		}},
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           1,
+					Network: infrav1.NetworkSpec{
+						Devices: []infrav1.NetworkDeviceSpec{{
+							Vlan: "vlan1",
+						}, {
+							Vlan: "vlan2",
+						}},
+					},
+				},
+			},
+		}},
+		Errs: nil,
+	})
+	tests = append(tests, testCaseEMT{
+		Name: "Cannot modify network device",
+		OldEMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           1,
+					Network: infrav1.NetworkSpec{
+						Devices: []infrav1.NetworkDeviceSpec{{
+							Vlan: "vlan1",
+						}},
+					},
+				},
+			},
+		}},
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           1,
+					Network: infrav1.NetworkSpec{
+						Devices: []infrav1.NetworkDeviceSpec{{
+							Vlan: "vlan2",
+						}},
+					},
+				},
+			},
+		}},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "template", "spec", "network", "devices[0]"), infrav1.NetworkDeviceSpec{Vlan: "vlan2"}, networkDeviceCannotModifyMsg),
+		},
+	})
+	tests = append(tests, testCaseEMT{
+		Name: "Cannot reduce network device",
+		OldEMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           1,
+					Network: infrav1.NetworkSpec{
+						Devices: []infrav1.NetworkDeviceSpec{{
+							Vlan: "vlan1",
+						}, {
+							Vlan: "vlan2",
+						}},
+					},
+				},
+			},
+		}},
+		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
+			Template: infrav1.ElfMachineTemplateResource{
+				Spec: infrav1.ElfMachineSpec{
+					NumCPUs:           1,
+					NumCoresPerSocket: 1,
+					MemoryMiB:         1,
+					DiskGiB:           1,
+					Network: infrav1.NetworkSpec{
+						Devices: []infrav1.NetworkDeviceSpec{{
+							Vlan: "vlan1",
+						}},
+					},
+				},
+			},
+		}},
+		Errs: field.ErrorList{
+			field.Invalid(field.NewPath("spec", "template", "spec", "network", "devices"), []infrav1.NetworkDeviceSpec{{Vlan: "vlan1"}}, networkDeviceCannotReduceMsg),
+		},
+	})
+
+	validator := &ElfMachineTemplateValidator{}
+
+	for _, tc := range tests {
+		t.Run(tc.Name, func(t *testing.T) {
+			warnings, err := validator.ValidateUpdate(goctx.Background(), tc.OldEMT, tc.EMT)
+			g.Expect(warnings).To(BeEmpty())
+			expectTestCase(g, tc, err)
+		})
+	}
+}
+
 func expectTestCase(g Gomega, tc testCaseEMT, err error) {
 	if tc.Errs != nil {
 		g.Expect(err).To(HaveOccurred())

@@ -15,3 +15,8 @@ limitations under the License.
 */
 
 package constants
+
+const (
+	// NamespaceCape is the namespace of the cape system.
+	NamespaceCape = "cape-system"
+)

@@ -11,6 +11,7 @@ commonLabels:
 
 resources:
 - namespace.yaml
+- ../hostagent
 
 bases:
 - ../crd
