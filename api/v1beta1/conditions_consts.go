@@ -166,12 +166,12 @@ const (
 
 	// AddingVMNetworkDeviceReason documents (Severity=Info) ElfMachine currently executing the adding
 	// a new network device operation.
-	AddingVMNetworkDeviceReason = "AddinggVMNetworkDevice"
+	AddingVMNetworkDeviceReason = "AddingVMNetworkDevice"
 
 	// AddingVMNetworkDeviceFailedReason (Severity=Warning) documents an ElfMachine controller detecting
 	// an error while adding a new network device; those kind of errors are usually transient and failed updating
 	// are automatically re-tried by the controller.
-	AddingVMNetworkDeviceFailedReason = "AddinggVMNetworkDeviceFailed"
+	AddingVMNetworkDeviceFailedReason = "AddingVMNetworkDeviceFailed"
 
 	// SettingVMNetworkDeviceConfigReason documents (Severity=Info) ElfMachine currently executing the
 	// setting VM network device configuration operation.
