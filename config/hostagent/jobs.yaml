@@ -75,12 +75,19 @@ data:
         shell: |
           set -e
 
+          echo "get list of ens/enp nics"
           all_nics=($(ls /sys/class/net | grep -E '^(ens[0-9]+|enp[0-9]+s[0-9]+)$'))
 
+          echo "classify nics as unconfigured and static-configured"
           unconfigured_nics=()
+          static_configured_nics=()
           for nic in "${all_nics[@]}"; do
             if ! ls /etc/sysconfig/network-scripts/ifcfg-$nic* 1>/dev/null 2>&1; then
               unconfigured_nics+=("$nic")
+            else
+              if ls /etc/sysconfig/network-scripts/ifcfg-$nic-staticX 1>/dev/null 2>&1; then
+                static_configured_nics+=("$nic")
+              fi
             fi
           done
 
@@ -88,7 +95,22 @@ data:
             echo "set network configuration for nic $nic"
             nmcli device connect $nic
             connection_name=$(nmcli -g GENERAL.CONNECTION device show "$nic")
-            nmcli connection modify "$connection_name" ipv4.never-default yes ipv6.never-default yes
-            echo "PEERDNS=no" >> /etc/sysconfig/network-scripts/ifcfg-$nic
+            nmcli connection modify "$connection_name" ipv4.never-default yes ipv6.never-default yes ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes
             nmcli conn up "$connection_name"
           done
+
+          if [ ${#unconfigured_nics[@]} -gt 0 ]; then
+            echo "set network configuration for unconfigured nics done"
+          fi
+
+          for nic in "${static_configured_nics[@]}"; do
+            echo "set default network configuration for nic $nic"
+            connection_name=$(nmcli -g GENERAL.CONNECTION device show "$nic")
+            nmcli connection modify "$connection_name" ipv4.never-default yes ipv6.never-default yes ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes
+          done
+
+          if [ ${#static_configured_nics[@]} -gt 0 ]; then
+            echo "set default network configuration for static-configured nics done"
+          fi
+
+          echo "set network configuration for nics done"
