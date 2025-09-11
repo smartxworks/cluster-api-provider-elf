@@ -94,6 +94,10 @@ const (
 	// settings to be reported after machine being powered on.
 	WaitingForNetworkAddressesReason = "WaitingForNetworkAddresses"
 
+	// WaitingForNetworkMacAddressReason (Severity=Info) documents an ElfMachine waiting for the machine network
+	// settings to be reported after machine being powered on.
+	WaitingForNetworkMacAddressReason = "WaitingForNetworkMacAddress"
+
 	// JoiningPlacementGroupReason documents (Severity=Info) an ElfMachine currently executing the join placement group operation.
 	JoiningPlacementGroupReason = "JoiningPlacementGroup"
 

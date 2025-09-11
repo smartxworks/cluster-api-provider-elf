@@ -16,6 +16,7 @@ package hostagent
 import (
 	goctx "context"
 	"fmt"
+	"strings"
 	"time"
 
 	agentv1 "github.com/smartxworks/host-config-agent-api/api/v1alpha1"
@@ -66,18 +67,22 @@ func GetRestartKubeletJobName(elfMachine *infrav1.ElfMachine) string {
 	return fmt.Sprintf("cape-restart-kubelet-%s-%d-%d-%d", elfMachine.Name, elfMachine.Spec.NumCPUs, elfMachine.Spec.NumCoresPerSocket, elfMachine.Spec.MemoryMiB)
 }
 
-func GetSetNetworkDeviceConfigJobName(elfMachine *infrav1.ElfMachine, index int) string {
-	return fmt.Sprintf("cape-set-network-device-config-%s-%d", elfMachine.Name, index)
+func GetSetNetworkDeviceConfigJobName(elfMachine *infrav1.ElfMachine, macTypes []MacType) string {
+	if len(macTypes) == 0 {
+		return "cape-set-network-config-" + elfMachine.Name
+	}
+	mac := strings.ToLower(strings.ReplaceAll(macTypes[len(macTypes)-1].Mac, ":", ""))
+	return fmt.Sprintf("cape-set-network-config-%s-%s", elfMachine.Name, mac)
 }
 
-func GetJobName(elfMachine *infrav1.ElfMachine, jobType HostAgentJobType) string {
+func GetJobName(elfMachine *infrav1.ElfMachine, jobType HostAgentJobType, macTypes []MacType) string {
 	switch jobType {
 	case HostAgentJobTypeExpandRootPartition:
 		return GetExpandRootPartitionJobName(elfMachine)
 	case HostAgentJobTypeRestartKubelet:
 		return GetRestartKubeletJobName(elfMachine)
 	case HostAgentJobTypeSetNetworkDeviceConfig:
-		return GetSetNetworkDeviceConfigJobName(elfMachine, len(elfMachine.Spec.Network.Devices))
+		return GetSetNetworkDeviceConfigJobName(elfMachine, macTypes)
 	default:
 		return ""
 	}
@@ -123,10 +128,10 @@ func GenerateRestartKubeletJob(elfMachine *infrav1.ElfMachine, playbook string) 
 	}
 }
 
-func GenerateSetNetworkDeviceConfigJob(elfMachine *infrav1.ElfMachine, playbook string) *agentv1.HostOperationJob {
+func GenerateSetNetworkDeviceConfigJob(elfMachine *infrav1.ElfMachine, playbook string, macTypes []MacType) *agentv1.HostOperationJob {
 	return &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      GetSetNetworkDeviceConfigJobName(elfMachine, len(elfMachine.Spec.Network.Devices)),
+			Name:      GetSetNetworkDeviceConfigJobName(elfMachine, macTypes),
 			Namespace: "default",
 		},
 		Spec: agentv1.HostOperationJobSpec{
@@ -143,7 +148,12 @@ func GenerateSetNetworkDeviceConfigJob(elfMachine *infrav1.ElfMachine, playbook 
 	}
 }
 
-func GenerateJob(ctx goctx.Context, cli client.Client, elfMachine *infrav1.ElfMachine, jobType HostAgentJobType) (*agentv1.HostOperationJob, error) {
+type MacType struct {
+	Mac  string
+	Type string
+}
+
+func GenerateJob(ctx goctx.Context, cli client.Client, elfMachine *infrav1.ElfMachine, jobType HostAgentJobType, macTypes []MacType) (*agentv1.HostOperationJob, error) {
 	var configmap corev1.ConfigMap
 	if err := cli.Get(ctx, client.ObjectKey{Namespace: constants.NamespaceCape, Name: HostAgentJobsConfigName}, &configmap); err != nil {
 		return nil, err
@@ -160,7 +170,16 @@ func GenerateJob(ctx goctx.Context, cli client.Client, elfMachine *infrav1.ElfMa
 	case HostAgentJobTypeRestartKubelet:
 		return GenerateRestartKubeletJob(elfMachine, playbook), nil
 	case HostAgentJobTypeSetNetworkDeviceConfig:
-		return GenerateSetNetworkDeviceConfigJob(elfMachine, playbook), nil
+		if len(macTypes) > 0 {
+			var sb strings.Builder
+			sb.WriteString("mac_types:\n")
+			for i := range macTypes {
+				sb.WriteString(fmt.Sprintf("      \"%s\": \"%s\"\n", macTypes[i].Mac, macTypes[i].Type))
+			}
+			playbook = strings.Replace(playbook, "mac_types: {}", sb.String(), 1)
+		}
+
+		return GenerateSetNetworkDeviceConfigJob(elfMachine, playbook, macTypes), nil
 	default:
 		return nil, fmt.Errorf("unknown job type: %s", jobType)
 	}

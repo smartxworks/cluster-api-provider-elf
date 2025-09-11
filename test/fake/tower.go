@@ -17,6 +17,8 @@ limitations under the License.
 package fake
 
 import (
+	"crypto/rand"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -34,6 +36,16 @@ func ID() string {
 
 func UUID() string {
 	return uuid.New().String()
+}
+
+func MAC() string {
+	buf := make([]byte, 6)
+	_, _ = rand.Read(buf)
+
+	buf[0] |= 2
+	buf[0] &^= 1
+
+	return strings.ToUpper(fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]))
 }
 
 func NewTowerCluster() *models.Cluster {
@@ -236,7 +248,7 @@ func NewVMDisk(vmVolume *models.VMVolume) *models.VMDisk {
 func NewVMNic() *models.VMNic {
 	return &models.VMNic{
 		ID:         ptr.To(ID()),
-		MacAddress: ptr.To(ID()),
+		MacAddress: ptr.To(MAC()),
 		IPAddress:  ptr.To("127.0.0.1"),
 	}
 }
