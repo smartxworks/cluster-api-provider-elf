@@ -1274,8 +1274,10 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx goctx.Context, machineCtx *c
 
 		// Add to Status.Network even if IP is empty.
 		machineCtx.ElfMachine.Status.Network = append(machineCtx.ElfMachine.Status.Network, infrav1.NetworkStatus{
-			IPAddrs: []string{ip},
-			MACAddr: service.GetTowerString(nic.MacAddress),
+			IPAddrs:    []string{ip},
+			MACAddr:    service.GetTowerString(nic.MacAddress),
+			Gateway:    service.GetTowerString(nic.Gateway),
+			SubnetMask: service.GetTowerString(nic.SubnetMask),
 		})
 
 		if ip == "" {

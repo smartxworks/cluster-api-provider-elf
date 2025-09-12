@@ -68,6 +68,21 @@ func (mr *MockVMServiceMockRecorder) AddLabelsToVM(vmID, labels interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddLabelsToVM", reflect.TypeOf((*MockVMService)(nil).AddLabelsToVM), vmID, labels)
 }
 
+// AddVMNics mocks base method.
+func (m *MockVMService) AddVMNics(vmID string, nics []*models.VMNicParams) (*models.WithTaskVM, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddVMNics", vmID, nics)
+	ret0, _ := ret[0].(*models.WithTaskVM)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddVMNics indicates an expected call of AddVMNics.
+func (mr *MockVMServiceMockRecorder) AddVMNics(vmID, nics interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddVMNics", reflect.TypeOf((*MockVMService)(nil).AddVMNics), vmID, nics)
+}
+
 // AddVMsToPlacementGroup mocks base method.
 func (m *MockVMService) AddVMsToPlacementGroup(placementGroup *models.VMPlacementGroup, vmIDs []string) (*models.Task, error) {
 	m.ctrl.T.Helper()

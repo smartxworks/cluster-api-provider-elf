@@ -19,6 +19,7 @@ package webhooks
 import (
 	goctx "context"
 	"fmt"
+	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,6 +37,9 @@ const (
 	memoryCannotLessThanZeroMsg            = "the memory can only greater than 0"
 	numCPUsCannotLessThanZeroMsg           = "the umCPUs can only greater than 0"
 	numCoresPerSocketCannotLessThanZeroMsg = "the numCoresPerSocket can only greater than 0"
+
+	networkDeviceCannotModifyMsg = "the network device cannot be modified"
+	networkDeviceCannotReduceMsg = "the network devices cannot be reduced"
 )
 
 func (v *ElfMachineTemplateValidator) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -81,10 +85,43 @@ func (v *ElfMachineTemplateValidator) ValidateCreate(ctx goctx.Context, obj runt
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
 func (v *ElfMachineTemplateValidator) ValidateUpdate(ctx goctx.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	return nil, nil
+	oldElfMachineTemplate, ok := oldObj.(*infrav1.ElfMachineTemplate) //nolint:forcetypeassert
+	if !ok {
+		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an ElfMachineTemplate but got a %T", oldObj))
+	}
+	elfMachineTemplate, ok := newObj.(*infrav1.ElfMachineTemplate) //nolint:forcetypeassert
+	if !ok {
+		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an ElfMachineTemplate but got a %T", newObj))
+	}
+
+	var allErrs field.ErrorList
+
+	if err := v.validateNetwork(&elfMachineTemplate.Spec.Template.Spec.Network, &oldElfMachineTemplate.Spec.Template.Spec.Network); err != nil {
+		allErrs = append(allErrs, err)
+	}
+
+	return nil, aggregateObjErrors(elfMachineTemplate.GroupVersionKind().GroupKind(), elfMachineTemplate.Name, allErrs)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
 func (v *ElfMachineTemplateValidator) ValidateDelete(ctx goctx.Context, obj runtime.Object) (admission.Warnings, error) {
 	return nil, nil
+}
+
+func (v *ElfMachineTemplateValidator) validateNetwork(network, oldNetwork *infrav1.NetworkSpec) *field.Error {
+	if reflect.DeepEqual(network.Devices, oldNetwork.Devices) {
+		return nil
+	}
+
+	if len(network.Devices) < len(oldNetwork.Devices) {
+		return field.Invalid(field.NewPath("spec", "template", "spec", "network", "devices"), network.Devices, networkDeviceCannotReduceMsg)
+	}
+
+	for i := range len(oldNetwork.Devices) {
+		if !reflect.DeepEqual(network.Devices[i], oldNetwork.Devices[i]) {
+			return field.Invalid(field.NewPath("spec", "template", "spec", "network", fmt.Sprintf("devices[%d]", i)), network.Devices[i], networkDeviceCannotModifyMsg)
+		}
+	}
+
+	return nil
 }

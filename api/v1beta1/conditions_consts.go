@@ -94,6 +94,10 @@ const (
 	// settings to be reported after machine being powered on.
 	WaitingForNetworkAddressesReason = "WaitingForNetworkAddresses"
 
+	// WaitingForNetworkMacAddressReason (Severity=Info) documents an ElfMachine waiting for the machine network
+	// settings to be reported after machine being powered on.
+	WaitingForNetworkMacAddressReason = "WaitingForNetworkMacAddress"
+
 	// JoiningPlacementGroupReason documents (Severity=Info) an ElfMachine currently executing the join placement group operation.
 	JoiningPlacementGroupReason = "JoiningPlacementGroup"
 
@@ -163,6 +167,24 @@ const (
 	// an error while restarting kubelet; those kind of errors are usually transient and failed restarting
 	// are automatically re-tried by the controller.
 	RestartingKubeletFailedReason = "RestartingKubeletFailed"
+
+	// AddingVMNetworkDeviceReason documents (Severity=Info) ElfMachine currently executing the adding
+	// a new network device operation.
+	AddingVMNetworkDeviceReason = "AddingVMNetworkDevice"
+
+	// AddingVMNetworkDeviceFailedReason (Severity=Warning) documents an ElfMachine controller detecting
+	// an error while adding a new network device; those kind of errors are usually transient and failed updating
+	// are automatically re-tried by the controller.
+	AddingVMNetworkDeviceFailedReason = "AddingVMNetworkDeviceFailed"
+
+	// SettingVMNetworkDeviceConfigReason documents (Severity=Info) ElfMachine currently executing the
+	// setting VM network device configuration operation.
+	SettingVMNetworkDeviceConfigReason = "SettingVMNetworkDeviceConfig"
+
+	// SettingVMNetworkDeviceConfigFailedReason (Severity=Warning) documents an ElfMachine controller
+	// detecting an error while setting VM network device configuration; those kind of errors are usually
+	// transient and failed updating are automatically re-tried by the controller.
+	SettingVMNetworkDeviceConfigFailedReason = "SettingVMNetworkDeviceConfigFailed"
 )
 
 // Conditions and Reasons related to make connections to a Tower. Can currently be used by ElfCluster and ElfMachine

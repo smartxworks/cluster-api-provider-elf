@@ -1,0 +1,146 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hostagent-jobs
+  namespace: default
+data:
+  expand-root-partition: |
+    - name: Expand root partition
+      hosts: all
+      become: true
+      gather_facts: true
+      tasks:
+      - name: Set root device
+        ansible.builtin.set_fact:
+          rootdevice: >-
+            {{ ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='device') | first }}
+
+      - name: Set root partition
+        ansible.builtin.set_fact:
+          rootpartition: >-
+            {{ ansible_devices
+               | dict2items
+               | map(attribute='value.partitions')
+               | map('dict2items')
+               | flatten(1)
+               | selectattr('value.holders', 'defined')
+               | selectattr('value.holders', 'contains', rootdevice.split('/')[-1])
+               | map(attribute='key')
+               | first }}
+
+      - name: Grow partition
+        shell: |
+          result=$(growpart /dev/{{ rootpartition | regex_replace('[0-9]+$', '') }} {{ rootpartition | regex_search('[0-9]+$') }})
+          if [ $? -eq 0 ]; then
+            echo "$result"
+          elif echo "$result" | grep -q '^NOCHANGE'; then
+            echo "$result"
+          else
+            echo "$result"
+            exit 1
+          fi
+
+      - name: Resize partition
+        shell: pvresize /dev/{{ rootpartition }}
+
+      - name: Extend root
+        shell: |
+          result=$(lvextend -r -l+100%FREE -n {{ rootdevice }} 2>&1)
+          if [ $? -eq 0 ]; then
+            echo "$result"
+          elif echo "$result" | grep -q 'matches existing size'; then
+            echo "$result"
+          else
+            echo "$result"
+            exit 1
+          fi
+
+  restart-kubelet: |
+    - name: Kubelet | restart kubelet
+      hosts: all
+      become: true
+      gather_facts: false
+      tasks:
+      - ansible.builtin.service:
+          name: kubelet
+          state: restarted
+
+  set-network-device-config: |
+    - name: Set network device configuration
+      hosts: all
+      become: true
+      vars:
+        mac_types: {}
+      tasks:
+      - name: Set network configuration for unconfigured nics
+        shell: |
+          set -e
+          shopt -s nullglob
+
+          declare -A mac_type_map
+          mac_type_map=(
+          {% for mac, type in mac_types.items() %}
+            ["{{ mac }}"]="{{ type }}"
+          {% endfor %}
+          )
+
+          echo "Find NICs for MACs"
+
+          declare -A mac_nic_map
+          for i in /sys/class/net/{enp*,ens*}/address; do
+            nic=$(basename $(dirname "$i"))
+            mac=$(cat "$i")
+            mac_nic_map["$mac"]="$nic"
+          done
+
+          declare -A nic_type_map
+          for mac in "${!mac_type_map[@]}"; do
+            nic="${mac_nic_map[$mac]}"
+            if [[ -z "$nic" ]]; then
+              echo "Error: No NIC found for MAC $mac"
+              exit 1
+            fi
+
+            echo "Find NIC for MAC: $mac, Type: ${mac_type_map[$mac]}, NIC: $nic"
+
+            nic_type_map["$nic"]="${mac_type_map[$mac]}"
+          done
+
+          for nic in "${!nic_type_map[@]}"; do
+            echo "Set network configuration for NIC: $nic, Type: ${nic_type_map[$nic]}"
+
+            if [[ "${nic_type_map[$nic]}" == "NONE" || "${nic_type_map[$nic]}" == "IPV4_DHCP" ]]; then
+              if result=$(nmcli connection delete "$nic" 2>&1); then
+                echo "$result"
+              elif ! echo "$result" | grep -q "unknown connection"; then
+                echo "Error: failed to delete connection for $nic: $result"
+                exit 1
+              fi
+            fi
+
+            if [ "${nic_type_map[$nic]}" == "NONE" ]; then
+              nmcli connection add type ethernet con-name "$nic" \
+                ifname "$nic" \
+                ipv4.method disabled \
+                ipv6.method ignore
+            elif [ "${nic_type_map[$nic]}" == "IPV4" ]; then
+              con_name=$(nmcli -g GENERAL.CONNECTION device show "$nic")
+              nmcli connection modify "$con_name" \
+                ipv4.never-default yes \
+                ipv6.never-default yes \
+                ipv4.ignore-auto-dns yes \
+                ipv6.ignore-auto-dns yes
+            elif [ "${nic_type_map[$nic]}" == "IPV4_DHCP" ]; then
+              nmcli connection add type ethernet con-name "$nic" \
+                ifname "$nic" \
+                ipv4.never-default yes \
+                ipv6.never-default yes \
+                ipv4.ignore-auto-dns yes \
+                ipv6.ignore-auto-dns yes
+            else
+              echo "Error: Unknown NIC type ${nic_type_map[$nic]}"
+              exit 1
+            fi
+          done
+
+          echo "Set network configuration for nics done"

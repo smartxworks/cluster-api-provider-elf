@@ -255,6 +255,13 @@ func NewElfMachineTemplate() *infrav1.ElfMachineTemplate {
 			Template: infrav1.ElfMachineTemplateResource{
 				Spec: infrav1.ElfMachineSpec{
 					DiskGiB: DiskGiB,
+					Network: infrav1.NetworkSpec{
+						Devices: []infrav1.NetworkDeviceSpec{
+							{
+								NetworkType: infrav1.NetworkTypeIPV4DHCP,
+							},
+						},
+					},
 				},
 			},
 		},

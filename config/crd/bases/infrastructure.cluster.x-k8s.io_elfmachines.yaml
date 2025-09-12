@@ -417,6 +417,9 @@ spec:
                         Connected is a flag that indicates whether this network is currently
                         connected to the VM.
                       type: boolean
+                    gateway:
+                      description: Gateway is the gateway of the network device.
+                      type: string
                     ipAddrs:
                       description: IPAddrs is one or more IP addresses reported by
                         vm-tools.
@@ -428,6 +431,9 @@ spec:
                       type: string
                     networkName:
                       description: NetworkName is the name of the network.
+                      type: string
+                    subnetMask:
+                      description: SubnetMask is the subnet mask of the network device.
                       type: string
                   required:
                   - macAddr

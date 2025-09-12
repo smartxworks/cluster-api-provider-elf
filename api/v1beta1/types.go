@@ -112,6 +112,12 @@ type NetworkStatus struct {
 	// MACAddr is the MAC address of the network device.
 	MACAddr string `json:"macAddr"`
 
+	// Gateway is the gateway of the network device.
+	Gateway string `json:"gateway,omitempty"`
+
+	// SubnetMask is the subnet mask of the network device.
+	SubnetMask string `json:"subnetMask,omitempty"`
+
 	// NetworkName is the name of the network.
 	// +optional
 	NetworkName string `json:"networkName,omitempty"`
