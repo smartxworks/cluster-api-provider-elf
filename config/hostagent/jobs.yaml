@@ -94,22 +94,22 @@ data:
           done
 
           declare -A nic_type_map
-          for mac in "${!mac_type_map[@]}"; do
-            nic="${mac_nic_map[$mac]}"
+          for mac in "$${!mac_type_map[@]}"; do
+            nic="$${mac_nic_map[$mac]}"
             if [[ -z "$nic" ]]; then
               echo "Error: No NIC found for MAC $mac"
               exit 1
             fi
 
-            echo "Find NIC for MAC: $mac, Type: ${mac_type_map[$mac]}, NIC: $nic"
+            echo "Find NIC for MAC: $mac, Type: $${mac_type_map[$mac]}, NIC: $nic"
 
-            nic_type_map["$nic"]="${mac_type_map[$mac]}"
+            nic_type_map["$nic"]="$${mac_type_map[$mac]}"
           done
 
-          for nic in "${!nic_type_map[@]}"; do
-            echo "Set network configuration for NIC: $nic, Type: ${nic_type_map[$nic]}"
+          for nic in "$${!nic_type_map[@]}"; do
+            echo "Set network configuration for NIC: $nic, Type: $${nic_type_map[$nic]}"
 
-            if [[ "${nic_type_map[$nic]}" == "NONE" || "${nic_type_map[$nic]}" == "IPV4_DHCP" ]]; then
+            if [[ "$${nic_type_map[$nic]}" == "NONE" || "$${nic_type_map[$nic]}" == "IPV4_DHCP" ]]; then
               if result=$(nmcli connection delete "$nic" 2>&1); then
                 echo "$result"
               elif ! echo "$result" | grep -q "unknown connection"; then
@@ -118,19 +118,19 @@ data:
               fi
             fi
 
-            if [ "${nic_type_map[$nic]}" == "NONE" ]; then
+            if [ "$${nic_type_map[$nic]}" == "NONE" ]; then
               nmcli connection add type ethernet con-name "$nic" \
                 ifname "$nic" \
                 ipv4.method disabled \
                 ipv6.method ignore
-            elif [ "${nic_type_map[$nic]}" == "IPV4" ]; then
+            elif [ "$${nic_type_map[$nic]}" == "IPV4" ]; then
               con_name=$(nmcli -g GENERAL.CONNECTION device show "$nic")
               nmcli connection modify "$con_name" \
                 ipv4.never-default yes \
                 ipv6.never-default yes \
                 ipv4.ignore-auto-dns yes \
                 ipv6.ignore-auto-dns yes
-            elif [ "${nic_type_map[$nic]}" == "IPV4_DHCP" ]; then
+            elif [ "$${nic_type_map[$nic]}" == "IPV4_DHCP" ]; then
               nmcli connection add type ethernet con-name "$nic" \
                 ifname "$nic" \
                 ipv4.never-default yes \
@@ -138,7 +138,7 @@ data:
                 ipv4.ignore-auto-dns yes \
                 ipv6.ignore-auto-dns yes
             else
-              echo "Error: Unknown NIC type ${nic_type_map[$nic]}"
+              echo "Error: Unknown NIC type $${nic_type_map[$nic]}"
               exit 1
             fi
           done
