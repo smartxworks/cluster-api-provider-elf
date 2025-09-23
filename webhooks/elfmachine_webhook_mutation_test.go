@@ -19,6 +19,7 @@ package webhooks
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -67,7 +68,7 @@ func TestElfMachineMutation(t *testing.T) {
 		expectRespAllowed: true,
 		expectPatchs: []jsonpatch.Operation{
 			{Operation: "add", Path: "/metadata/annotations", Value: map[string]interface{}{infrav1.CAPEVersionAnnotation: version.CAPEVersion()}},
-			{Operation: "add", Path: "/spec/numCoresPerSocket", Value: float64(elfMachine.Spec.NumCPUs)},
+			{Operation: "add", Path: "/spec/numCoresPerSocket", Value: json.Number(strconv.Itoa(int(elfMachine.Spec.NumCPUs)))},
 		},
 	})
 
@@ -87,7 +88,7 @@ func TestElfMachineMutation(t *testing.T) {
 		}},
 		expectRespAllowed: true,
 		expectPatchs: []jsonpatch.Operation{
-			{Operation: "add", Path: "/spec/numCoresPerSocket", Value: float64(elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket)},
+			{Operation: "add", Path: "/spec/numCoresPerSocket", Value: json.Number(strconv.Itoa(int(elfMachineTemplate.Spec.Template.Spec.NumCoresPerSocket)))},
 		},
 		client: fakeclient.NewClientBuilder().WithScheme(scheme).WithObjects(elfMachineTemplate).Build(),
 	})

@@ -19,11 +19,11 @@ images:
     loadBehavior: tryLoad
   - name: k8s.gcr.io/smartxworks/cape-manager:e2e
     loadBehavior: mustLoad
-  - name: quay.io/jetstack/cert-manager-cainjector:v1.16.3
+  - name: quay.io/jetstack/cert-manager-cainjector:v1.18.1
     loadBehavior: tryLoad
-  - name: quay.io/jetstack/cert-manager-webhook:v1.16.3
+  - name: quay.io/jetstack/cert-manager-webhook:v1.18.1
     loadBehavior: tryLoad
-  - name: quay.io/jetstack/cert-manager-controller:v1.16.3
+  - name: quay.io/jetstack/cert-manager-controller:v1.18.1
     loadBehavior: tryLoad
 
 providers:
