@@ -66,7 +66,7 @@ var _ = Describe("CAPE kcp scale e2e test", func() {
 				Flavor:                   clusterctl.DefaultFlavor,
 				Namespace:                namespace.Name,
 				ClusterName:              fmt.Sprintf("%s-%s", specName, capiutil.RandomString(6)),
-				KubernetesVersion:        e2eConfig.GetVariable(capie2e.KubernetesVersion),
+				KubernetesVersion:        e2eConfig.MustGetVariable(capie2e.KubernetesVersion),
 				ControlPlaneMachineCount: ptr.To[int64](1),
 				WorkerMachineCount:       ptr.To[int64](1),
 			},

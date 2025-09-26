@@ -68,7 +68,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 				Flavor:                   "cp-ha",
 				Namespace:                namespace.Name,
 				ClusterName:              fmt.Sprintf("%s-%s", specName, capiutil.RandomString(6)),
-				KubernetesVersion:        e2eConfig.GetVariable(capie2e.KubernetesVersion),
+				KubernetesVersion:        e2eConfig.MustGetVariable(capie2e.KubernetesVersion),
 				ControlPlaneMachineCount: ptr.To[int64](3),
 				WorkerMachineCount:       ptr.To[int64](1),
 			},
@@ -115,7 +115,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 		Logf("Waiting until nodes are ready")
 		framework.WaitForNodesReady(ctx, framework.WaitForNodesReadyInput{
 			Lister:            workloadClient,
-			KubernetesVersion: e2eConfig.GetVariable(capie2e.KubernetesVersion),
+			KubernetesVersion: e2eConfig.MustGetVariable(capie2e.KubernetesVersion),
 			Count:             int(4),
 			WaitForNodesReady: e2eConfig.GetIntervals(specName, "wait-nodes-ready"),
 		})
