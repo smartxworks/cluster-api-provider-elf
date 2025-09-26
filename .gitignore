@@ -1,4 +1,5 @@
 # Test
+*.log
 bin
 _artifacts
 test/e2e/data/infrastructure-elf/kustomization/base/cluster-template.yaml
