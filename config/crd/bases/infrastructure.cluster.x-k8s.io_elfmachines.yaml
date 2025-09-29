@@ -156,6 +156,13 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                           type: array
+                        defaultRoute:
+                          description: |-
+                            DefaultRoute indicates whether this network device should be used for
+                            the virtual machine's default route.
+                            When true, the gateway from this device will be used as the default route.
+                            Only one device should typically be set to true.
+                          type: boolean
                         ipAddrs:
                           description: |-
                             IPAddrs is a list of one or more IPv4 and/or IPv6 addresses to assign

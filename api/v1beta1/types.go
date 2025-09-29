@@ -149,6 +149,16 @@ func (n *NetworkSpec) RequiresStaticIPs() bool {
 	return false
 }
 
+func (n *NetworkSpec) GetDefaultRouteDeviceIndex() int {
+	for i := range len(n.Devices) {
+		if n.Devices[i].DefaultRoute {
+			return i
+		}
+	}
+
+	return 0
+}
+
 // NetworkDeviceSpec defines the network configuration for a virtual machine's
 // network device.
 type NetworkDeviceSpec struct {
@@ -182,6 +192,13 @@ type NetworkDeviceSpec struct {
 	// to IPAddressClaims.
 	// +optional
 	AddressesFromPools []corev1.TypedLocalObjectReference `json:"addressesFromPools,omitempty"`
+
+	// DefaultRoute indicates whether this network device should be used for
+	// the virtual machine's default route.
+	// When true, the gateway from this device will be used as the default route.
+	// Only one device should typically be set to true.
+	// +optional
+	DefaultRoute bool `json:"defaultRoute,omitempty"`
 }
 
 func (d *NetworkDeviceSpec) HasNetworkType() bool {

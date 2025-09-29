@@ -245,6 +245,7 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 
 	nics := make([]*models.VMNicParams, 0, len(elfMachine.Spec.Network.Devices))
 	networks := make([]*models.CloudInitNetWork, 0, len(elfMachine.Spec.Network.Devices))
+	defautRouteDeviceIndex := elfMachine.Spec.Network.GetDefaultRouteDeviceIndex()
 	for i := range len(elfMachine.Spec.Network.Devices) {
 		device := elfMachine.Spec.Network.Devices[i]
 
@@ -272,41 +273,45 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 			networkType = models.CloudInitNetworkTypeEnumIPV4
 		}
 
-		ipAddress := ""
-		if len(device.IPAddrs) > 0 {
-			ipAddress = device.IPAddrs[0]
-		}
-
-		routes := make([]*models.CloudInitNetWorkRoute, 0, len(device.Routes))
-		for _, route := range device.Routes {
-			netmask := route.Netmask
-			if netmask == "" {
-				netmask = "0.0.0.0"
-			}
-			network := route.Network
-			if network == "" {
-				network = "0.0.0.0"
-			}
-
-			routes = append(routes, &models.CloudInitNetWorkRoute{
-				Gateway: TowerString(route.Gateway),
-				Netmask: TowerString(netmask),
-				Network: TowerString(network),
-			})
-		}
-
 		network := &models.CloudInitNetWork{
 			NicIndex: TowerInt32(i),
 			Type:     &networkType,
 		}
+
+		ipAddress := ""
+		if len(device.IPAddrs) > 0 {
+			ipAddress = device.IPAddrs[0]
+		}
 		if ipAddress != "" {
 			network.IPAddress = TowerString(ipAddress)
 		}
+
 		if device.Netmask != "" {
 			network.Netmask = TowerString(device.Netmask)
 		}
-		if len(routes) > 0 {
-			network.Routes = routes
+
+		if defautRouteDeviceIndex == i {
+			routes := make([]*models.CloudInitNetWorkRoute, 0, len(device.Routes))
+			for _, route := range device.Routes {
+				netmask := route.Netmask
+				if netmask == "" {
+					netmask = "0.0.0.0"
+				}
+				network := route.Network
+				if network == "" {
+					network = "0.0.0.0"
+				}
+
+				routes = append(routes, &models.CloudInitNetWorkRoute{
+					Gateway: TowerString(route.Gateway),
+					Netmask: TowerString(netmask),
+					Network: TowerString(network),
+				})
+			}
+
+			if len(routes) > 0 {
+				network.Routes = routes
+			}
 		}
 
 		networks = append(networks, network)
