@@ -22,6 +22,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -1350,56 +1351,81 @@ func (r *ElfMachineReconciler) getBootstrapData(ctx goctx.Context, machineCtx *c
 }
 
 func (r *ElfMachineReconciler) reconcileLabels(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) (bool, error) {
-	log := ctrl.LoggerFrom(ctx)
+	var capeManagedLabelValues, namespaceLabelValues, clusterNameLabelValues, vipLabelValues, labelIDs []string
+	var capeManagedLabel, namespaceLabel, clusterNameLabel, vipLabel *models.Label
+	var err error
 
+	log := ctrl.LoggerFrom(ctx)
 	capeManagedLabelKey := towerresources.GetVMLabelManaged()
-	capeManagedLabel := getLabelFromCache(capeManagedLabelKey)
-	if capeManagedLabel == nil {
-		var err error
+	namespaceLabelKey := towerresources.GetVMLabelNamespace()
+	clusterNameLabelKey := towerresources.GetVMLabelClusterName()
+	vipLabelKey := towerresources.GetVMLabelVIP()
+
+	for _, label := range vm.Labels {
+		if label.Key != nil && label.Value != nil {
+			switch *label.Key {
+			case capeManagedLabelKey:
+				capeManagedLabelValues = append(capeManagedLabelValues, *label.Value)
+			case namespaceLabelKey:
+				namespaceLabelValues = append(namespaceLabelValues, *label.Value)
+			case clusterNameLabelKey:
+				clusterNameLabelValues = append(clusterNameLabelValues, *label.Value)
+			case vipLabelKey:
+				vipLabelValues = append(vipLabelValues, *label.Value)
+			}
+		}
+	}
+
+	if !strings.Contains(strings.Join(capeManagedLabelValues, ","), "true") {
 		capeManagedLabel, err = machineCtx.VMService.UpsertLabel(capeManagedLabelKey, "true")
 		if err != nil {
-			return false, errors.Wrapf(err, "%s %s", failedToUpsertLabelMsg, towerresources.GetVMLabelManaged())
+			return false, errors.Wrapf(err, "%s %s", failedToUpsertLabelMsg, capeManagedLabelKey)
 		}
-
-		setLabelInCache(capeManagedLabel)
-	}
-
-	// If the virtual machine has been labeled with managed label,
-	// it is considered that all labels have been labeled.
-	for i := range len(vm.Labels) {
-		if *vm.Labels[i].ID == *capeManagedLabel.ID {
-			return true, nil
+		if capeManagedLabel.ID != nil {
+			labelIDs = append(labelIDs, *capeManagedLabel.ID)
 		}
 	}
 
-	namespaceLabel, err := machineCtx.VMService.UpsertLabel(towerresources.GetVMLabelNamespace(), machineCtx.ElfMachine.Namespace)
-	if err != nil {
-		return false, errors.Wrapf(err, "%s %s", failedToUpsertLabelMsg, towerresources.GetVMLabelNamespace())
-	}
-	clusterNameLabel, err := machineCtx.VMService.UpsertLabel(towerresources.GetVMLabelClusterName(), machineCtx.ElfCluster.Name)
-	if err != nil {
-		return false, errors.Wrapf(err, "%s %s", failedToUpsertLabelMsg, towerresources.GetVMLabelClusterName())
-	}
-
-	var vipLabel *models.Label
-	if machineutil.IsControlPlaneMachine(machineCtx.ElfMachine) {
-		vipLabel, err = machineCtx.VMService.UpsertLabel(towerresources.GetVMLabelVIP(), machineCtx.ElfCluster.Spec.ControlPlaneEndpoint.Host)
+	if !strings.Contains(strings.Join(namespaceLabelValues, ","), machineCtx.ElfMachine.Namespace) {
+		namespaceLabel, err = machineCtx.VMService.UpsertLabel(namespaceLabelKey, machineCtx.ElfMachine.Namespace)
 		if err != nil {
-			return false, errors.Wrapf(err, "%s %s", failedToUpsertLabelMsg, towerresources.GetVMLabelVIP())
+			return false, errors.Wrapf(err, "%s %s", failedToUpsertLabelMsg, namespaceLabelKey)
+		}
+		if namespaceLabel.ID != nil {
+			labelIDs = append(labelIDs, *namespaceLabel.ID)
 		}
 	}
 
-	labelIDs := []string{*namespaceLabel.ID, *clusterNameLabel.ID, *capeManagedLabel.ID}
-	if machineutil.IsControlPlaneMachine(machineCtx.ElfMachine) {
-		labelIDs = append(labelIDs, *vipLabel.ID)
+	if !strings.Contains(strings.Join(clusterNameLabelValues, ","), machineCtx.ElfCluster.Name) {
+		clusterNameLabel, err = machineCtx.VMService.UpsertLabel(clusterNameLabelKey, machineCtx.ElfCluster.Name)
+		if err != nil {
+			return false, errors.Wrapf(err, "%s %s", failedToUpsertLabelMsg, clusterNameLabelKey)
+		}
+		if clusterNameLabel.ID != nil {
+			labelIDs = append(labelIDs, *clusterNameLabel.ID)
+		}
 	}
-	log.V(3).Info("Upsert labels", "labelIds", labelIDs)
-	_, err = machineCtx.VMService.AddLabelsToVM(*vm.ID, labelIDs)
-	if err != nil {
-		delLabelCache(capeManagedLabelKey)
 
-		return false, err
+	if machineutil.IsControlPlaneMachine(machineCtx.ElfMachine) {
+		if !strings.Contains(strings.Join(vipLabelValues, ","), machineCtx.ElfCluster.Spec.ControlPlaneEndpoint.Host) {
+			vipLabel, err = machineCtx.VMService.UpsertLabel(vipLabelKey, machineCtx.ElfCluster.Spec.ControlPlaneEndpoint.Host)
+			if err != nil {
+				return false, errors.Wrapf(err, "%s %s", failedToUpsertLabelMsg, vipLabelKey)
+			}
+			if vipLabel.ID != nil {
+				labelIDs = append(labelIDs, *vipLabel.ID)
+			}
+		}
 	}
+
+	if len(labelIDs) > 0 {
+		log.V(3).Info("Upsert labels", "labelIds", labelIDs)
+		_, err = machineCtx.VMService.AddLabelsToVM(*vm.ID, labelIDs)
+		if err != nil {
+			return false, err
+		}
+	}
+
 	return true, nil
 }
 
