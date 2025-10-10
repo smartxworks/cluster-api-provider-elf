@@ -232,8 +232,8 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (r
 			machineCtx.ElfMachine.DeletionTimestamp.IsZero() &&
 			machineutil.IsNodeHealthyConditionUnknown(machineCtx.Machine) {
 			lastTransitionTime := conditions.GetLastTransitionTime(machineCtx.Machine, clusterv1.MachineNodeHealthyCondition)
-			if lastTransitionTime != nil && time.Now().Before(lastTransitionTime.Add(config.VMPowerStatusCheckingDuration)) {
-				result.RequeueAfter = config.DefaultRequeueTimeout
+			if lastTransitionTime != nil && time.Now().Before(lastTransitionTime.Add(config.Task.VMPowerStatusCheckingDuration)) {
+				result.RequeueAfter = config.Cape.DefaultRequeueTimeout
 
 				log.Info(fmt.Sprintf("The node's healthy condition is unknown, virtual machine may have been shut down, will reconcile after %s", result.RequeueAfter), "nodeConditionUnknownTime", lastTransitionTime)
 			}
@@ -338,7 +338,7 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx goctx.Context, machineCtx *co
 	if ok, err := r.deletePlacementGroup(ctx, machineCtx); err != nil {
 		return reconcile.Result{}, err
 	} else if !ok {
-		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 	}
 
 	// if cluster need to force delete, skipping VM deletion and remove the finalizer.
@@ -388,7 +388,7 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx goctx.Context, machineCtx *co
 	log.Info("Waiting for VM to be deleted",
 		"vmRef", machineCtx.ElfMachine.Status.VMRef, "taskRef", machineCtx.ElfMachine.Status.TaskRef)
 
-	return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+	return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 }
 
 func (r *ElfMachineReconciler) reconcileNormal(ctx goctx.Context, machineCtx *context.MachineContext) (reconcile.Result, error) {
@@ -403,7 +403,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx goctx.Context, machineCtx *co
 
 	// If the ElfMachine doesn't have our finalizer, add it.
 	if !ctrlutil.ContainsFinalizer(machineCtx.ElfMachine, infrav1.MachineFinalizer) {
-		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, patchutil.AddFinalizerWithOptimisticLock(ctx, r.Client, machineCtx.ElfMachine, infrav1.MachineFinalizer)
+		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, patchutil.AddFinalizerWithOptimisticLock(ctx, r.Client, machineCtx.ElfMachine, infrav1.MachineFinalizer)
 	}
 
 	// If ElfMachine requires static IPs for devices, should wait for CAPE-IP to set MachineStaticIPFinalizer first
@@ -412,7 +412,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx goctx.Context, machineCtx *co
 	if machineCtx.ElfMachine.Spec.Network.RequiresStaticIPs() && !ctrlutil.ContainsFinalizer(machineCtx.ElfMachine, infrav1.MachineStaticIPFinalizer) {
 		log.V(2).Info("Waiting for CAPE-IP to set MachineStaticIPFinalizer on ElfMachine")
 
-		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 	}
 
 	if !machineCtx.Cluster.Status.InfrastructureReady {
@@ -458,12 +458,12 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx goctx.Context, machineCtx *co
 		log.Error(err, "failed to reconcile VM")
 
 		if service.IsVMNotFound(err) {
-			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+			return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 		}
 
 		return reconcile.Result{}, errors.Wrapf(err, "failed to reconcile VM")
 	case !ok || machineCtx.ElfMachine.HasTask():
-		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 	}
 
 	// Reconcile the ElfMachine's Labels using the cluster info
@@ -480,7 +480,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx goctx.Context, machineCtx *co
 	if ok, err := r.reconcileNetwork(ctx, machineCtx, vm); err != nil {
 		return reconcile.Result{}, err
 	} else if !ok {
-		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 	}
 
 	machineCtx.ElfMachine.Status.Ready = true
@@ -493,7 +493,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx goctx.Context, machineCtx *co
 
 		log.Info("Node providerID is not reconciled")
 
-		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 	}
 
 	if result, err := r.deleteDuplicateVMs(ctx, machineCtx); err != nil || !result.IsZero() {
@@ -1518,7 +1518,7 @@ func (r *ElfMachineReconciler) deleteDuplicateVMs(ctx goctx.Context, machineCtx 
 			vmIDs = append(vmIDs, *vms[i].ID)
 		}
 		log.Info("Waiting for ElfMachine to select one of the duplicate VMs before deleting the other", "vms", vmIDs)
-		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 	}
 
 	for i := range vms {
@@ -1534,7 +1534,7 @@ func (r *ElfMachineReconciler) deleteDuplicateVMs(ctx goctx.Context, machineCtx 
 		if err := r.deleteVM(ctx, machineCtx, vms[i]); err != nil {
 			return reconcile.Result{}, err
 		} else {
-			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+			return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 		}
 	}
 

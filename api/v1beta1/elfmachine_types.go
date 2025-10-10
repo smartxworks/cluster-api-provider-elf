@@ -21,6 +21,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -393,6 +394,43 @@ func (m *ElfMachine) RequiresPassThroughGPUDevices() bool {
 
 func (m *ElfMachine) RequiresVGPUDevices() bool {
 	return len(m.Spec.VGPUDevices) > 0
+}
+
+// GetLimitedNameservers returns a limited number of nameservers.
+func (m *ElfMachine) GetLimitedNameservers(limit int) []string {
+	var nameservers []string
+	if len(m.Spec.Network.Nameservers) > 0 {
+		nameservers = append(nameservers, m.Spec.Network.Nameservers...)
+	}
+
+	defaultRouteDeviceIndex := m.Spec.Network.GetDefaultRouteDeviceIndex()
+	if defaultRouteDeviceIndex < len(m.Spec.Network.Devices) && len(m.Spec.Network.Devices[defaultRouteDeviceIndex].Nameservers) > 0 {
+		nameservers = append(nameservers, m.Spec.Network.Devices[defaultRouteDeviceIndex].Nameservers...)
+	}
+	for i := range m.Spec.Network.Devices {
+		if i != defaultRouteDeviceIndex && len(m.Spec.Network.Devices[i].Nameservers) > 0 {
+			nameservers = append(nameservers, m.Spec.Network.Devices[i].Nameservers...)
+		}
+	}
+
+	limitedNameservers := []string{}
+	nameserverSet := sets.NewString()
+	for i := range nameservers {
+		nameserver := nameservers[i]
+		if nameserverSet.Has(nameserver) {
+			continue
+		}
+
+		limitedNameservers = append(limitedNameservers, nameserver)
+		nameserverSet.Insert(nameserver)
+	}
+
+	count := limit
+	if count > len(limitedNameservers) {
+		count = len(limitedNameservers)
+	}
+
+	return limitedNameservers[:count]
 }
 
 //+kubebuilder:object:root=true
