@@ -250,10 +250,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
+			Expect(result.RequeueAfter).To(Equal(config.Cape.DefaultRequeueTimeout))
 			Expect(logBuffer.String()).To(ContainSubstring(message))
 
-			machine.Status.Conditions[0].LastTransitionTime = metav1.NewTime(time.Now().Add(-config.VMPowerStatusCheckingDuration))
+			machine.Status.Conditions[0].LastTransitionTime = metav1.NewTime(time.Now().Add(-config.Task.VMPowerStatusCheckingDuration))
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
@@ -1124,7 +1124,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			mockVMService.EXPECT().AddVMsToPlacementGroup(placementGroup, []string{*vm.ID}).Return(task, nil)
-			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(task, nil)
+			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.Task.WaitTaskTimeoutForPlacementGroupOperation, config.Task.WaitTaskInterval).Return(task, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			ok, err := reconciler.joinPlacementGroup(ctx, machineContext, vm)
@@ -1148,7 +1148,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
 			mockVMService.EXPECT().AddVMsToPlacementGroup(placementGroup, []string{*vm.ID}).Return(task, nil)
-			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(task, nil)
+			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.Task.WaitTaskTimeoutForPlacementGroupOperation, config.Task.WaitTaskInterval).Return(task, nil)
 
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			err := reconciler.addVMsToPlacementGroup(ctx, machineContext, placementGroup, []string{*vm.ID})
@@ -1160,7 +1160,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			taskStatus = models.TaskStatusFAILED
 			task.Status = &taskStatus
 			mockVMService.EXPECT().AddVMsToPlacementGroup(placementGroup, []string{*vm.ID}).Return(task, nil)
-			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(task, nil)
+			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.Task.WaitTaskTimeoutForPlacementGroupOperation, config.Task.WaitTaskInterval).Return(task, nil)
 
 			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			err = reconciler.addVMsToPlacementGroup(ctx, machineContext, placementGroup, []string{*vm.ID})
@@ -1169,12 +1169,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
 			mockVMService.EXPECT().AddVMsToPlacementGroup(placementGroup, []string{*vm.ID}).Return(task, nil)
-			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(nil, errors.New("xxx"))
+			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.Task.WaitTaskTimeoutForPlacementGroupOperation, config.Task.WaitTaskInterval).Return(nil, errors.New("xxx"))
 
 			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			err = reconciler.addVMsToPlacementGroup(ctx, machineContext, placementGroup, []string{*vm.ID})
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to wait for placement group updating task to complete in %s: pgName %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, *placementGroup.Name, *task.ID)))
+			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to wait for placement group updating task to complete in %s: pgName %s, taskID %s", config.Task.WaitTaskTimeoutForPlacementGroupOperation, *placementGroup.Name, *task.ID)))
 		})
 
 		It("should wait for placement group task done", func() {
@@ -1254,7 +1254,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host), nil)
 				mockVMService.EXPECT().FindByIDs([]string{}).Return([]*models.VM{}, nil)
 				mockVMService.EXPECT().AddVMsToPlacementGroup(placementGroup, []string{*vm.ID}).Return(task, nil)
-				mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(task, nil)
+				mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.Task.WaitTaskTimeoutForPlacementGroupOperation, config.Task.WaitTaskInterval).Return(task, nil)
 
 				reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 				ok, err := reconciler.joinPlacementGroup(ctx, machineContext, vm)
@@ -1362,7 +1362,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				mockVMService.EXPECT().GetHostsByCluster(elfCluster.Spec.Cluster).Return(service.NewHosts(host1, host2, host3), nil)
 				mockVMService.EXPECT().FindByIDs([]string{*vm2.ID}).Return([]*models.VM{vm2}, nil)
 				mockVMService.EXPECT().AddVMsToPlacementGroup(placementGroup, gomock.Any()).Return(task, nil)
-				mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(task, nil)
+				mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.Task.WaitTaskTimeoutForPlacementGroupOperation, config.Task.WaitTaskInterval).Return(task, nil)
 				setPGCache(placementGroup)
 
 				reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
@@ -3096,7 +3096,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			result, err := reconciler.reconcilePlacementGroup(ctx, machineContext)
-			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
+			Expect(result.RequeueAfter).To(Equal(config.Cape.DefaultRequeueTimeout))
 			Expect(err).To(BeZero())
 
 			placementGroup.EntityAsyncStatus = nil
@@ -3116,7 +3116,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
-			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(task, nil)
+			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.Task.WaitTaskTimeoutForPlacementGroupOperation, config.Task.WaitTaskInterval).Return(task, nil)
 
 			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			result, err = reconciler.reconcilePlacementGroup(ctx, machineContext)
@@ -3131,7 +3131,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
-			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(task, nil)
+			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.Task.WaitTaskTimeoutForPlacementGroupOperation, config.Task.WaitTaskInterval).Return(task, nil)
 
 			result, err = reconciler.reconcilePlacementGroup(ctx, machineContext)
 			Expect(result).To(BeZero())
@@ -3144,12 +3144,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 			mockVMService.EXPECT().GetCluster(elfCluster.Spec.Cluster).Return(towerCluster, nil)
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
-			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(nil, errors.New("xxx"))
+			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.Task.WaitTaskTimeoutForPlacementGroupOperation, config.Task.WaitTaskInterval).Return(nil, errors.New("xxx"))
 
 			result, err = reconciler.reconcilePlacementGroup(ctx, machineContext)
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to wait for placement group creating task to complete in %s: pgName %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, placementGroupName, *withTaskVMPlacementGroup.TaskID)))
+			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("failed to wait for placement group creating task to complete in %s: pgName %s, taskID %s", config.Task.WaitTaskTimeoutForPlacementGroupOperation, placementGroupName, *withTaskVMPlacementGroup.TaskID)))
 			Expect(canCreatePlacementGroup(placementGroupName)).To(BeFalse())
 
 			logBuffer = new(bytes.Buffer)
@@ -3160,7 +3160,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().CreateVMPlacementGroup(gomock.Any(), *towerCluster.ID, towerresources.GetVMPlacementGroupPolicy(machine)).Return(withTaskVMPlacementGroup, nil)
 			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
 			task.ErrorMessage = ptr.To(service.VMPlacementGroupDuplicate)
-			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval).Return(task, nil)
+			mockVMService.EXPECT().WaitTask(gomock.Any(), *task.ID, config.Task.WaitTaskTimeoutForPlacementGroupOperation, config.Task.WaitTaskInterval).Return(task, nil)
 
 			result, err = reconciler.reconcilePlacementGroup(ctx, machineContext)
 			Expect(result).To(BeZero())
@@ -3174,7 +3174,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(nil, errors.New(service.VMPlacementGroupNotFound))
 
 			result, err = reconciler.reconcilePlacementGroup(ctx, machineContext)
-			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
+			Expect(result.RequeueAfter).To(Equal(config.Cape.DefaultRequeueTimeout))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Tower has duplicate placement group, skip creating placement group " + placementGroupName))
 		})
@@ -3721,7 +3721,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			result, err := reconciler.deleteDuplicateVMs(ctx, machineContext)
-			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
+			Expect(result.RequeueAfter).To(Equal(config.Cape.DefaultRequeueTimeout))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM task done before deleting the duplicate VM"))
 		})
@@ -3737,7 +3737,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			result, err := reconciler.deleteDuplicateVMs(ctx, machineContext)
-			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
+			Expect(result.RequeueAfter).To(Equal(config.Cape.DefaultRequeueTimeout))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for ElfMachine to select one of the duplicate VMs before deleting the other"))
 		})
@@ -3758,7 +3758,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			result, err := reconciler.deleteDuplicateVMs(ctx, machineContext)
-			Expect(result.RequeueAfter).To(Equal(config.DefaultRequeueTimeout))
+			Expect(result.RequeueAfter).To(Equal(config.Cape.DefaultRequeueTimeout))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Destroying duplicate VM %s in task %s", *vm2.ID, *task.ID)))
 		})

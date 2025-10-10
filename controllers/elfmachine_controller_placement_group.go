@@ -63,16 +63,16 @@ func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx goctx.Context, machin
 		if ok := acquireTicketForPlacementGroupOperation(placementGroupName); ok {
 			defer releaseTicketForPlacementGroupOperation(placementGroupName)
 		} else {
-			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+			return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 		}
 
 		if placementGroup, err := r.createPlacementGroup(ctx, machineCtx, placementGroupName); err != nil {
 			return reconcile.Result{}, err
 		} else if placementGroup == nil {
-			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, err
+			return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, err
 		}
 	} else if placementGroup == nil {
-		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 	}
 
 	return reconcile.Result{}, nil
@@ -99,14 +99,14 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx goctx.Context, machineCt
 		return nil, err
 	}
 
-	task, err := machineCtx.VMService.WaitTask(ctx, *withTaskVMPlacementGroup.TaskID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval)
+	task, err := machineCtx.VMService.WaitTask(ctx, *withTaskVMPlacementGroup.TaskID, config.Task.WaitTaskTimeoutForPlacementGroupOperation, config.Task.WaitTaskInterval)
 	if err != nil {
 		// The default timeout for Tower to create a placement group is one minute.
 		// When current task times out, duplicate placement groups may or may not appear.
 		// For simplicity, both cases are treated as duplicate placement groups.
 		setPlacementGroupDuplicate(placementGroupName)
 
-		return nil, errors.Wrapf(err, "failed to wait for placement group creating task to complete in %s: pgName %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, placementGroupName, *withTaskVMPlacementGroup.TaskID)
+		return nil, errors.Wrapf(err, "failed to wait for placement group creating task to complete in %s: pgName %s, taskID %s", config.Task.WaitTaskTimeoutForPlacementGroupOperation, placementGroupName, *withTaskVMPlacementGroup.TaskID)
 	}
 
 	if *task.Status == models.TaskStatusFAILED {
@@ -585,9 +585,9 @@ func (r *ElfMachineReconciler) addVMsToPlacementGroup(ctx goctx.Context, machine
 	delPGCaches([]string{*placementGroup.Name})
 
 	taskID := *task.ID
-	task, err = machineCtx.VMService.WaitTask(ctx, taskID, config.WaitTaskTimeoutForPlacementGroupOperation, config.WaitTaskInterval)
+	task, err = machineCtx.VMService.WaitTask(ctx, taskID, config.Task.WaitTaskTimeoutForPlacementGroupOperation, config.Task.WaitTaskInterval)
 	if err != nil {
-		return errors.Wrapf(err, "failed to wait for placement group updating task to complete in %s: pgName %s, taskID %s", config.WaitTaskTimeoutForPlacementGroupOperation, *placementGroup.Name, taskID)
+		return errors.Wrapf(err, "failed to wait for placement group updating task to complete in %s: pgName %s, taskID %s", config.Task.WaitTaskTimeoutForPlacementGroupOperation, *placementGroup.Name, taskID)
 	}
 
 	if *task.Status == models.TaskStatusFAILED {

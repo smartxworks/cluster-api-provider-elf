@@ -98,7 +98,7 @@ func GetVMsInPlacementGroup(placementGroup *models.VMPlacementGroup) sets.Set[st
 func TowerMemory(memoryMiB int64) *int64 {
 	memory := memoryMiB
 	if memory <= 0 {
-		memory = config.VMMemoryMiB
+		memory = config.VM.VMMemoryMiB
 	}
 
 	return ptr.To[int64](memory * MiB)
@@ -137,7 +137,7 @@ func TowerString(v string) *string {
 
 func TowerVCPU(vCPU int32) *int32 {
 	if vCPU <= 0 {
-		vCPU = config.VMNumCPUs
+		vCPU = config.VM.VMNumCPUs
 	}
 
 	return &vCPU

@@ -19,15 +19,6 @@ package config
 const (
 	// VMDescription is the default description in a VM.
 	VMDescription = "Automatically created Kubernetes node by server %s."
-
-	// VMNumCPUs is the default virtual processors in a VM.
-	VMNumCPUs = 2
-
-	// VMMemoryMiB is the default memory in a VM.
-	VMMemoryMiB = 2048
-
-	// VMDiskName is the default disk name in a VM.
-	VMDiskName = "disk"
 )
 
 // MaxConcurrentVMCreations is the maximum number of concurrent virtual machine creations.

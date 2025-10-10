@@ -139,6 +139,13 @@ spec:
                                     type: object
                                     x-kubernetes-map-type: atomic
                                   type: array
+                                defaultRoute:
+                                  description: |-
+                                    DefaultRoute indicates whether this network device should be used for
+                                    the virtual machine's default route.
+                                    When true, the gateway from this device will be used as the default route.
+                                    Only one device should typically be set to true.
+                                  type: boolean
                                 ipAddrs:
                                   description: |-
                                     IPAddrs is a list of one or more IPv4 and/or IPv6 addresses to assign
@@ -153,6 +160,14 @@ spec:
                                     It is generally a good idea to omit this field and allow a MAC address
                                     to be generated.
                                   type: string
+                                nameservers:
+                                  description: |-
+                                    Nameservers is a list of IPv4 and/or IPv6 addresses used as DNS
+                                    nameservers.
+                                    Please note that Linux allows only three nameservers (https://linux.die.net/man/5/resolv.conf).
+                                  items:
+                                    type: string
+                                  type: array
                                 netmask:
                                   description: |-
                                     Netmask is the subnet mask used by this device.

@@ -16,25 +16,57 @@ limitations under the License.
 
 package config
 
-import "time"
+import (
+	"time"
+
+	"github.com/caarlos0/env/v11"
+)
 
 var (
-	ProviderNameShort = "cape"
+	Task taskConfig
+	Cape capeConfig
+	VM   vmConfig
+)
+
+type capeConfig struct {
+	ProviderNameShort string `env:"PROVIDER_NAME_SHORT" envDefault:"cape"`
 
 	// DefaultRequeueTimeout is the default time for how long to wait when
 	// requeueing a CAPE operation.
-	DefaultRequeueTimeout = 10 * time.Second
+	DefaultRequeueTimeout time.Duration `env:"DEFAULT_REQUEUE_TIMEOUT" envDefault:"10s"`
+}
 
+type taskConfig struct {
 	// WaitTaskInterval is the default interval time polling task.
-	WaitTaskInterval = 1 * time.Second
-
-	// WaitTaskTimeout is the default timeout for waiting for task to complete.
-	WaitTaskTimeout = 3 * time.Second
+	WaitTaskInterval time.Duration `env:"WAIT_TASK_INTERVAL" envDefault:"1s"`
 
 	// WaitTaskTimeoutForPlacementGroupOperation is the timeout for waiting for placement group creating/updating/deleting task to complete.
-	WaitTaskTimeoutForPlacementGroupOperation = 10 * time.Second
+	WaitTaskTimeoutForPlacementGroupOperation time.Duration `env:"WAIT_TASK_TIMEOUT_FOR_PLACEMENT_GROUP_OPERATION" envDefault:"10s"`
 
 	// VMPowerStatusCheckingDuration is the time duration for cheking if the VM is powered off
 	// after the Machine's NodeHealthy condition status is set to Unknown.
-	VMPowerStatusCheckingDuration = 2 * time.Minute
-)
+	VMPowerStatusCheckingDuration time.Duration `env:"VM_POWER_STATUS_CHECKING_DURATION" envDefault:"2m"`
+}
+
+type vmConfig struct {
+	// VMNumCPUs is the default virtual processors in a VM.
+	VMNumCPUs int32 `env:"VM_NUM_CPUS" envDefault:"2"`
+
+	// VMMemoryMiB is the default memory in a VM.
+	VMMemoryMiB int64 `env:"VM_MEMORY_MIB" envDefault:"2048"`
+
+	// NameserverLimit is the maximum number of nameservers allowed in a VM.
+	NameserverLimit int `env:"VM_NAMESERVER_LIMIT" envDefault:"3"`
+}
+
+func init() {
+	if err := env.Parse(&Cape); err != nil {
+		panic(err)
+	}
+	if err := env.Parse(&Task); err != nil {
+		panic(err)
+	}
+	if err := env.Parse(&VM); err != nil {
+		panic(err)
+	}
+}

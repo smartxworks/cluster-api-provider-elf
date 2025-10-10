@@ -193,7 +193,7 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx goctx.Context, clusterCtx *co
 	if len(elfMachines) > 0 {
 		log.Info("Waiting for ElfMachines to be deleted", "count", len(elfMachines))
 
-		return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 	}
 
 	// if cluster need to force delete, skipping infra resource deletion and remove the finalizer.
@@ -201,7 +201,7 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx goctx.Context, clusterCtx *co
 		if ok, err := r.reconcileDeleteVMPlacementGroups(ctx, clusterCtx); err != nil {
 			return reconcile.Result{}, errors.Wrapf(err, "failed to delete vm placement groups")
 		} else if !ok {
-			return reconcile.Result{RequeueAfter: config.DefaultRequeueTimeout}, nil
+			return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 		}
 
 		if err := r.reconcileDeleteLabels(ctx, clusterCtx); err != nil {
