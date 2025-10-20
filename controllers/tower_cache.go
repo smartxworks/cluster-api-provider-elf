@@ -267,38 +267,6 @@ func getPGFromCache(pgName string) *models.VMPlacementGroup {
 	return nil
 }
 
-// labelCacheDuration is the lifespan of label cache.
-const labelCacheDuration = 10 * time.Minute
-
-func getKeyForLabelCache(labelKey string) string {
-	return fmt.Sprintf("label:%s:cache", labelKey)
-}
-
-// setLabelInCache saves the specified label to the memory,
-// which can reduce access to the Tower service.
-func setLabelInCache(label *models.Label) {
-	inMemoryCache.Set(getKeyForLabelCache(*label.Key), *label, labelCacheDuration)
-}
-
-// delLabelCache deletes the specified label cache.
-func delLabelCache(labelKey string) {
-	inMemoryCache.Delete(getKeyForLabelCache(labelKey))
-}
-
-// getLabelFromCache gets the specified label from the memory.
-func getLabelFromCache(labelKey string) *models.Label {
-	key := getKeyForLabelCache(labelKey)
-	if val, found := inMemoryCache.Get(key); found {
-		if label, ok := val.(models.Label); ok {
-			return &label
-		}
-		// Delete unexpected data.
-		inMemoryCache.Delete(key)
-	}
-
-	return nil
-}
-
 /* GPU */
 
 // gpuCacheDuration is the lifespan of gpu cache.
