@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func TestLimitDNSServers(t *testing.T) {
@@ -46,6 +47,157 @@ func TestLimitDNSServers(t *testing.T) {
 			elfMachine.Spec.Network.Devices = tc.devices
 			dnsServers := elfMachine.GetLimitedNameservers(3)
 			g.Expect(dnsServers).To(gomega.Equal(tc.expected))
+		})
+	}
+}
+
+func TestIsResourcesUpToDate(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	testCases := []struct {
+		name     string
+		machine  *ElfMachine
+		expected bool
+	}{
+		{
+			name: "all resources match",
+			machine: &ElfMachine{
+				Spec: ElfMachineSpec{
+					NumCPUs:   int32(4),
+					MemoryMiB: int64(8192),
+					DiskGiB:   int32(50),
+					Network: NetworkSpec{
+						Devices: []NetworkDeviceSpec{
+							{NetworkType: NetworkTypeIPV4DHCP},
+							{NetworkType: NetworkTypeIPV4DHCP},
+						},
+					},
+				},
+				Status: ElfMachineStatus{
+					Resources: ResourcesStatus{
+						CPUCores: int32(4),
+						Memory:   *resource.NewQuantity(8192*1024*1024, resource.BinarySI),
+						Disk:     int32(50),
+					},
+					Network: []NetworkStatus{
+						{IPAddrs: []string{"10.0.0.1"}},
+						{IPAddrs: []string{"10.0.0.2"}},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "CPU cores mismatch",
+			machine: &ElfMachine{
+				Spec: ElfMachineSpec{
+					NumCPUs:   int32(4),
+					MemoryMiB: int64(8192),
+					DiskGiB:   int32(50),
+					Network: NetworkSpec{
+						Devices: []NetworkDeviceSpec{
+							{NetworkType: NetworkTypeIPV4DHCP},
+						},
+					},
+				},
+				Status: ElfMachineStatus{
+					Resources: ResourcesStatus{
+						CPUCores: int32(8),
+						Memory:   *resource.NewQuantity(8192*1024*1024, resource.BinarySI),
+						Disk:     int32(50),
+					},
+					Network: []NetworkStatus{
+						{IPAddrs: []string{"10.0.0.1"}},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "memory mismatch",
+			machine: &ElfMachine{
+				Spec: ElfMachineSpec{
+					NumCPUs:   int32(4),
+					MemoryMiB: int64(8192),
+					DiskGiB:   int32(50),
+					Network: NetworkSpec{
+						Devices: []NetworkDeviceSpec{
+							{NetworkType: NetworkTypeIPV4DHCP},
+						},
+					},
+				},
+				Status: ElfMachineStatus{
+					Resources: ResourcesStatus{
+						CPUCores: int32(4),
+						Memory:   *resource.NewQuantity(16384*1024*1024, resource.BinarySI),
+						Disk:     int32(50),
+					},
+					Network: []NetworkStatus{
+						{IPAddrs: []string{"10.0.0.1"}},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "disk mismatch",
+			machine: &ElfMachine{
+				Spec: ElfMachineSpec{
+					NumCPUs:   int32(4),
+					MemoryMiB: int64(8192),
+					DiskGiB:   int32(50),
+					Network: NetworkSpec{
+						Devices: []NetworkDeviceSpec{
+							{NetworkType: NetworkTypeIPV4DHCP},
+						},
+					},
+				},
+				Status: ElfMachineStatus{
+					Resources: ResourcesStatus{
+						CPUCores: int32(4),
+						Memory:   *resource.NewQuantity(8192*1024*1024, resource.BinarySI),
+						Disk:     int32(100),
+					},
+					Network: []NetworkStatus{
+						{IPAddrs: []string{"10.0.0.1"}},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "network devices count mismatch",
+			machine: &ElfMachine{
+				Spec: ElfMachineSpec{
+					NumCPUs:   int32(4),
+					MemoryMiB: int64(8192),
+					DiskGiB:   int32(50),
+					Network: NetworkSpec{
+						Devices: []NetworkDeviceSpec{
+							{NetworkType: NetworkTypeIPV4DHCP},
+							{NetworkType: NetworkTypeIPV4DHCP},
+						},
+					},
+				},
+				Status: ElfMachineStatus{
+					Resources: ResourcesStatus{
+						CPUCores: int32(4),
+						Memory:   *resource.NewQuantity(8192*1024*1024, resource.BinarySI),
+						Disk:     int32(50),
+					},
+					Network: []NetworkStatus{
+						{IPAddrs: []string{"10.0.0.1"}},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := tc.machine.IsResourcesUpToDate()
+			g.Expect(result).To(gomega.Equal(tc.expected))
 		})
 	}
 }

@@ -275,7 +275,8 @@ func (m *ElfMachine) IsResourcesUpToDate() bool {
 	specMemory := *resource.NewQuantity(m.Spec.MemoryMiB*1024*1024, resource.BinarySI)
 	return m.Spec.DiskGiB == m.Status.Resources.Disk &&
 		m.Spec.NumCPUs == m.Status.Resources.CPUCores &&
-		specMemory.Equal(m.Status.Resources.Memory)
+		specMemory.Equal(m.Status.Resources.Memory) &&
+		len(m.Spec.Network.Devices) == len(m.Status.Network)
 }
 
 func (m *ElfMachine) SetVMDisconnectionTimestamp(timestamp *metav1.Time) {
