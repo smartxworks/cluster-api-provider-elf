@@ -204,9 +204,7 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx goctx.Context, clusterCtx *co
 			return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 		}
 
-		if err := r.reconcileDeleteLabels(ctx, clusterCtx); err != nil {
-			return reconcile.Result{}, errors.Wrapf(err, "failed to delete labels")
-		}
+		r.reconcileDeleteLabels(ctx, clusterCtx)
 	}
 
 	// Cluster is deleted so remove the finalizer.
@@ -235,24 +233,24 @@ func (r *ElfClusterReconciler) reconcileDeleteVMPlacementGroups(ctx goctx.Contex
 	return true, nil
 }
 
-func (r *ElfClusterReconciler) reconcileDeleteLabels(ctx goctx.Context, clusterCtx *context.ClusterContext) error {
+func (r *ElfClusterReconciler) reconcileDeleteLabels(ctx goctx.Context, clusterCtx *context.ClusterContext) {
+	log := ctrl.LoggerFrom(ctx)
+
 	if err := r.reconcileDeleteLabel(ctx, clusterCtx, towerresources.GetVMLabelClusterName(), clusterCtx.ElfCluster.Name, true); err != nil {
-		return err
+		log.Error(err, "failed to delete label", "key", towerresources.GetVMLabelClusterName(), "value", clusterCtx.ElfCluster.Name)
 	}
 
 	if err := r.reconcileDeleteLabel(ctx, clusterCtx, towerresources.GetVMLabelVIP(), clusterCtx.ElfCluster.Spec.ControlPlaneEndpoint.Host, false); err != nil {
-		return err
+		log.Error(err, "failed to delete label", "key", towerresources.GetVMLabelVIP(), "value", clusterCtx.ElfCluster.Spec.ControlPlaneEndpoint.Host)
 	}
 
 	if err := r.reconcileDeleteLabel(ctx, clusterCtx, towerresources.GetVMLabelNamespace(), clusterCtx.ElfCluster.Namespace, true); err != nil {
-		return err
+		log.Error(err, "failed to delete label", "key", towerresources.GetVMLabelNamespace(), "value", clusterCtx.ElfCluster.Namespace)
 	}
 
 	if err := r.reconcileDeleteLabel(ctx, clusterCtx, towerresources.GetVMLabelManaged(), "true", true); err != nil {
-		return err
+		log.Error(err, "failed to delete label", "key", towerresources.GetVMLabelManaged(), "value", "true")
 	}
-
-	return nil
 }
 
 func (r *ElfClusterReconciler) reconcileDeleteLabel(ctx goctx.Context, clusterCtx *context.ClusterContext, key, value string, strict bool) error {
