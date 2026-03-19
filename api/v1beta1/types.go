@@ -126,7 +126,8 @@ type NetworkStatus struct {
 // NetworkSpec defines the virtual machine's network configuration.
 type NetworkSpec struct {
 	// Devices is the list of network devices used by the virtual machine.
-	Devices []NetworkDeviceSpec `json:"devices"`
+	// +optional
+	Devices []NetworkDeviceSpec `json:"devices,omitempty"`
 
 	// Nameservers is a list of IPv4 and/or IPv6 addresses used as DNS
 	// nameservers.

@@ -345,8 +345,9 @@ func (r *ElfMachineReconciler) reconcieVMNetworkDevices(ctx goctx.Context, machi
 		return true, nil
 	}
 
-	for i := range machineCtx.ElfMachine.Spec.Network.Devices {
-		if machineCtx.ElfMachine.Spec.Network.Devices[i].NetworkType == infrav1.NetworkTypeNone {
+	network := machineCtx.ElfMachine.GetNetwork()
+	for i := range network.Devices {
+		if network.Devices[i].NetworkType == infrav1.NetworkTypeNone {
 			continue
 		}
 
@@ -364,7 +365,8 @@ func (r *ElfMachineReconciler) reconcieVMNetworkDevices(ctx goctx.Context, machi
 
 // reconcileVMNics ensures that the vm nics are as expected.
 func (r *ElfMachineReconciler) reconcileVMNics(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM, vmNics []*models.VMNic) (bool, error) {
-	devices := machineCtx.ElfMachine.Spec.Network.Devices
+	network := machineCtx.ElfMachine.GetNetwork()
+	devices := network.Devices
 	if len(devices) <= len(vmNics) {
 		return true, nil
 	}
@@ -454,7 +456,8 @@ func (r *ElfMachineReconciler) setVMNetworkDeviceConfig(ctx goctx.Context, machi
 
 	// Calculate the number of network nics to configure.
 	// Skip the first nic(management network).
-	deviceCount := len(machineCtx.ElfMachine.Spec.Network.Devices) - 1
+	network := machineCtx.ElfMachine.GetNetwork()
+	deviceCount := len(network.Devices) - 1
 	networkCount := len(machineCtx.ElfMachine.Status.Network)
 	if networkCount > 0 {
 		networkCount -= 1
@@ -463,19 +466,19 @@ func (r *ElfMachineReconciler) setVMNetworkDeviceConfig(ctx goctx.Context, machi
 	vmNicCount := len(vmNics) - 1
 
 	if toConfigNicCount <= 0 {
-		log.V(1).Info("No vm nics needs to be set network configuration.", "expectedDevices", machineCtx.ElfMachine.Spec.Network.Devices, "currentDevices", machineCtx.ElfMachine.Status.Network)
+		log.V(1).Info("No vm nics needs to be set network configuration.", "expectedDevices", network.Devices, "currentDevices", machineCtx.ElfMachine.Status.Network)
 		return true, nil
 	} else if deviceCount != vmNicCount {
 		message := "The expected number of network devices is not equal to the number of vm nics"
 		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.SettingVMNetworkDeviceConfigFailedReason, clusterv1.ConditionSeverityWarning, message)
-		log.V(1).Info(message, "expectedDevices", machineCtx.ElfMachine.Spec.Network.Devices, "currentNics", formatNics(vmNics))
+		log.V(1).Info(message, "expectedDevices", network.Devices, "currentNics", formatNics(vmNics))
 
 		return false, nil
 	}
 
 	var macTypes []hostagent.MacType
 	nics := vmNics[1:]
-	devices := machineCtx.ElfMachine.Spec.Network.Devices[1:]
+	devices := network.Devices[1:]
 	for i := len(nics) - toConfigNicCount; i >= 0 && i < len(nics); i++ {
 		if service.GetTowerString(nics[i].MacAddress) == "" {
 			message := fmt.Sprintf("Waiting for the vm network device %d mac address", i+1)

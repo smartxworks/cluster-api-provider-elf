@@ -189,6 +189,30 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (r
 		PatchHelper: patchHelper,
 	}
 
+	if elfMachine.HasMultiElfClusters() {
+		if machine.Spec.FailureDomain == nil {
+			log.Error(errors.New("machine.Spec.FailureDomain is nil for a machine with multi-ElfCluster configuration"), "failure domain is nil")
+			return reconcile.Result{}, nil
+		}
+		if _, ok := elfCluster.Spec.MultiClusters[*machine.Spec.FailureDomain]; !ok {
+			log.Error(errors.New("Machine's failure domain is not in the ElfCluster's multi-cluster list"), "failure domain mismatch", "failureDomain", *machine.Spec.FailureDomain)
+			return reconcile.Result{}, nil
+		}
+		failureDomain := ""
+		for _, cfg := range elfMachine.Spec.MultiElfClusters {
+			if cfg.Cluster == *machine.Spec.FailureDomain {
+				failureDomain = cfg.Cluster
+				break
+			}
+		}
+		if failureDomain == "" {
+			log.Error(errors.New("Failed to find a matching failure domain for machine.Spec.FailureDomain in elfMachine.Spec.MultiElfClusters"), "failure domain mismatch", "failureDomain", *machine.Spec.FailureDomain)
+			return reconcile.Result{}, nil
+		}
+
+		elfMachine.Status.FailureDomain = failureDomain
+	}
+
 	// If ElfMachine is being deleting and ElfCLuster ForceDeleteCluster flag is set, skip creating the VMService object,
 	// because Tower server may be out of service. So we can force delete ElfCluster.
 	if elfMachine.ObjectMeta.DeletionTimestamp.IsZero() || !elfCluster.HasForceDeleteCluster() {
@@ -332,7 +356,8 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx goctx.Context, machineCtx *co
 		// For example, the Cluster or ElfMachine was deleted during a pause.
 		if !ctrlutil.ContainsFinalizer(machineCtx.ElfMachine, infrav1.MachineFinalizer) &&
 			machineCtx.ElfMachine.RequiresGPUDevices() {
-			unlockGPUDevicesLockedByVM(machineCtx.ElfCluster.Spec.Cluster, machineCtx.ElfMachine.Name)
+			clusterID := getClusterIDForMachine(machineCtx)
+			unlockGPUDevicesLockedByVM(clusterID, machineCtx.ElfMachine.Name)
 		}
 	}()
 
@@ -410,7 +435,8 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx goctx.Context, machineCtx *co
 	// If ElfMachine requires static IPs for devices, should wait for CAPE-IP to set MachineStaticIPFinalizer first
 	// to prevent CAPE from overwriting MachineStaticIPFinalizer when setting MachineFinalizer.
 	// If ElfMachine happens to be deleted at this time, CAPE-IP may not have time to release the IPs.
-	if machineCtx.ElfMachine.Spec.Network.RequiresStaticIPs() && !ctrlutil.ContainsFinalizer(machineCtx.ElfMachine, infrav1.MachineStaticIPFinalizer) {
+	network := machineCtx.ElfMachine.GetNetwork()
+	if network.RequiresStaticIPs() && !ctrlutil.ContainsFinalizer(machineCtx.ElfMachine, infrav1.MachineStaticIPFinalizer) {
 		log.V(2).Info("Waiting for CAPE-IP to set MachineStaticIPFinalizer on ElfMachine")
 
 		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
@@ -572,7 +598,6 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 		}
 
 		log.Info("Create VM for ElfMachine")
-
 		withTaskVM, err := machineCtx.VMService.Clone(machineCtx.ElfCluster, machineCtx.ElfMachine, bootstrapData, *hostID, gpuDeviceInfos)
 		if err != nil {
 			releaseTicketForCreateVM(machineCtx.ElfMachine.Name)
@@ -587,7 +612,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 			} else {
 				// Duplicate VM error does not require unlocking GPU devices.
 				if machineCtx.ElfMachine.RequiresGPUDevices() {
-					unlockGPUDevicesLockedByVM(machineCtx.ElfCluster.Spec.Cluster, machineCtx.ElfMachine.Name)
+					unlockGPUDevicesLockedByVM(getClusterIDForMachine(machineCtx), machineCtx.ElfMachine.Name)
 				}
 
 				log.Error(err, "failed to create VM",
@@ -963,7 +988,8 @@ func (r *ElfMachineReconciler) reconcileVMTask(ctx goctx.Context, machineCtx *co
 
 		if machineCtx.ElfMachine.RequiresGPUDevices() &&
 			(service.IsCloneVMTask(task) || service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task)) {
-			unlockGPUDevicesLockedByVM(machineCtx.ElfCluster.Spec.Cluster, machineCtx.ElfMachine.Name)
+			clusterID := getClusterIDForMachine(machineCtx)
+			unlockGPUDevicesLockedByVM(clusterID, machineCtx.ElfMachine.Name)
 		}
 
 		if service.IsPowerOnVMTask(task) &&
@@ -1018,7 +1044,8 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx goctx.Context, machineC
 		}
 
 		if machineCtx.ElfMachine.RequiresGPUDevices() {
-			unlockGPUDevicesLockedByVM(machineCtx.ElfCluster.Spec.Cluster, machineCtx.ElfMachine.Name)
+			clusterID := getClusterIDForMachine(machineCtx)
+			unlockGPUDevicesLockedByVM(clusterID, machineCtx.ElfMachine.Name)
 		}
 	case service.IsUpdateVMDiskTask(task, machineCtx.ElfMachine.Name):
 		reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
@@ -1032,7 +1059,8 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx goctx.Context, machineC
 		}
 	case service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task) || service.IsVMColdMigrationTask(task):
 		if machineCtx.ElfMachine.RequiresGPUDevices() {
-			unlockGPUDevicesLockedByVM(machineCtx.ElfCluster.Spec.Cluster, machineCtx.ElfMachine.Name)
+			clusterID := getClusterIDForMachine(machineCtx)
+			unlockGPUDevicesLockedByVM(clusterID, machineCtx.ElfMachine.Name)
 		}
 	}
 
@@ -1041,13 +1069,13 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx goctx.Context, machineC
 		setVMDuplicate(machineCtx.ElfMachine.Name)
 	case service.IsStorageInsufficientError(errorMessage):
 		recordElfClusterStorageInsufficient(machineCtx, true)
-		message := "Insufficient storage detected for the ELF cluster " + machineCtx.ElfCluster.Spec.Cluster
+		message := "Insufficient storage detected for the ELF cluster " + getClusterIDForMachine(machineCtx)
 		log.Info(message)
 
 		return errors.New(message)
 	case service.IsMemoryInsufficientError(errorMessage):
 		recordElfClusterMemoryInsufficient(machineCtx, true)
-		message := "Insufficient memory detected for the ELF cluster " + machineCtx.ElfCluster.Spec.Cluster
+		message := "Insufficient memory detected for the ELF cluster " + getClusterIDForMachine(machineCtx)
 		log.Info(message)
 
 		return errors.New(message)
@@ -1080,7 +1108,7 @@ func (r *ElfMachineReconciler) reconcileHostAndZone(ctx goctx.Context, machineCt
 		return nil
 	}
 
-	zones, err := machineCtx.VMService.GetClusterZones(machineCtx.ElfCluster.Spec.Cluster)
+	zones, err := machineCtx.VMService.GetClusterZones(getClusterIDForMachine(machineCtx))
 	if err != nil {
 		return err
 	}
@@ -1393,7 +1421,8 @@ func (r *ElfMachineReconciler) reconcileLabels(ctx goctx.Context, machineCtx *co
 // isWaitingForStaticIPAllocation checks whether the VM should wait for a static IP
 // to be allocated.
 func (r *ElfMachineReconciler) isWaitingForStaticIPAllocation(machineCtx *context.MachineContext) bool {
-	devices := machineCtx.ElfMachine.Spec.Network.Devices
+	network := machineCtx.ElfMachine.GetNetwork()
+	devices := network.Devices
 	for _, device := range devices {
 		if device.NetworkType == infrav1.NetworkTypeIPV4 && len(device.IPAddrs) == 0 {
 			// Static IP is not available yet
@@ -1549,4 +1578,14 @@ func (r *ElfMachineReconciler) deleteVM(ctx goctx.Context, machineCtx *context.M
 	log.Info(fmt.Sprintf("Destroying duplicate VM %s in task %s", *vm.ID, *task.ID))
 
 	return nil
+}
+
+// getClusterIDForMachine returns the appropriate cluster ID for a machine.
+// If MultiElfClusters is configured and a cluster has been selected, returns the selected cluster.
+// Otherwise, returns the default cluster from ElfCluster.
+func getClusterIDForMachine(machineCtx *context.MachineContext) string {
+	if machineCtx.ElfMachine.HasMultiElfClusters() {
+		return machineCtx.ElfMachine.Status.FailureDomain
+	}
+	return machineCtx.ElfCluster.Spec.Cluster
 }

@@ -237,12 +237,14 @@ func main() {
 			}
 		}
 
-		if err := controllers.AddClusterControllerToManager(ctx, ctrlMgrCtx, mgr, controller.Options{MaxConcurrentReconciles: elfClusterConcurrency}); err != nil {
-			return err
-		}
+		if os.Getenv("ENABLE_CONTROLLERS") != "false" {
+			if err := controllers.AddClusterControllerToManager(ctx, ctrlMgrCtx, mgr, controller.Options{MaxConcurrentReconciles: elfClusterConcurrency}); err != nil {
+				return err
+			}
 
-		if err := controllers.AddMachineControllerToManager(ctx, ctrlMgrCtx, mgr, controller.Options{MaxConcurrentReconciles: elfMachineConcurrency}); err != nil {
-			return err
+			if err := controllers.AddMachineControllerToManager(ctx, ctrlMgrCtx, mgr, controller.Options{MaxConcurrentReconciles: elfMachineConcurrency}); err != nil {
+				return err
+			}
 		}
 
 		return nil

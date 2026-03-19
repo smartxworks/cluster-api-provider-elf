@@ -311,6 +311,8 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx goctx.Context, clusterCtx *co
 		return reconcile.Result{}, nil
 	}
 
+	clusterCtx.ElfCluster.Status.FailureDomains = clusterCtx.ElfCluster.Spec.MultiClusters
+
 	// Reconcile the ElfCluster resource's ready state.
 	clusterCtx.ElfCluster.Status.Ready = true
 

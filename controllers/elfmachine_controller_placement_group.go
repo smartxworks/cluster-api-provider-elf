@@ -50,6 +50,11 @@ import (
 
 // reconcilePlacementGroup makes sure that the placement group exist.
 func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx goctx.Context, machineCtx *context.MachineContext) (reconcile.Result, error) {
+	// For multi-ElfCluster scenarios, use separate logic
+	if machineCtx.ElfMachine.HasMultiElfClusters() {
+		return r.reconcilePlacementGroupForMultiClusters(ctx, machineCtx)
+	}
+
 	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -88,7 +93,7 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx goctx.Context, machineCt
 		return nil, nil
 	}
 
-	towerCluster, err := machineCtx.VMService.GetCluster(machineCtx.ElfCluster.Spec.Cluster)
+	towerCluster, err := machineCtx.VMService.GetCluster(getClusterIDForMachine(machineCtx))
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +134,43 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx goctx.Context, machineCt
 	return placementGroup, nil
 }
 
+// reconcilePlacementGroupForMultiClusters handles placement group reconciliation for multi-ElfCluster scenarios.
+// For multi-ElfCluster machines, each ElfCluster has its own placement group, and CP nodes
+// are placed into the placement group of their selected ElfCluster.
+func (r *ElfMachineReconciler) reconcilePlacementGroupForMultiClusters(ctx goctx.Context, machineCtx *context.MachineContext) (reconcile.Result, error) {
+	log := ctrl.LoggerFrom(ctx)
+
+	elfClusterID := machineCtx.ElfMachine.Status.FailureDomain
+	placementGroupName, err := towerresources.GetVMPlacementGroupNameForMultiCluster(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster, elfClusterID)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	log.V(1).Info("Reconciling placement group for multi-ElfCluster machine", "placementGroup", placementGroupName, "elfClusterID", elfClusterID)
+
+	if placementGroup, err := r.getPlacementGroup(ctx, machineCtx, placementGroupName); err != nil {
+		if !service.IsVMPlacementGroupNotFound(err) {
+			return reconcile.Result{}, err
+		}
+
+		if ok := acquireTicketForPlacementGroupOperation(placementGroupName); ok {
+			defer releaseTicketForPlacementGroupOperation(placementGroupName)
+		} else {
+			return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
+		}
+
+		if placementGroup, err := r.createPlacementGroup(ctx, machineCtx, placementGroupName); err != nil {
+			return reconcile.Result{}, err
+		} else if placementGroup == nil {
+			return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, err
+		}
+	} else if placementGroup == nil {
+		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
+	}
+
+	return reconcile.Result{}, nil
+}
+
 // preCheckPlacementGroup checks whether there are still available hosts before creating the virtual machine.
 //
 // The return value:
@@ -148,6 +190,13 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx goctx.Context, machine
 		return ptr.To(""), nil
 	}
 
+	// For multi-ElfCluster scenarios, skip the complex pre-check logic.
+	// Just allow VM creation and let joinPlacementGroup handle the rest.
+	if machineCtx.ElfMachine.HasMultiElfClusters() {
+		log.V(1).Info("Multi-ElfCluster machine, skipping complex placement group pre-check")
+		return ptr.To(""), nil
+	}
+
 	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster)
 	if err != nil {
 		return nil, err
@@ -163,7 +212,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx goctx.Context, machine
 		return nil, err
 	}
 
-	hosts, err := machineCtx.VMService.GetHostsByCluster(machineCtx.ElfCluster.Spec.Cluster)
+	hosts, err := machineCtx.VMService.GetHostsByCluster(getClusterIDForMachine(machineCtx))
 	if err != nil {
 		return nil, err
 	}
@@ -390,6 +439,11 @@ func (r *ElfMachineReconciler) getPlacementGroup(ctx goctx.Context, machineCtx *
 //  2. false and error is nil means the virtual machine has not joined the placement group.
 //     For example, the placement group is full or the virtual machine is being migrated.
 func (r *ElfMachineReconciler) joinPlacementGroup(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
+	// For multi-ElfCluster scenarios, use separate logic
+	if machineCtx.ElfMachine.HasMultiElfClusters() {
+		return r.joinPlacementGroupForMultiClusters(ctx, machineCtx, vm)
+	}
+
 	log := ctrl.LoggerFrom(ctx)
 
 	defer func() {
@@ -426,7 +480,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx goctx.Context, machineCtx 
 	}
 
 	if machineutil.IsControlPlaneMachine(machineCtx.Machine) {
-		hosts, err := machineCtx.VMService.GetHostsByCluster(machineCtx.ElfCluster.Spec.Cluster)
+		hosts, err := machineCtx.VMService.GetHostsByCluster(getClusterIDForMachine(machineCtx))
 		if err != nil {
 			return false, err
 		}
@@ -549,6 +603,86 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx goctx.Context, machineCtx 
 	return true, nil
 }
 
+// joinPlacementGroupForMultiClusters handles joining placement group for multi-ElfCluster scenarios.
+// This is a simplified version that directly adds the VM to the placement group of its selected ElfCluster.
+func (r *ElfMachineReconciler) joinPlacementGroupForMultiClusters(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
+	log := ctrl.LoggerFrom(ctx)
+
+	defer func() {
+		if reterr != nil {
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.JoiningPlacementGroupFailedReason, clusterv1.ConditionSeverityWarning, reterr.Error())
+		} else if !ret {
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.JoiningPlacementGroupReason, clusterv1.ConditionSeverityInfo, "")
+		}
+	}()
+
+	elfClusterID := machineCtx.ElfMachine.Status.FailureDomain
+	placementGroupName, err := towerresources.GetVMPlacementGroupNameForMultiCluster(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster, elfClusterID)
+	if err != nil {
+		return false, err
+	}
+
+	log.V(1).Info("Joining placement group for multi-ElfCluster machine", "placementGroup", placementGroupName, "elfClusterID", elfClusterID, "vmId", *vm.ID)
+
+	// Locking ensures that only one coroutine operates on the placement group at the same time,
+	// and concurrent operations will cause data inconsistency in the placement group.
+	if ok := acquireTicketForPlacementGroupOperation(placementGroupName); ok {
+		defer releaseTicketForPlacementGroupOperation(placementGroupName)
+	} else {
+		return false, nil
+	}
+
+	placementGroup, err := r.getPlacementGroup(ctx, machineCtx, placementGroupName)
+	if err != nil || placementGroup == nil {
+		return false, err
+	}
+
+	placementGroupVMSet := service.GetVMsInPlacementGroup(placementGroup)
+	if placementGroupVMSet.Has(*vm.ID) {
+		// VM already in placement group
+		machineCtx.ElfMachine.Status.PlacementGroupRef = *placementGroup.ID
+		return true, nil
+	}
+
+	// For control plane machines, check if placement group has capacity
+	if machineutil.IsControlPlaneMachine(machineCtx.Machine) {
+		hosts, err := machineCtx.VMService.GetHostsByCluster(getClusterIDForMachine(machineCtx))
+		if err != nil {
+			return false, err
+		}
+
+		usedHostSetByPG, err := r.getHostsInPlacementGroup(machineCtx, placementGroup)
+		if err != nil {
+			return false, err
+		}
+
+		usedHostsByPG := hosts.Find(usedHostSetByPG)
+		availableHosts := r.getAvailableHostsForVM(machineCtx, hosts, usedHostsByPG, vm)
+
+		// If placement group is full, wait for capacity
+		if availableHosts.IsEmpty() && *vm.Status == models.VMStatusSTOPPED {
+			log.V(1).Info("Placement group is full for multi-ElfCluster machine, waiting for available hosts",
+				"placementGroup", *placementGroup.Name,
+				"usedHostsByPG", usedHostsByPG.String(),
+				"vmId", *vm.ID)
+			return false, nil
+		}
+	}
+
+	// Add VM to placement group
+	placementGroupVMSet.Insert(*vm.ID)
+	if err := r.addVMsToPlacementGroup(ctx, machineCtx, placementGroup, placementGroupVMSet.UnsortedList()); err != nil {
+		return false, err
+	}
+
+	log.Info("Successfully joined placement group for multi-ElfCluster machine",
+		"placementGroup", *placementGroup.Name,
+		"elfClusterID", elfClusterID,
+		"vmId", *vm.ID)
+
+	return true, nil
+}
+
 // migrateVM migrates the virtual machine to the specified target host.
 //
 // The return value:
@@ -628,7 +762,13 @@ func (r *ElfMachineReconciler) deletePlacementGroup(ctx goctx.Context, machineCt
 		return true, nil
 	}
 
-	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster)
+	var placementGroupName string
+	// For multi-ElfCluster scenarios, use the placement group name with ElfCluster ID
+	if machineCtx.ElfMachine.HasMultiElfClusters() {
+		placementGroupName, err = towerresources.GetVMPlacementGroupNameForMultiCluster(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster, machineCtx.ElfMachine.Status.FailureDomain)
+	} else {
+		placementGroupName, err = towerresources.GetVMPlacementGroupName(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster)
+	}
 	if err != nil {
 		return false, err
 	}

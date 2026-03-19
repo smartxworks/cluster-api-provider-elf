@@ -110,6 +110,16 @@ type ElfMachineSpec struct {
 	// Defaults to AUTO_SCHEDULE.
 	// +optional
 	Host string `json:"host,omitempty"`
+
+	MultiElfClusters []MultiElfClusterConfig `json:"multiElfClusters,omitempty"`
+}
+
+type MultiElfClusterConfig struct {
+	// Cluster is a unique identifier for a ELF cluster.
+	Cluster string `json:"cluster"`
+	// Network
+	// +optional
+	Network NetworkSpec `json:"network,omitempty"`
 }
 
 // ElfMachineStatus defines the observed state of ElfMachine.
@@ -210,6 +220,13 @@ type ElfMachineStatus struct {
 	// Zone is the status of the zone.
 	// +optional
 	Zone ZoneStatus `json:"zone,omitempty"`
+
+	// failureDomain is the unique identifier of the failure domain where this Machine has been placed in.
+	// For this infrastructure provider, the name is equivalent to the name of one of the available elfCluster.
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
+	FailureDomain string `json:"failureDomain,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -293,13 +310,17 @@ func (m *ElfMachine) SetVMDisconnectionTimestamp(timestamp *metav1.Time) {
 // GetNetworkDevicesRequiringIP returns a slice of NetworkDeviceSpec which requires DHCP IP or static IP.
 func (m *ElfMachine) GetNetworkDevicesRequiringIP() []NetworkDeviceSpec {
 	networkDevices := []NetworkDeviceSpec{}
+	network := m.GetNetwork()
+	if network == nil {
+		return networkDevices
+	}
 
-	for index := range m.Spec.Network.Devices {
-		if m.Spec.Network.Devices[index].NetworkType == NetworkTypeNone {
+	for index := range network.Devices {
+		if network.Devices[index].NetworkType == NetworkTypeNone {
 			continue
 		}
 
-		networkDevices = append(networkDevices, m.Spec.Network.Devices[index])
+		networkDevices = append(networkDevices, network.Devices[index])
 	}
 
 	return networkDevices
@@ -308,10 +329,14 @@ func (m *ElfMachine) GetNetworkDevicesRequiringIP() []NetworkDeviceSpec {
 // GetNetworkDevicesRequiringDHCP returns a slice of NetworkDeviceSpec which requires DHCP IP.
 func (m *ElfMachine) GetNetworkDevicesRequiringDHCP() []NetworkDeviceSpec {
 	networkDevices := []NetworkDeviceSpec{}
+	network := m.GetNetwork()
+	if network == nil {
+		return networkDevices
+	}
 
-	for index := range m.Spec.Network.Devices {
-		if m.Spec.Network.Devices[index].NetworkType == NetworkTypeIPV4DHCP {
-			networkDevices = append(networkDevices, m.Spec.Network.Devices[index])
+	for index := range network.Devices {
+		if network.Devices[index].NetworkType == NetworkTypeIPV4DHCP {
+			networkDevices = append(networkDevices, network.Devices[index])
 		}
 	}
 
@@ -320,12 +345,16 @@ func (m *ElfMachine) GetNetworkDevicesRequiringDHCP() []NetworkDeviceSpec {
 
 // IsMachineStaticIP returns true if the IP is the static IP for the Machine.
 func (m *ElfMachine) IsMachineStaticIP(ip string) bool {
-	for index := range m.Spec.Network.Devices {
-		if m.Spec.Network.Devices[index].NetworkType != NetworkTypeIPV4 {
+	network := m.GetNetwork()
+	if network == nil {
+		return false
+	}
+	for index := range network.Devices {
+		if network.Devices[index].NetworkType != NetworkTypeIPV4 {
 			continue
 		}
 
-		for _, staticIP := range m.Spec.Network.Devices[index].IPAddrs {
+		for _, staticIP := range network.Devices[index].IPAddrs {
 			if ip == staticIP {
 				return true
 			}
@@ -399,17 +428,22 @@ func (m *ElfMachine) RequiresVGPUDevices() bool {
 // GetLimitedNameservers returns a limited number of nameservers.
 func (m *ElfMachine) GetLimitedNameservers(limit int) []string {
 	var nameservers []string
-	if len(m.Spec.Network.Nameservers) > 0 {
-		nameservers = append(nameservers, m.Spec.Network.Nameservers...)
+	network := m.GetNetwork()
+	if network == nil {
+		return nameservers
 	}
 
-	defaultRouteDeviceIndex := m.Spec.Network.GetDefaultRouteDeviceIndex()
-	if defaultRouteDeviceIndex < len(m.Spec.Network.Devices) && len(m.Spec.Network.Devices[defaultRouteDeviceIndex].Nameservers) > 0 {
-		nameservers = append(nameservers, m.Spec.Network.Devices[defaultRouteDeviceIndex].Nameservers...)
+	if len(network.Nameservers) > 0 {
+		nameservers = append(nameservers, network.Nameservers...)
 	}
-	for i := range m.Spec.Network.Devices {
-		if i != defaultRouteDeviceIndex && len(m.Spec.Network.Devices[i].Nameservers) > 0 {
-			nameservers = append(nameservers, m.Spec.Network.Devices[i].Nameservers...)
+
+	defaultRouteDeviceIndex := network.GetDefaultRouteDeviceIndex()
+	if defaultRouteDeviceIndex < len(network.Devices) && len(network.Devices[defaultRouteDeviceIndex].Nameservers) > 0 {
+		nameservers = append(nameservers, network.Devices[defaultRouteDeviceIndex].Nameservers...)
+	}
+	for i := range network.Devices {
+		if i != defaultRouteDeviceIndex && len(network.Devices[i].Nameservers) > 0 {
+			nameservers = append(nameservers, network.Devices[i].Nameservers...)
 		}
 	}
 
@@ -431,6 +465,29 @@ func (m *ElfMachine) GetLimitedNameservers(limit int) []string {
 	}
 
 	return limitedNameservers[:count]
+}
+
+// HasMultiElfClusters returns true if the machine has multiple ELF clusters configured.
+func (m *ElfMachine) HasMultiElfClusters() bool {
+	return len(m.Spec.MultiElfClusters) > 0
+}
+
+// GetNetwork returns the network configuration for this machine.
+// If MultiElfClusters is configured,
+// returns the network configuration from the specified failure domain.
+// Otherwise, returns the default network configuration from spec.
+func (m *ElfMachine) GetNetwork() *NetworkSpec {
+	if m.HasMultiElfClusters() {
+		for i := range m.Spec.MultiElfClusters {
+			if m.Spec.MultiElfClusters[i].Cluster == m.Status.FailureDomain {
+				return &m.Spec.MultiElfClusters[i].Network
+			}
+		}
+		return nil
+	}
+
+	// Return the default network configuration
+	return &m.Spec.Network
 }
 
 //+kubebuilder:object:root=true

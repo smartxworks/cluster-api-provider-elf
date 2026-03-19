@@ -37,6 +37,9 @@ type ElfClusterSpec struct {
 	// Cluster is a unique identifier for a ELF cluster.
 	Cluster string `json:"cluster,omitempty"`
 
+	// MultiClusters is a list of cluster names for a multi-cluster setup.
+	MultiClusters clusterv1.FailureDomains `json:"multiClusters,omitempty"`
+
 	// ClusterType is the type of the ELF cluster.
 	// If ClusterType is empty, it will be automatically set.
 	// +kubebuilder:validation:Enum=Standard;Stretched
@@ -60,6 +63,10 @@ type ElfClusterSpec struct {
 type ElfClusterStatus struct {
 	// +optional
 	Ready bool `json:"ready,omitempty"`
+
+	// failureDomains is a list of failure domain objects synced from the infrastructure provider.
+	// +optional
+	FailureDomains clusterv1.FailureDomains `json:"failureDomains,omitempty"`
 
 	// Conditions defines current service state of the ElfCluster.
 	// +optional

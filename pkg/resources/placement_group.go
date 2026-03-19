@@ -68,6 +68,28 @@ func GetVMPlacementGroupNamePrefix(cluster *clusterv1.Cluster) string {
 	return fmt.Sprintf("%s-managed-%s-%s", GetResourcePrefix(), cluster.UID, cluster.Namespace)
 }
 
+// GetVMPlacementGroupNameForMultiCluster returns the placement group name for multi-ElfCluster scenarios.
+// It appends the ElfCluster ID (first 8 characters) to the base placement group name to ensure uniqueness
+// across different ElfClusters.
+func GetVMPlacementGroupNameForMultiCluster(ctx goctx.Context, ctrlClient client.Client, machine *clusterv1.Machine, cluster *clusterv1.Cluster, elfClusterID string) (string, error) {
+	baseName, err := GetVMPlacementGroupName(ctx, ctrlClient, machine, cluster)
+	if err != nil {
+		return "", err
+	}
+
+	if baseName == "" {
+		return "", nil
+	}
+
+	// Use first 8 characters of elfClusterID to keep the name reasonably short
+	shortID := elfClusterID
+	if len(elfClusterID) > 8 {
+		shortID = elfClusterID[:8]
+	}
+
+	return fmt.Sprintf("%s-%s", baseName, shortID), nil
+}
+
 func GetVMPlacementGroupPolicy(machine *clusterv1.Machine) models.VMVMPolicy {
 	if machineutil.IsControlPlaneMachine(machine) {
 		return models.VMVMPolicyMUSTDIFFERENT

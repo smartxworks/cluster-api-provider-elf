@@ -190,7 +190,15 @@ func (svr *TowerVMService) ResizeVMVolume(vmVolumeID string, size int64) (*model
 func (svr *TowerVMService) Clone(
 	elfCluster *infrav1.ElfCluster, elfMachine *infrav1.ElfMachine, bootstrapData,
 	host string, gpuDeviceInfos []*GPUDeviceInfo) (*models.WithTaskVM, error) {
-	cluster, err := svr.GetCluster(elfCluster.Spec.Cluster)
+
+	var cluster *models.Cluster
+	var err error
+
+	if elfMachine.HasMultiElfClusters() {
+		cluster, err = svr.GetCluster(elfMachine.Status.FailureDomain)
+	} else {
+		cluster, err = svr.GetCluster(elfCluster.Spec.Cluster)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -243,11 +251,12 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 		haPriority = models.NewVMHaPriority(models.VMHaPriorityLEVEL3HIGH)
 	}
 
-	nics := make([]*models.VMNicParams, 0, len(elfMachine.Spec.Network.Devices))
-	networks := make([]*models.CloudInitNetWork, 0, len(elfMachine.Spec.Network.Devices))
-	defautRouteDeviceIndex := elfMachine.Spec.Network.GetDefaultRouteDeviceIndex()
-	for i := range len(elfMachine.Spec.Network.Devices) {
-		device := elfMachine.Spec.Network.Devices[i]
+	network := elfMachine.GetNetwork()
+	nics := make([]*models.VMNicParams, 0, len(network.Devices))
+	networks := make([]*models.CloudInitNetWork, 0, len(network.Devices))
+	defautRouteDeviceIndex := network.GetDefaultRouteDeviceIndex()
+	for i := range len(network.Devices) {
+		device := network.Devices[i]
 
 		// nics
 		vlan, err := svr.GetVlan(device.Vlan)
