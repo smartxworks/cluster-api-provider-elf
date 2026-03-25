@@ -297,3 +297,15 @@ type PatchStringValue struct {
 	Path  string      `json:"path"`
 	Value interface{} `json:"value"`
 }
+
+// CloudFailureDomain contains data to identify and configure a failure domain.
+type CloudFailureDomain struct {
+	// computeCluster as the failure domain
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	ComputeCluster string `json:"computeCluster,omitempty"`
+
+	// Network is the network configuration.
+	// +optional
+	Network NetworkSpec `json:"network,omitempty"`
+}

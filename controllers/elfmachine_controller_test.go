@@ -367,7 +367,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
-			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(withTaskVM, nil)
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any()).Return(withTaskVM, nil)
 			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
 			mockVMService.EXPECT().GetTask(*task.ID).Return(task, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
@@ -394,7 +394,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
-			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New(service.VMDuplicate))
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New(service.VMDuplicate))
 			mockVMService.EXPECT().GetByName(elfMachine.Name).Return(vm, nil)
 			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
 
@@ -415,7 +415,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
-			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("some error"))
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("some error"))
 
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
@@ -3285,7 +3285,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			}
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
-			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("some error"))
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("some error"))
 
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)

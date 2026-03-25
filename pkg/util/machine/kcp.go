@@ -20,11 +20,39 @@ import (
 	goctx "context"
 	"fmt"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// GetKCPForCluster gets a cluster's ControlPlane resource.
+func GetKCPForCluster(
+	ctx goctx.Context,
+	ctrlClient client.Client,
+	clusterKey client.ObjectKey,
+) (*controlplanev1.KubeadmControlPlane, error) {
+	var kcpList controlplanev1.KubeadmControlPlaneList
+	labels := map[string]string{clusterv1.ClusterNameLabel: clusterKey.Name}
+
+	if err := ctrlClient.List(
+		ctx, &kcpList,
+		client.InNamespace(clusterKey.Namespace),
+		client.MatchingLabels(labels)); err != nil {
+		return nil, err
+	}
+
+	if len(kcpList.Items) == 0 {
+		return nil, apierrors.NewNotFound(schema.GroupResource{
+			Group:    controlplanev1.GroupVersion.Group,
+			Resource: "kubeadmcontrolplanes",
+		}, clusterKey.Name)
+	}
+
+	return &kcpList.Items[0], nil
+}
 
 // GetKCPNameByMachine returns the KCP name associated with the Machine.
 // Do not use "cluster.x-k8s.io/control-plane-name" label because

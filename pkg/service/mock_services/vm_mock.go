@@ -114,18 +114,18 @@ func (mr *MockVMServiceMockRecorder) CleanUnusedLabels(keys interface{}) *gomock
 }
 
 // Clone mocks base method.
-func (m *MockVMService) Clone(elfCluster *v1beta1.ElfCluster, elfMachine *v1beta1.ElfMachine, bootstrapData, host string, machineGPUDevices []*service.GPUDeviceInfo) (*models.WithTaskVM, error) {
+func (m *MockVMService) Clone(elfCluster *v1beta1.ElfCluster, elfMachine *v1beta1.ElfMachine, vmInfo *service.CloneVMInfo) (*models.WithTaskVM, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Clone", elfCluster, elfMachine, bootstrapData, host, machineGPUDevices)
+	ret := m.ctrl.Call(m, "Clone", elfCluster, elfMachine, vmInfo)
 	ret0, _ := ret[0].(*models.WithTaskVM)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Clone indicates an expected call of Clone.
-func (mr *MockVMServiceMockRecorder) Clone(elfCluster, elfMachine, bootstrapData, host, machineGPUDevices interface{}) *gomock.Call {
+func (mr *MockVMServiceMockRecorder) Clone(elfCluster, elfMachine, vmInfo interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockVMService)(nil).Clone), elfCluster, elfMachine, bootstrapData, host, machineGPUDevices)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockVMService)(nil).Clone), elfCluster, elfMachine, vmInfo)
 }
 
 // CreateVMPlacementGroup mocks base method.
@@ -279,18 +279,18 @@ func (mr *MockVMServiceMockRecorder) GetCluster(id interface{}) *gomock.Call {
 }
 
 // GetClusterZones mocks base method.
-func (m *MockVMService) GetClusterZones(id string) ([]*models.Zone, error) {
+func (m *MockVMService) GetClusterZones(clusterID string) ([]*models.Zone, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetClusterZones", id)
+	ret := m.ctrl.Call(m, "GetClusterZones", clusterID)
 	ret0, _ := ret[0].([]*models.Zone)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetClusterZones indicates an expected call of GetClusterZones.
-func (mr *MockVMServiceMockRecorder) GetClusterZones(id interface{}) *gomock.Call {
+func (mr *MockVMServiceMockRecorder) GetClusterZones(clusterID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterZones", reflect.TypeOf((*MockVMService)(nil).GetClusterZones), id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterZones", reflect.TypeOf((*MockVMService)(nil).GetClusterZones), clusterID)
 }
 
 // GetGPUDevicesAllocationInfoByHostIDs mocks base method.

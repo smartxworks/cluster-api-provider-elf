@@ -36,6 +36,7 @@ import (
 	capiutil "sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
@@ -114,7 +115,11 @@ var _ = Describe("ElfClusterReconciler", func() {
 		It("should add finalizer to the elfcluster", func() {
 			elfCluster.Spec.ControlPlaneEndpoint.Host = "127.0.0.1"
 			elfCluster.Spec.ControlPlaneEndpoint.Port = 6443
-			ctrlMgrCtx := fake.NewControllerManagerContext(cluster, elfCluster)
+			emt := fake.NewElfMachineTemplate()
+			kcp := fake.NewKCP()
+			kcp.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
+			kcp.Spec.MachineTemplate.InfrastructureRef.Name = emt.Name
+			ctrlMgrCtx := fake.NewControllerManagerContext(cluster, elfCluster, kcp, emt)
 			fake.InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
 
 			keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace()}
@@ -280,6 +285,162 @@ var _ = Describe("ElfClusterReconciler", func() {
 			logBuffer.Reset()
 			reconciler.cleanOrphanLabels(ctx, clusterCtx)
 			Expect(logBuffer.String()).NotTo(ContainSubstring(fmt.Sprintf("Cleaning orphan labels in Tower %s created by CAPE", elfCluster.Spec.Tower.Server)))
+		})
+	})
+
+	Context("elfMachineTemplateFailureDomainsPredicate", func() {
+		It("should return false for Create, Delete and Generic events", func() {
+			p := elfMachineTemplateFailureDomainsPredicate()
+			emt := fake.NewElfMachineTemplate()
+			Expect(p.CreateFunc(event.CreateEvent{Object: emt})).To(BeFalse())
+			Expect(p.DeleteFunc(event.DeleteEvent{Object: emt})).To(BeFalse())
+			Expect(p.GenericFunc(event.GenericEvent{Object: emt})).To(BeFalse())
+		})
+
+		It("should return false for Update event when FailureDomains not changed", func() {
+			p := elfMachineTemplateFailureDomainsPredicate()
+			oldEmt := fake.NewElfMachineTemplate()
+			newEmt := oldEmt.DeepCopy()
+			Expect(p.UpdateFunc(event.UpdateEvent{ObjectOld: oldEmt, ObjectNew: newEmt})).To(BeFalse())
+		})
+
+		It("should return true for Update event when FailureDomains changed", func() {
+			p := elfMachineTemplateFailureDomainsPredicate()
+			oldEmt := fake.NewElfMachineTemplate()
+			newEmt := oldEmt.DeepCopy()
+			newEmt.Spec.Template.Spec.FailureDomains = []infrav1.CloudFailureDomain{
+				{ComputeCluster: "cluster1"},
+			}
+			Expect(p.UpdateFunc(event.UpdateEvent{ObjectOld: oldEmt, ObjectNew: newEmt})).To(BeTrue())
+		})
+	})
+
+	Context("elfMachineTemplateToCluster", func() {
+		It("should return empty when ElfMachineTemplate has no Cluster ownerRef", func() {
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster)
+			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			emt := fake.NewElfMachineTemplate()
+			requests := reconciler.elfMachineTemplateToCluster()(ctx, emt)
+			Expect(requests).To(BeEmpty())
+		})
+
+		It("should return the ElfCluster reconcile request when Cluster ownerRef found", func() {
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster)
+			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			emt := fake.NewElfMachineTemplate()
+			emt.OwnerReferences = []metav1.OwnerReference{
+				{Kind: "Cluster", Name: cluster.Name, APIVersion: clusterv1.GroupVersion.String()},
+			}
+			requests := reconciler.elfMachineTemplateToCluster()(ctx, emt)
+			Expect(requests).To(HaveLen(1))
+			Expect(requests[0].NamespacedName.Name).To(Equal(cluster.Name))
+			Expect(requests[0].NamespacedName.Namespace).To(Equal(emt.Namespace))
+		})
+	})
+
+	Context("reconcileFailureDomains", func() {
+		It("should return false when KCP not found", func() {
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster)
+			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			clusterCtx := &context.ClusterContext{
+				Cluster:    cluster,
+				ElfCluster: elfCluster,
+				Logger:     ctrllog.Log,
+			}
+			ok, err := reconciler.reconcileFailureDomains(ctx, clusterCtx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeFalse())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for KubeadmControlPlane to be created"))
+		})
+
+		It("should return false when ElfMachineTemplate not found", func() {
+			kcp := fake.NewKCP()
+			kcp.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
+			kcp.Spec.MachineTemplate.InfrastructureRef.Name = "non-existent-emt"
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, kcp)
+			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			clusterCtx := &context.ClusterContext{
+				Cluster:    cluster,
+				ElfCluster: elfCluster,
+				Logger:     ctrllog.Log,
+			}
+			ok, err := reconciler.reconcileFailureDomains(ctx, clusterCtx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeFalse())
+			Expect(logBuffer.String()).To(ContainSubstring("Waiting for ElfMachineTemplate to be created"))
+		})
+
+		It("should set FailureDomains on ElfCluster from ElfMachineTemplate", func() {
+			emt := fake.NewElfMachineTemplate()
+			emt.Spec.Template.Spec.FailureDomains = []infrav1.CloudFailureDomain{
+				{ComputeCluster: "cluster1"},
+				{ComputeCluster: "cluster2"},
+			}
+			kcp := fake.NewKCP()
+			kcp.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
+			kcp.Spec.MachineTemplate.InfrastructureRef.Name = emt.Name
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, kcp, emt)
+			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			clusterCtx := &context.ClusterContext{
+				Cluster:    cluster,
+				ElfCluster: elfCluster,
+				Logger:     ctrllog.Log,
+			}
+			ok, err := reconciler.reconcileFailureDomains(ctx, clusterCtx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeTrue())
+			Expect(elfCluster.Status.FailureDomains).To(HaveLen(2))
+			Expect(elfCluster.Status.FailureDomains).To(HaveKey("cluster1"))
+			Expect(elfCluster.Status.FailureDomains).To(HaveKey("cluster2"))
+			Expect(logBuffer.String()).To(ContainSubstring("FailureDomains updated"))
+		})
+
+		It("should skip FailureDomain entries with empty ComputeCluster", func() {
+			emt := fake.NewElfMachineTemplate()
+			emt.Spec.Template.Spec.FailureDomains = []infrav1.CloudFailureDomain{
+				{ComputeCluster: "cluster1"},
+				{ComputeCluster: ""},
+			}
+			kcp := fake.NewKCP()
+			kcp.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
+			kcp.Spec.MachineTemplate.InfrastructureRef.Name = emt.Name
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, kcp, emt)
+			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			clusterCtx := &context.ClusterContext{
+				Cluster:    cluster,
+				ElfCluster: elfCluster,
+				Logger:     ctrllog.Log,
+			}
+			ok, err := reconciler.reconcileFailureDomains(ctx, clusterCtx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeTrue())
+			Expect(elfCluster.Status.FailureDomains).To(HaveLen(1))
+			Expect(elfCluster.Status.FailureDomains).To(HaveKey("cluster1"))
+		})
+
+		It("should not log when FailureDomains not changed", func() {
+			emt := fake.NewElfMachineTemplate()
+			emt.Spec.Template.Spec.FailureDomains = []infrav1.CloudFailureDomain{
+				{ComputeCluster: "cluster1"},
+			}
+			elfCluster.Status.FailureDomains = clusterv1.FailureDomains{
+				"cluster1": clusterv1.FailureDomainSpec{ControlPlane: true},
+			}
+			kcp := fake.NewKCP()
+			kcp.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
+			kcp.Spec.MachineTemplate.InfrastructureRef.Name = emt.Name
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, kcp, emt)
+			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			clusterCtx := &context.ClusterContext{
+				Cluster:    cluster,
+				ElfCluster: elfCluster,
+				Logger:     ctrllog.Log,
+			}
+			logBuffer.Reset()
+			ok, err := reconciler.reconcileFailureDomains(ctx, clusterCtx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeTrue())
+			Expect(logBuffer.String()).NotTo(ContainSubstring("FailureDomains updated"))
 		})
 	})
 

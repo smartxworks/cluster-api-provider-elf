@@ -32,11 +32,14 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
@@ -77,6 +80,12 @@ func AddClusterControllerToManager(ctx goctx.Context, ctrlMgrCtx *context.Contro
 		Watches(
 			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(capiutil.ClusterToInfrastructureMapFunc(ctx, clusterControlledTypeGVK, mgr.GetClient(), &infrav1.ElfCluster{})),
+		).
+		// Watch ElfMachineTemplate and only trigger cluster reconcile when failureDomains changes.
+		Watches(
+			&infrav1.ElfMachineTemplate{},
+			handler.EnqueueRequestsFromMapFunc(reconciler.elfMachineTemplateToCluster()),
+			builder.WithPredicates(elfMachineTemplateFailureDomainsPredicate()),
 		).
 		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(mgr.GetScheme(), predicateLog, ctrlMgrCtx.WatchFilterValue)).
 		WithOptions(options).
@@ -311,7 +320,11 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx goctx.Context, clusterCtx *co
 		return reconcile.Result{}, nil
 	}
 
-	clusterCtx.ElfCluster.Status.FailureDomains = clusterCtx.ElfCluster.Spec.MultiClusters
+	if ok, err := r.reconcileFailureDomains(ctx, clusterCtx); err != nil {
+		return reconcile.Result{}, err
+	} else if !ok {
+		return reconcile.Result{}, nil
+	}
 
 	// Reconcile the ElfCluster resource's ready state.
 	clusterCtx.ElfCluster.Status.Ready = true
@@ -357,6 +370,57 @@ func (r *ElfClusterReconciler) reconcileControlPlaneEndpoint(ctx goctx.Context, 
 	return false
 }
 
+func (r *ElfClusterReconciler) reconcileFailureDomains(ctx goctx.Context, clusterCtx *context.ClusterContext) (bool, error) {
+	log := ctrl.LoggerFrom(ctx)
+
+	kcp, err := machineutil.GetKCPForCluster(ctx, r.Client, client.ObjectKey{Namespace: clusterCtx.Cluster.Namespace, Name: clusterCtx.Cluster.Name})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("Waiting for KubeadmControlPlane to be created")
+
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	elfMachineTemplateName := kcp.Spec.MachineTemplate.InfrastructureRef.Name
+	var elfMachineTemplate infrav1.ElfMachineTemplate
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: kcp.Namespace, Name: elfMachineTemplateName}, &elfMachineTemplate); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("Waiting for ElfMachineTemplate to be created", "name", elfMachineTemplateName)
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	expectedFailureDomains := make(clusterv1.FailureDomains, len(elfMachineTemplate.Spec.Template.Spec.FailureDomains))
+	for i := range elfMachineTemplate.Spec.Template.Spec.FailureDomains {
+		failureDomain := elfMachineTemplate.Spec.Template.Spec.FailureDomains[i]
+		if failureDomain.ComputeCluster == "" {
+			continue
+		}
+
+		expectedFailureDomains[failureDomain.ComputeCluster] = clusterv1.FailureDomainSpec{
+			ControlPlane: true,
+		}
+	}
+
+	actualFailureDomains := clusterCtx.ElfCluster.Status.FailureDomains
+	if len(actualFailureDomains) == 0 {
+		actualFailureDomains = clusterv1.FailureDomains{}
+	}
+
+	if !reflect.DeepEqual(expectedFailureDomains, actualFailureDomains) {
+		clusterCtx.ElfCluster.Status.FailureDomains = expectedFailureDomains
+
+		log.Info("FailureDomains updated", "failureDomains", expectedFailureDomains)
+	}
+
+	return true, nil
+}
+
 func (r *ElfClusterReconciler) isAPIServerOnline(ctx goctx.Context, clusterCtx *context.ClusterContext) bool {
 	log := ctrl.LoggerFrom(ctx)
 
@@ -387,4 +451,58 @@ func (r *ElfClusterReconciler) isAPIServerOnline(ctx goctx.Context, clusterCtx *
 	}
 
 	return false
+}
+
+// elfMachineTemplateToCluster returns a mapper function that maps an ElfMachineTemplate
+// to its owning ElfCluster. ElfMachineTemplate has an ownerReference to its Cluster,
+// and ElfCluster shares the same name and namespace as the Cluster.
+func (r *ElfClusterReconciler) elfMachineTemplateToCluster() handler.MapFunc {
+	return func(ctx goctx.Context, obj client.Object) []reconcile.Request {
+		elfMachineTemplate, ok := obj.(*infrav1.ElfMachineTemplate)
+		if !ok {
+			return nil
+		}
+
+		// Find the Cluster ownerReference on the ElfMachineTemplate.
+		var clusterName string
+		for _, ref := range elfMachineTemplate.OwnerReferences {
+			if ref.Kind == "Cluster" {
+				clusterName = ref.Name
+				break
+			}
+		}
+		if clusterName == "" {
+			return nil
+		}
+
+		return []reconcile.Request{
+			{
+				NamespacedName: client.ObjectKey{
+					Namespace: elfMachineTemplate.Namespace,
+					Name:      clusterName,
+				},
+			},
+		}
+	}
+}
+
+// elfMachineTemplateFailureDomainsPredicate returns a predicate that only allows
+// Update events on ElfMachineTemplate when the FailureDomains field changes.
+func elfMachineTemplateFailureDomainsPredicate() predicate.Funcs {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldTemplate, ok := e.ObjectOld.(*infrav1.ElfMachineTemplate)
+			if !ok {
+				return false
+			}
+			newTemplate, ok := e.ObjectNew.(*infrav1.ElfMachineTemplate)
+			if !ok {
+				return false
+			}
+			return !reflect.DeepEqual(oldTemplate.Spec.Template.Spec.FailureDomains, newTemplate.Spec.Template.Spec.FailureDomains)
+		},
+		CreateFunc:  func(_ event.CreateEvent) bool { return false },
+		DeleteFunc:  func(_ event.DeleteEvent) bool { return false },
+		GenericFunc: func(_ event.GenericEvent) bool { return false },
+	}
 }

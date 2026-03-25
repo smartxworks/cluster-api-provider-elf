@@ -50,11 +50,6 @@ import (
 
 // reconcilePlacementGroup makes sure that the placement group exist.
 func (r *ElfMachineReconciler) reconcilePlacementGroup(ctx goctx.Context, machineCtx *context.MachineContext) (reconcile.Result, error) {
-	// For multi-ElfCluster scenarios, use separate logic
-	if machineCtx.ElfMachine.HasMultiElfClusters() {
-		return r.reconcilePlacementGroupForMultiClusters(ctx, machineCtx)
-	}
-
 	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -93,7 +88,7 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx goctx.Context, machineCt
 		return nil, nil
 	}
 
-	towerCluster, err := machineCtx.VMService.GetCluster(getClusterIDForMachine(machineCtx))
+	towerCluster, err := machineCtx.VMService.GetCluster(machineCtx.GetElfClusterID())
 	if err != nil {
 		return nil, err
 	}
@@ -134,43 +129,6 @@ func (r *ElfMachineReconciler) createPlacementGroup(ctx goctx.Context, machineCt
 	return placementGroup, nil
 }
 
-// reconcilePlacementGroupForMultiClusters handles placement group reconciliation for multi-ElfCluster scenarios.
-// For multi-ElfCluster machines, each ElfCluster has its own placement group, and CP nodes
-// are placed into the placement group of their selected ElfCluster.
-func (r *ElfMachineReconciler) reconcilePlacementGroupForMultiClusters(ctx goctx.Context, machineCtx *context.MachineContext) (reconcile.Result, error) {
-	log := ctrl.LoggerFrom(ctx)
-
-	elfClusterID := machineCtx.ElfMachine.Status.FailureDomain
-	placementGroupName, err := towerresources.GetVMPlacementGroupNameForMultiCluster(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster, elfClusterID)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-
-	log.V(1).Info("Reconciling placement group for multi-ElfCluster machine", "placementGroup", placementGroupName, "elfClusterID", elfClusterID)
-
-	if placementGroup, err := r.getPlacementGroup(ctx, machineCtx, placementGroupName); err != nil {
-		if !service.IsVMPlacementGroupNotFound(err) {
-			return reconcile.Result{}, err
-		}
-
-		if ok := acquireTicketForPlacementGroupOperation(placementGroupName); ok {
-			defer releaseTicketForPlacementGroupOperation(placementGroupName)
-		} else {
-			return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
-		}
-
-		if placementGroup, err := r.createPlacementGroup(ctx, machineCtx, placementGroupName); err != nil {
-			return reconcile.Result{}, err
-		} else if placementGroup == nil {
-			return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, err
-		}
-	} else if placementGroup == nil {
-		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
-	}
-
-	return reconcile.Result{}, nil
-}
-
 // preCheckPlacementGroup checks whether there are still available hosts before creating the virtual machine.
 //
 // The return value:
@@ -190,10 +148,8 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx goctx.Context, machine
 		return ptr.To(""), nil
 	}
 
-	// For multi-ElfCluster scenarios, skip the complex pre-check logic.
-	// Just allow VM creation and let joinPlacementGroup handle the rest.
-	if machineCtx.ElfMachine.HasMultiElfClusters() {
-		log.V(1).Info("Multi-ElfCluster machine, skipping complex placement group pre-check")
+	if machineCtx.GetFailureDomain() != "" {
+		log.V(2).Info("Failure domain configured, so skip placement group pre-check")
 		return ptr.To(""), nil
 	}
 
@@ -212,7 +168,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx goctx.Context, machine
 		return nil, err
 	}
 
-	hosts, err := machineCtx.VMService.GetHostsByCluster(getClusterIDForMachine(machineCtx))
+	hosts, err := machineCtx.VMService.GetHostsByCluster(machineCtx.GetElfClusterID())
 	if err != nil {
 		return nil, err
 	}
@@ -438,12 +394,9 @@ func (r *ElfMachineReconciler) getPlacementGroup(ctx goctx.Context, machineCtx *
 //     For example, the virtual machine has joined the placement group.
 //  2. false and error is nil means the virtual machine has not joined the placement group.
 //     For example, the placement group is full or the virtual machine is being migrated.
+//
+//nolint:gocyclo
 func (r *ElfMachineReconciler) joinPlacementGroup(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
-	// For multi-ElfCluster scenarios, use separate logic
-	if machineCtx.ElfMachine.HasMultiElfClusters() {
-		return r.joinPlacementGroupForMultiClusters(ctx, machineCtx, vm)
-	}
-
 	log := ctrl.LoggerFrom(ctx)
 
 	defer func() {
@@ -480,7 +433,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx goctx.Context, machineCtx 
 	}
 
 	if machineutil.IsControlPlaneMachine(machineCtx.Machine) {
-		hosts, err := machineCtx.VMService.GetHostsByCluster(getClusterIDForMachine(machineCtx))
+		hosts, err := machineCtx.VMService.GetHostsByCluster(machineCtx.GetElfClusterID())
 		if err != nil {
 			return false, err
 		}
@@ -493,103 +446,114 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx goctx.Context, machineCtx 
 		usedHostsByPG := hosts.Find(usedHostSetByPG)
 
 		availableHosts := r.getAvailableHostsForVM(machineCtx, hosts, usedHostsByPG, vm)
-		if availableHosts.IsEmpty() {
-			kcp, err := machineutil.GetKCPByMachine(ctx, r.Client, machineCtx.Machine)
-			if err != nil {
-				return false, err
-			}
 
-			// Proceed only when the KCP is in rolling update, the VM is stopped, and all the hosts used by the placement group are available.
-			// In this case the machine created by KCP rolling update can be powered on without being added to the placement group,
-			// so return true and nil to let reconcileVMStatus() power it on.
-			if kcputil.IsKCPInRollingUpdate(kcp) && *vm.Status == models.VMStatusSTOPPED {
-				unusablehosts := usedHostsByPG.FilterUnavailableHostsOrWithoutEnoughMemory(*service.TowerMemory(machineCtx.ElfMachine.Spec.MemoryMiB))
-				if unusablehosts.IsEmpty() {
-					log.Info("KCP is in rolling update, the placement group is full and has no unusable hosts, so skip adding VM to the placement group and power it on", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", machineCtx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+		if machineCtx.GetFailureDomain() != "" {
+			if availableHosts.IsEmpty() && *vm.Status == models.VMStatusSTOPPED {
+				log.V(1).Info("Placement group is full, waiting for available hosts",
+					"placementGroup", *placementGroup.Name,
+					"usedHostsByPG", usedHostsByPG.String(),
+					"vmId", *vm.ID)
+				return false, nil
+			}
+		} else {
+			if availableHosts.IsEmpty() {
+				kcp, err := machineutil.GetKCPByMachine(ctx, r.Client, machineCtx.Machine)
+				if err != nil {
+					return false, err
+				}
+
+				// Proceed only when the KCP is in rolling update, the VM is stopped, and all the hosts used by the placement group are available.
+				// In this case the machine created by KCP rolling update can be powered on without being added to the placement group,
+				// so return true and nil to let reconcileVMStatus() power it on.
+				if kcputil.IsKCPInRollingUpdate(kcp) && *vm.Status == models.VMStatusSTOPPED {
+					unusablehosts := usedHostsByPG.FilterUnavailableHostsOrWithoutEnoughMemory(*service.TowerMemory(machineCtx.ElfMachine.Spec.MemoryMiB))
+					if unusablehosts.IsEmpty() {
+						log.Info("KCP is in rolling update, the placement group is full and has no unusable hosts, so skip adding VM to the placement group and power it on", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", machineCtx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+						return true, nil
+					}
+
+					log.Info("KCP is in rolling update, the placement group is full and has unusable hosts, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "unusablehosts", unusablehosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", machineCtx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+
+					return false, nil
+				}
+
+				if *vm.Status != models.VMStatusSTOPPED {
+					log.V(1).Info(fmt.Sprintf("The placement group is full and VM is in %s status, skip adding VM to the placement group", *vm.Status), "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", machineCtx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+
 					return true, nil
 				}
 
-				log.Info("KCP is in rolling update, the placement group is full and has unusable hosts, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "unusablehosts", unusablehosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", machineCtx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+				// KCP is scaling out or being created.
+				log.V(1).Info("KCP is in scaling up or being created, the placement group is full, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", machineCtx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
 
 				return false, nil
 			}
 
-			if *vm.Status != models.VMStatusSTOPPED {
-				log.V(1).Info(fmt.Sprintf("The placement group is full and VM is in %s status, skip adding VM to the placement group", *vm.Status), "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", machineCtx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+			// If the virtual machine is not on a host that is not used by the placement group
+			// and the virtual machine is not STOPPED, we need to migrate the virtual machine to a host that
+			// is not used by the placement group before adding the virtual machine to the placement group.
+			// Otherwise, just add the virtual machine to the placement group directly.
+			log.V(1).Info("The availableHosts for migrating the VM", "hosts", availableHosts.String(), "vmHost", formatNestedHost(vm.Host))
+			if !availableHosts.Contains(*vm.Host.ID) && *vm.Status != models.VMStatusSTOPPED {
+				log.V(1).Info("Try to migrate the virtual machine to the specified target host if needed")
 
-				return true, nil
-			}
-
-			// KCP is scaling out or being created.
-			log.V(1).Info("KCP is in scaling up or being created, the placement group is full, so wait for enough available hosts", "placementGroup", *placementGroup.Name, "availableHosts", availableHosts.String(), "usedHostsByPG", usedHostsByPG.String(), "vmRef", machineCtx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
-
-			return false, nil
-		}
-
-		// If the virtual machine is not on a host that is not used by the placement group
-		// and the virtual machine is not STOPPED, we need to migrate the virtual machine to a host that
-		// is not used by the placement group before adding the virtual machine to the placement group.
-		// Otherwise, just add the virtual machine to the placement group directly.
-		log.V(1).Info("The availableHosts for migrating the VM", "hosts", availableHosts.String(), "vmHost", formatNestedHost(vm.Host))
-		if !availableHosts.Contains(*vm.Host.ID) && *vm.Status != models.VMStatusSTOPPED {
-			log.V(1).Info("Try to migrate the virtual machine to the specified target host if needed")
-
-			kcp, err := machineutil.GetKCPByMachine(ctx, r.Client, machineCtx.Machine)
-			if err != nil {
-				return false, err
-			}
-
-			if kcputil.IsKCPInRollingUpdate(kcp) {
-				log.Info("KCP rolling update in progress, skip migrating VM", "vmRef", machineCtx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
-				return true, nil
-			}
-
-			// The powered on CP ElfMachine which is not in the PlacementGroup should wait for other new CP ElfMachines to join the target PlacementGroup.
-			// The code below double checks the recommended target host for migration is valid.
-			cpElfMachines, err := machineutil.GetControlPlaneElfMachinesInCluster(ctx, r.Client, machineCtx.Cluster.Namespace, machineCtx.Cluster.Name)
-			if err != nil {
-				return false, err
-			}
-
-			usedHostsByPG := sets.Set[string]{}
-			cpElfMachineNames := make([]string, 0, len(cpElfMachines))
-			for i := range cpElfMachines {
-				cpElfMachineNames = append(cpElfMachineNames, cpElfMachines[i].Name)
-				if machineCtx.ElfMachine.Name != cpElfMachines[i].Name &&
-					cpElfMachines[i].Status.PlacementGroupRef == *placementGroup.ID {
-					usedHostsByPG.Insert(cpElfMachines[i].Status.HostServerRef)
+				kcp, err := machineutil.GetKCPByMachine(ctx, r.Client, machineCtx.Machine)
+				if err != nil {
+					return false, err
 				}
+
+				if kcputil.IsKCPInRollingUpdate(kcp) {
+					log.Info("KCP rolling update in progress, skip migrating VM", "vmRef", machineCtx.ElfMachine.Status.VMRef, "vmId", *vm.ID)
+					return true, nil
+				}
+
+				// The powered on CP ElfMachine which is not in the PlacementGroup should wait for other new CP ElfMachines to join the target PlacementGroup.
+				// The code below double checks the recommended target host for migration is valid.
+				cpElfMachines, err := machineutil.GetControlPlaneElfMachinesInCluster(ctx, r.Client, machineCtx.Cluster.Namespace, machineCtx.Cluster.Name)
+				if err != nil {
+					return false, err
+				}
+
+				usedHostsByPG := sets.Set[string]{}
+				cpElfMachineNames := make([]string, 0, len(cpElfMachines))
+				for i := range cpElfMachines {
+					cpElfMachineNames = append(cpElfMachineNames, cpElfMachines[i].Name)
+					if machineCtx.ElfMachine.Name != cpElfMachines[i].Name &&
+						cpElfMachines[i].Status.PlacementGroupRef == *placementGroup.ID {
+						usedHostsByPG.Insert(cpElfMachines[i].Status.HostServerRef)
+					}
+				}
+
+				// During KCP rolling update, when the last new CP is just created,
+				// it may happen that kcp.Spec.Replicas == kcp.Status.Replicas == kcp.Status.UpdatedReplicas
+				// and kcp.Status.UnavailableReplicas == 0.
+				// So we need to check if the number of CP ElfMachine is equal to kcp.Spec.Replicas.
+				if len(cpElfMachines) != int(*kcp.Spec.Replicas) {
+					log.V(1).Info("The number of CP ElfMachine does not match the expected", "kcp", formatKCP(kcp), "cpElfMachines", cpElfMachineNames)
+					return true, nil
+				}
+
+				targetHost := availableHosts.UnsortedList()[0]
+				usedHostsCount := usedHostsByPG.Len()
+				log.V(1).Info("The hosts used by the PlacementGroup", "usedHosts", usedHostsByPG, "count", usedHostsCount, "targetHost", formatHost(targetHost), "kcp", formatKCP(kcp), "cpElfMachines", cpElfMachineNames)
+				if usedHostsCount < int(*kcp.Spec.Replicas-1) {
+					log.V(1).Info("Not all other CPs joined the PlacementGroup, skip migrating VM")
+					return true, nil
+				}
+
+				if usedHostsByPG.Has(*targetHost.ID) {
+					log.V(1).Info("The recommended target host for VM migration is used by the PlacementGroup, skip migrating VM")
+					return true, nil
+				}
+
+				// KCP is not in rolling update process.
+				// This is the last CP ElfMachine (i.e. the 1st new CP ElfMachine) which has not been added into the target PlacementGroup.
+				// Migrate this VM to the target host, then it will be added into the target PlacementGroup.
+
+				log.V(1).Info("Start migrating VM since KCP is not in rolling update process", "targetHost", formatHost(targetHost))
+
+				return r.migrateVM(ctx, machineCtx, vm, *targetHost.ID)
 			}
-
-			// During KCP rolling update, when the last new CP is just created,
-			// it may happen that kcp.Spec.Replicas == kcp.Status.Replicas == kcp.Status.UpdatedReplicas
-			// and kcp.Status.UnavailableReplicas == 0.
-			// So we need to check if the number of CP ElfMachine is equal to kcp.Spec.Replicas.
-			if len(cpElfMachines) != int(*kcp.Spec.Replicas) {
-				log.V(1).Info("The number of CP ElfMachine does not match the expected", "kcp", formatKCP(kcp), "cpElfMachines", cpElfMachineNames)
-				return true, nil
-			}
-
-			targetHost := availableHosts.UnsortedList()[0]
-			usedHostsCount := usedHostsByPG.Len()
-			log.V(1).Info("The hosts used by the PlacementGroup", "usedHosts", usedHostsByPG, "count", usedHostsCount, "targetHost", formatHost(targetHost), "kcp", formatKCP(kcp), "cpElfMachines", cpElfMachineNames)
-			if usedHostsCount < int(*kcp.Spec.Replicas-1) {
-				log.V(1).Info("Not all other CPs joined the PlacementGroup, skip migrating VM")
-				return true, nil
-			}
-
-			if usedHostsByPG.Has(*targetHost.ID) {
-				log.V(1).Info("The recommended target host for VM migration is used by the PlacementGroup, skip migrating VM")
-				return true, nil
-			}
-
-			// KCP is not in rolling update process.
-			// This is the last CP ElfMachine (i.e. the 1st new CP ElfMachine) which has not been added into the target PlacementGroup.
-			// Migrate this VM to the target host, then it will be added into the target PlacementGroup.
-
-			log.V(1).Info("Start migrating VM since KCP is not in rolling update process", "targetHost", formatHost(targetHost))
-
-			return r.migrateVM(ctx, machineCtx, vm, *targetHost.ID)
 		}
 	}
 
@@ -599,86 +563,6 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx goctx.Context, machineCtx 
 			return false, err
 		}
 	}
-
-	return true, nil
-}
-
-// joinPlacementGroupForMultiClusters handles joining placement group for multi-ElfCluster scenarios.
-// This is a simplified version that directly adds the VM to the placement group of its selected ElfCluster.
-func (r *ElfMachineReconciler) joinPlacementGroupForMultiClusters(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) (ret bool, reterr error) {
-	log := ctrl.LoggerFrom(ctx)
-
-	defer func() {
-		if reterr != nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.JoiningPlacementGroupFailedReason, clusterv1.ConditionSeverityWarning, reterr.Error())
-		} else if !ret {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.JoiningPlacementGroupReason, clusterv1.ConditionSeverityInfo, "")
-		}
-	}()
-
-	elfClusterID := machineCtx.ElfMachine.Status.FailureDomain
-	placementGroupName, err := towerresources.GetVMPlacementGroupNameForMultiCluster(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster, elfClusterID)
-	if err != nil {
-		return false, err
-	}
-
-	log.V(1).Info("Joining placement group for multi-ElfCluster machine", "placementGroup", placementGroupName, "elfClusterID", elfClusterID, "vmId", *vm.ID)
-
-	// Locking ensures that only one coroutine operates on the placement group at the same time,
-	// and concurrent operations will cause data inconsistency in the placement group.
-	if ok := acquireTicketForPlacementGroupOperation(placementGroupName); ok {
-		defer releaseTicketForPlacementGroupOperation(placementGroupName)
-	} else {
-		return false, nil
-	}
-
-	placementGroup, err := r.getPlacementGroup(ctx, machineCtx, placementGroupName)
-	if err != nil || placementGroup == nil {
-		return false, err
-	}
-
-	placementGroupVMSet := service.GetVMsInPlacementGroup(placementGroup)
-	if placementGroupVMSet.Has(*vm.ID) {
-		// VM already in placement group
-		machineCtx.ElfMachine.Status.PlacementGroupRef = *placementGroup.ID
-		return true, nil
-	}
-
-	// For control plane machines, check if placement group has capacity
-	if machineutil.IsControlPlaneMachine(machineCtx.Machine) {
-		hosts, err := machineCtx.VMService.GetHostsByCluster(getClusterIDForMachine(machineCtx))
-		if err != nil {
-			return false, err
-		}
-
-		usedHostSetByPG, err := r.getHostsInPlacementGroup(machineCtx, placementGroup)
-		if err != nil {
-			return false, err
-		}
-
-		usedHostsByPG := hosts.Find(usedHostSetByPG)
-		availableHosts := r.getAvailableHostsForVM(machineCtx, hosts, usedHostsByPG, vm)
-
-		// If placement group is full, wait for capacity
-		if availableHosts.IsEmpty() && *vm.Status == models.VMStatusSTOPPED {
-			log.V(1).Info("Placement group is full for multi-ElfCluster machine, waiting for available hosts",
-				"placementGroup", *placementGroup.Name,
-				"usedHostsByPG", usedHostsByPG.String(),
-				"vmId", *vm.ID)
-			return false, nil
-		}
-	}
-
-	// Add VM to placement group
-	placementGroupVMSet.Insert(*vm.ID)
-	if err := r.addVMsToPlacementGroup(ctx, machineCtx, placementGroup, placementGroupVMSet.UnsortedList()); err != nil {
-		return false, err
-	}
-
-	log.Info("Successfully joined placement group for multi-ElfCluster machine",
-		"placementGroup", *placementGroup.Name,
-		"elfClusterID", elfClusterID,
-		"vmId", *vm.ID)
 
 	return true, nil
 }
@@ -762,13 +646,7 @@ func (r *ElfMachineReconciler) deletePlacementGroup(ctx goctx.Context, machineCt
 		return true, nil
 	}
 
-	var placementGroupName string
-	// For multi-ElfCluster scenarios, use the placement group name with ElfCluster ID
-	if machineCtx.ElfMachine.HasMultiElfClusters() {
-		placementGroupName, err = towerresources.GetVMPlacementGroupNameForMultiCluster(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster, machineCtx.ElfMachine.Status.FailureDomain)
-	} else {
-		placementGroupName, err = towerresources.GetVMPlacementGroupName(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster)
-	}
+	placementGroupName, err := towerresources.GetVMPlacementGroupName(ctx, r.Client, machineCtx.Machine, machineCtx.Cluster)
 	if err != nil {
 		return false, err
 	}

@@ -69,7 +69,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 	}()
 
 	// If the GPU devices locked by the virtual machine still exist, use them directly.
-	if lockedVMGPUs := getGPUDevicesLockedByVM(getClusterIDForMachine(machineCtx), machineCtx.ElfMachine.Name); lockedVMGPUs != nil {
+	if lockedVMGPUs := getGPUDevicesLockedByVM(machineCtx.GetElfClusterID(), machineCtx.ElfMachine.Name); lockedVMGPUs != nil {
 		if ok, err := r.checkGPUsCanBeUsedForVM(machineCtx, lockedVMGPUs.GetGPUIDs()); err != nil {
 			return nil, nil, err
 		} else if ok {
@@ -82,10 +82,10 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 		// delete the locked GPU devices and reallocate.
 		log.V(1).Info("Locked VM GPU devices are invalid, so remove and reallocate", "lockedVMGPUs", lockedVMGPUs)
 
-		unlockGPUDevicesLockedByVM(getClusterIDForMachine(machineCtx), machineCtx.ElfMachine.Name)
+		unlockGPUDevicesLockedByVM(machineCtx.GetElfClusterID(), machineCtx.ElfMachine.Name)
 	}
 
-	hosts, err := machineCtx.VMService.GetHostsByCluster(getClusterIDForMachine(machineCtx))
+	hosts, err := machineCtx.VMService.GetHostsByCluster(machineCtx.GetElfClusterID())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -109,7 +109,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 	gpuVMInfos = gpuVMInfos.FilterAvailableGPUVMInfos()
 
 	// Filter locked GPU devices.
-	gpuVMInfos = filterGPUVMInfosByLockGPUDevices(getClusterIDForMachine(machineCtx), gpuVMInfos)
+	gpuVMInfos = filterGPUVMInfosByLockGPUDevices(machineCtx.GetElfClusterID(), gpuVMInfos)
 
 	// Group GPU deviceInfos by host.
 	hostGPUVMInfoMap := make(map[string]service.GPUVMInfos)
@@ -150,7 +150,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 
 		if len(selectedGPUDeviceInfos) > 0 {
 			// Lock the selected GPU devices to prevent it from being allocated to multiple virtual machines.
-			if !lockGPUDevicesForVM(getClusterIDForMachine(machineCtx), machineCtx.ElfMachine.Name, unsortedHostIDs[i], selectedGPUDeviceInfos) {
+			if !lockGPUDevicesForVM(machineCtx.GetElfClusterID(), machineCtx.ElfMachine.Name, unsortedHostIDs[i], selectedGPUDeviceInfos) {
 				// Lock failure indicates that the GPU devices are locked by another virtual machine.
 				// Just trying other hosts.
 				continue
@@ -309,7 +309,7 @@ func (r *ElfMachineReconciler) addGPUDevicesForVM(ctx goctx.Context, machineCtx 
 
 		ok, err := r.migrateVM(ctx, machineCtx, vm, *hostID)
 		if err != nil {
-			unlockGPUDevicesLockedByVM(getClusterIDForMachine(machineCtx), machineCtx.ElfMachine.Name)
+			unlockGPUDevicesLockedByVM(machineCtx.GetElfClusterID(), machineCtx.ElfMachine.Name)
 		}
 
 		return ok, err
@@ -319,7 +319,7 @@ func (r *ElfMachineReconciler) addGPUDevicesForVM(ctx goctx.Context, machineCtx 
 	if err != nil {
 		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.AttachingGPUFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 
-		unlockGPUDevicesLockedByVM(getClusterIDForMachine(machineCtx), machineCtx.ElfMachine.Name)
+		unlockGPUDevicesLockedByVM(machineCtx.GetElfClusterID(), machineCtx.ElfMachine.Name)
 
 		return false, errors.Wrapf(err, "failed to trigger attaching GPU devices for VM %s", machineCtx.ElfMachine.Status.VMRef)
 	}

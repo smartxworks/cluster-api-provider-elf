@@ -60,53 +60,18 @@ spec:
                           FailureDomain is the failure domain unique identifier this Machine should be attached to, as defined in Cluster API.
                           For this infrastructure provider, the name is equivalent to the name of the ElfDeploymentZone.
                         type: string
-                      gpuDevices:
-                        description: GPUDevices is the list of physical GPUs used
-                          by the virtual machine.
+                      failureDomains:
+                        description: FailureDomains is a list of failure domain objects.
                         items:
-                          description: GPUPassthroughDeviceSpec defines virtual machine's
-                            GPU configuration
+                          description: CloudFailureDomain contains data to identify
+                            and configure a failure domain.
                           properties:
-                            count:
-                              default: 1
-                              description: Count is the number of GPU. Defaults to
-                                1.
-                              format: int32
-                              minimum: 1
-                              type: integer
-                            model:
-                              description: Model is the model name of a physical GPU,
-                                e.g. 'A16'.
-                              type: string
-                          type: object
-                        type: array
-                      ha:
-                        type: boolean
-                      haPriority:
-                        description: Defaults to MEDIUM.
-                        enum:
-                        - LOW
-                        - MEDIUM
-                        - HIGH
-                        type: string
-                      host:
-                        description: |-
-                          Host is a unique identifier for a ELF host.
-                          Required when cloneMode is FullClone.
-                          Defaults to AUTO_SCHEDULE.
-                        type: string
-                      memoryMiB:
-                        format: int64
-                        type: integer
-                      multiElfClusters:
-                        items:
-                          properties:
-                            cluster:
-                              description: Cluster is a unique identifier for a ELF
-                                cluster.
+                            computeCluster:
+                              description: computeCluster as the failure domain
+                              minLength: 1
                               type: string
                             network:
-                              description: Network
+                              description: Network is the network configuration.
                               properties:
                                 devices:
                                   description: Devices is the list of network devices
@@ -226,10 +191,46 @@ spec:
                                     server endpoint on this machine
                                   type: string
                               type: object
-                          required:
-                          - cluster
                           type: object
                         type: array
+                      gpuDevices:
+                        description: GPUDevices is the list of physical GPUs used
+                          by the virtual machine.
+                        items:
+                          description: GPUPassthroughDeviceSpec defines virtual machine's
+                            GPU configuration
+                          properties:
+                            count:
+                              default: 1
+                              description: Count is the number of GPU. Defaults to
+                                1.
+                              format: int32
+                              minimum: 1
+                              type: integer
+                            model:
+                              description: Model is the model name of a physical GPU,
+                                e.g. 'A16'.
+                              type: string
+                          type: object
+                        type: array
+                      ha:
+                        type: boolean
+                      haPriority:
+                        description: Defaults to MEDIUM.
+                        enum:
+                        - LOW
+                        - MEDIUM
+                        - HIGH
+                        type: string
+                      host:
+                        description: |-
+                          Host is a unique identifier for a ELF host.
+                          Required when cloneMode is FullClone.
+                          Defaults to AUTO_SCHEDULE.
+                        type: string
+                      memoryMiB:
+                        format: int64
+                        type: integer
                       network:
                         description: Network is the network configuration for this
                           machin's VM.

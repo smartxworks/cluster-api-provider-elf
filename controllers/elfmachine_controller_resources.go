@@ -345,7 +345,7 @@ func (r *ElfMachineReconciler) reconcieVMNetworkDevices(ctx goctx.Context, machi
 		return true, nil
 	}
 
-	network := machineCtx.ElfMachine.GetNetwork()
+	network := machineCtx.GetNetwork()
 	for i := range network.Devices {
 		if network.Devices[i].NetworkType == infrav1.NetworkTypeNone {
 			continue
@@ -365,7 +365,7 @@ func (r *ElfMachineReconciler) reconcieVMNetworkDevices(ctx goctx.Context, machi
 
 // reconcileVMNics ensures that the vm nics are as expected.
 func (r *ElfMachineReconciler) reconcileVMNics(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM, vmNics []*models.VMNic) (bool, error) {
-	network := machineCtx.ElfMachine.GetNetwork()
+	network := machineCtx.GetNetwork()
 	devices := network.Devices
 	if len(devices) <= len(vmNics) {
 		return true, nil
@@ -456,7 +456,7 @@ func (r *ElfMachineReconciler) setVMNetworkDeviceConfig(ctx goctx.Context, machi
 
 	// Calculate the number of network nics to configure.
 	// Skip the first nic(management network).
-	network := machineCtx.ElfMachine.GetNetwork()
+	network := machineCtx.GetNetwork()
 	deviceCount := len(network.Devices) - 1
 	networkCount := len(machineCtx.ElfMachine.Status.Network)
 	if networkCount > 0 {

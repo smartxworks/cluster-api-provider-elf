@@ -87,22 +87,22 @@ func isELFScheduleVMErrorRecorded(ctx goctx.Context, machineCtx *context.Machine
 }
 
 func isELFClusterMemoryInsufficient(machineCtx *context.MachineContext) (bool, string) {
-	if resource := getClusterResource(getKeyForInsufficientMemoryError(getClusterIDForMachine(machineCtx))); resource != nil {
-		return true, "Insufficient memory detected for the ELF cluster " + getClusterIDForMachine(machineCtx)
+	if resource := getClusterResource(getKeyForInsufficientMemoryError(machineCtx.GetElfClusterID())); resource != nil {
+		return true, "Insufficient memory detected for the ELF cluster " + machineCtx.GetElfClusterID()
 	}
 	return false, ""
 }
 
 func isELFClusterStorageInsufficient(machineCtx *context.MachineContext) (bool, string) {
-	if resource := getClusterResource(getKeyForInsufficientStorageError(getClusterIDForMachine(machineCtx))); resource != nil {
-		return true, "Insufficient storage detected for the ELF cluster " + getClusterIDForMachine(machineCtx)
+	if resource := getClusterResource(getKeyForInsufficientStorageError(machineCtx.GetElfClusterID())); resource != nil {
+		return true, "Insufficient storage detected for the ELF cluster " + machineCtx.GetElfClusterID()
 	}
 	return false, ""
 }
 
 // recordElfClusterMemoryInsufficient records whether the memory is insufficient.
 func recordElfClusterMemoryInsufficient(machineCtx *context.MachineContext, isInsufficient bool) {
-	key := getKeyForInsufficientMemoryError(getClusterIDForMachine(machineCtx))
+	key := getKeyForInsufficientMemoryError(machineCtx.GetElfClusterID())
 	if isInsufficient {
 		inMemoryCache.Set(key, newClusterResource(getMemoryRequestAmount(machineCtx)), resourceDuration)
 	} else {
@@ -112,7 +112,7 @@ func recordElfClusterMemoryInsufficient(machineCtx *context.MachineContext, isIn
 
 // recordElfClusterStorageInsufficient records whether the storage is insufficient.
 func recordElfClusterStorageInsufficient(machineCtx *context.MachineContext, isError bool) {
-	key := getKeyForInsufficientStorageError(getClusterIDForMachine(machineCtx))
+	key := getKeyForInsufficientStorageError(machineCtx.GetElfClusterID())
 	if isError {
 		inMemoryCache.Set(key, newClusterResource(getStorageRequestAmount(machineCtx)), resourceDuration)
 	} else {
@@ -181,11 +181,11 @@ func canRetryVMOperation(ctx goctx.Context, machineCtx *context.MachineContext, 
 }
 
 func canRetryMemoryAllocation(machineCtx *context.MachineContext) bool {
-	return canRetry(getKeyForInsufficientMemoryError(getClusterIDForMachine(machineCtx)), getMemoryRequestAmount(machineCtx))
+	return canRetry(getKeyForInsufficientMemoryError(machineCtx.GetElfClusterID()), getMemoryRequestAmount(machineCtx))
 }
 
 func canRetryStorageAllocation(machineCtx *context.MachineContext) bool {
-	return canRetry(getKeyForInsufficientStorageError(getClusterIDForMachine(machineCtx)), getStorageRequestAmount(machineCtx))
+	return canRetry(getKeyForInsufficientStorageError(machineCtx.GetElfClusterID()), getStorageRequestAmount(machineCtx))
 }
 
 func canRetry(key string, requestAmount int64) bool {
