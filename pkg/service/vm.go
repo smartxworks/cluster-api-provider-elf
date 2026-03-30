@@ -54,12 +54,10 @@ var (
 )
 
 type CloneVMInfo struct {
-	Cluster     string               `json:"cluster,omitempty"`
-	Host        string               `json:"host,omitempty"`
-	CloudInit   string               `json:"cloudInit,omitempty"`
-	GPUDevices  []*GPUDeviceInfo     `json:"gpuDevices,omitempty"`
-	Network     *infrav1.NetworkSpec `json:"network,omitempty"`
-	Nameservers []string             `json:"nameservers,omitempty"`
+	Cluster    string           `json:"cluster,omitempty"`
+	Host       string           `json:"host,omitempty"`
+	CloudInit  string           `json:"cloudInit,omitempty"`
+	GPUDevices []*GPUDeviceInfo `json:"gpuDevices,omitempty"`
 }
 
 type VMService interface {
@@ -250,11 +248,11 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 		haPriority = models.NewVMHaPriority(models.VMHaPriorityLEVEL3HIGH)
 	}
 
-	nics := make([]*models.VMNicParams, 0, len(vmInfo.Network.Devices))
-	networks := make([]*models.CloudInitNetWork, 0, len(vmInfo.Network.Devices))
-	defautRouteDeviceIndex := vmInfo.Network.GetDefaultRouteDeviceIndex()
-	for i := range len(vmInfo.Network.Devices) {
-		device := vmInfo.Network.Devices[i]
+	nics := make([]*models.VMNicParams, 0, len(elfMachine.Spec.Network.Devices))
+	networks := make([]*models.CloudInitNetWork, 0, len(elfMachine.Spec.Network.Devices))
+	defautRouteDeviceIndex := elfMachine.Spec.Network.GetDefaultRouteDeviceIndex()
+	for i := range len(elfMachine.Spec.Network.Devices) {
+		device := elfMachine.Spec.Network.Devices[i]
 
 		// nics
 		vlan, err := svr.GetVlan(device.Vlan)
@@ -324,7 +322,7 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 		networks = append(networks, network)
 	}
 
-	nameservers := vmInfo.Network.Nameservers
+	nameservers := elfMachine.GetLimitedNameservers(config.VM.NameserverLimit)
 	cloudInit := &models.TemplateCloudInit{
 		Hostname: TowerString(elfMachine.Name),
 		UserData: TowerString(vmInfo.CloudInit),

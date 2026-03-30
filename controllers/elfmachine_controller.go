@@ -411,10 +411,16 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx goctx.Context, machineCtx *co
 		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, patchutil.AddFinalizerWithOptimisticLock(ctx, r.Client, machineCtx.ElfMachine, infrav1.MachineFinalizer)
 	}
 
+	if ok := r.reconcileFailureDomain(machineCtx); !ok {
+		log.Info(fmt.Sprintf("Waiting for failure domain %s to be set", machineCtx.GetFailureDomain()))
+
+		return reconcile.Result{}, nil
+	}
+
 	// If ElfMachine requires static IPs for devices, should wait for CAPE-IP to set MachineStaticIPFinalizer first
 	// to prevent CAPE from overwriting MachineStaticIPFinalizer when setting MachineFinalizer.
 	// If ElfMachine happens to be deleted at this time, CAPE-IP may not have time to release the IPs.
-	network := machineCtx.GetNetwork()
+	network := machineCtx.ElfMachine.Spec.Network
 	if network.RequiresStaticIPs() && !ctrlutil.ContainsFinalizer(machineCtx.ElfMachine, infrav1.MachineStaticIPFinalizer) {
 		log.V(2).Info("Waiting for CAPE-IP to set MachineStaticIPFinalizer on ElfMachine")
 
@@ -578,12 +584,10 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 
 		log.Info("Create VM for ElfMachine")
 		vmInfo := &service.CloneVMInfo{
-			Cluster:     machineCtx.GetElfClusterID(),
-			Host:        service.GetTowerString(hostID),
-			CloudInit:   bootstrapData,
-			GPUDevices:  gpuDeviceInfos,
-			Network:     machineCtx.GetNetwork(),
-			Nameservers: machineCtx.GetLimitedNameservers(),
+			Cluster:    machineCtx.GetElfClusterID(),
+			Host:       service.GetTowerString(hostID),
+			CloudInit:  bootstrapData,
+			GPUDevices: gpuDeviceInfos,
 		}
 		withTaskVM, err := machineCtx.VMService.Clone(machineCtx.ElfCluster, machineCtx.ElfMachine, vmInfo)
 		if err != nil {
@@ -1311,8 +1315,8 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx goctx.Context, machineCtx *c
 		}
 	}
 
-	networkDevicesWithIP := machineCtx.GetNetworkDevicesRequiringIP()
-	networkDevicesWithDHCP := machineCtx.GetNetworkDevicesRequiringDHCP()
+	networkDevicesWithIP := machineCtx.ElfMachine.GetNetworkDevicesRequiringIP()
+	networkDevicesWithDHCP := machineCtx.ElfMachine.GetNetworkDevicesRequiringDHCP()
 
 	if len(ipToMachineAddressMap) < len(networkDevicesWithIP) {
 		// Try to get VM NIC IP address from the K8s Node.
@@ -1330,7 +1334,7 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx goctx.Context, machineCtx *c
 	if len(networkDevicesWithDHCP) > 0 {
 		dhcpIPNum := 0
 		for _, ip := range ipToMachineAddressMap {
-			if !machineCtx.IsMachineStaticIP(ip.Address) {
+			if !machineCtx.ElfMachine.IsMachineStaticIP(ip.Address) {
 				dhcpIPNum++
 			}
 		}
@@ -1413,8 +1417,7 @@ func (r *ElfMachineReconciler) reconcileLabels(ctx goctx.Context, machineCtx *co
 // isWaitingForStaticIPAllocation checks whether the VM should wait for a static IP
 // to be allocated.
 func (r *ElfMachineReconciler) isWaitingForStaticIPAllocation(machineCtx *context.MachineContext) bool {
-	network := machineCtx.GetNetwork()
-	devices := network.Devices
+	devices := machineCtx.ElfMachine.Spec.Network.Devices
 	for _, device := range devices {
 		if device.NetworkType == infrav1.NetworkTypeIPV4 && len(device.IPAddrs) == 0 {
 			// Static IP is not available yet
@@ -1570,4 +1573,26 @@ func (r *ElfMachineReconciler) deleteVM(ctx goctx.Context, machineCtx *context.M
 	log.Info(fmt.Sprintf("Destroying duplicate VM %s in task %s", *vm.ID, *task.ID))
 
 	return nil
+}
+
+// reconcileFailureDomain overrides elfmachine.spec.Network with the Network
+// from the FailureDomain configured in machine.spec.FailureDomain.
+// This ensures that downstream reconciliation logic uses the correct network
+// configuration for the selected failure domain.
+func (r *ElfMachineReconciler) reconcileFailureDomain(machineCtx *context.MachineContext) bool {
+	fd := machineCtx.GetFailureDomain()
+	if fd == "" {
+		return true
+	}
+
+	failureDomain := machineCtx.GetCloudFailureDomain()
+	if failureDomain == nil {
+		return false
+	}
+
+	if len(machineCtx.ElfMachine.Spec.Network.Devices) == 0 {
+		machineCtx.ElfMachine.Spec.Network = failureDomain.Network
+	}
+
+	return true
 }
