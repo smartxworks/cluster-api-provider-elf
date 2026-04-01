@@ -63,6 +63,45 @@ func TestConvertToLabelValue(t *testing.T) {
 		}, {
 			str:        "toolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolong",
 			labelValue: "toolongtoolongtoolongtoolongtoolongtoolongtoolongtoolongtoolong",
+		}, {
+			str:        "Cluster!@#$%^&*()-_=+[]{}|:',.<>/?`~01",
+			labelValue: "Cluster----------------------.------01",
+		}, {
+			str:        "Host-Name-01",
+			labelValue: "Host-Name-01",
+		}, {
+			str:        "host-name-with-only-lowercase-letters-and-digits-123",
+			labelValue: "host-name-with-only-lowercase-letters-and-digits-123",
+		}, {
+			str:        "",
+			labelValue: "",
+		}, {
+			str:        "!!!",
+			labelValue: "",
+		}, {
+			str:        "...---___...",
+			labelValue: "",
+		}, {
+			str:        ".-_-edge-_-.",
+			labelValue: "edge",
+		}, {
+			str:        "cluster;name\\with\"forbidden",
+			labelValue: "cluster-name-with-forbidden",
+		}, {
+			str:        "cluster_name.v1",
+			labelValue: "cluster-name.v1",
+		}, {
+			str:        "node---name",
+			labelValue: "node---name",
+		}, {
+			str:        "___leading.and.trailing---",
+			labelValue: "leading.and.trailing",
+		}, {
+			str:        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-",
+			labelValue: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+		}, {
+			str:        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			labelValue: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		},
 	}
 

@@ -1940,6 +1940,44 @@ var _ = Describe("ElfMachineReconciler", func() {
 			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
 		})
 
+		Context("reconcileHostAndZone", func() {
+			It("should update compute cluster for non-stretched cluster", func() {
+				vm := fake.NewTowerVMFromElfMachine(elfMachine)
+				computeClusterID := fake.ID()
+				computeClusterName := "compute-cluster-a"
+				vm.Cluster = &models.NestedCluster{ID: service.TowerString(computeClusterID), Name: service.TowerString(computeClusterName)}
+				machineCtx := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+				reconciler := &ElfMachineReconciler{}
+
+				err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(machineCtx.ElfMachine.Status.ComputeCluster).To(Equal(infrav1.ComputeClusterStatus{
+					ClusterID: computeClusterName,
+					Name:      computeClusterName,
+				}))
+				Expect(machineCtx.ElfMachine.Status.Zone.IsZero()).To(BeTrue())
+			})
+
+			It("should not update compute cluster when unchanged", func() {
+				vm := fake.NewTowerVMFromElfMachine(elfMachine)
+				computeClusterName := "compute-cluster-a"
+				vm.Cluster = &models.NestedCluster{ID: service.TowerString(fake.ID()), Name: service.TowerString(computeClusterName)}
+				elfMachine.Status.ComputeCluster = infrav1.ComputeClusterStatus{
+					ClusterID: computeClusterName,
+					Name:      computeClusterName,
+				}
+				machineCtx := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+				reconciler := &ElfMachineReconciler{}
+
+				err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(machineCtx.ElfMachine.Status.ComputeCluster).To(Equal(infrav1.ComputeClusterStatus{
+					ClusterID: computeClusterName,
+					Name:      computeClusterName,
+				}))
+			})
+		})
+
 		It("should wait VM network ready", func() {
 			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
 			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineStaticIPFinalizer)
@@ -3520,6 +3558,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should set providerID and labels for node", func() {
 			elfMachine.Spec.GPUDevices = []infrav1.GPUPassthroughDeviceSpec{{Model: "H100"}}
+			elfMachine.Status.ComputeCluster = infrav1.ComputeClusterStatus{
+				ClusterID: fake.UUID(),
+				Name:      fake.UUID(),
+			}
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
 			elfMachine.Status.Zone = infrav1.ZoneStatus{
@@ -3559,8 +3601,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 				}
 
 				return node.Spec.ProviderID == machineutil.ConvertUUIDToProviderID(*vm.LocalID) &&
+					node.Labels[infrav1.ComputeClusterIDLabel] == elfMachine.Status.ComputeCluster.ClusterID &&
+					node.Labels[infrav1.ComputeClusterNameLabel] == elfMachine.Status.ComputeCluster.Name &&
 					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
-					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName &&
+					node.Labels[infrav1.HostServerNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.HostServerName) &&
 					node.Labels[infrav1.ZoneIDLabel] == elfMachine.Status.Zone.ZoneID &&
 					node.Labels[infrav1.ZoneTypeLabel] == elfMachine.Status.Zone.Type.ToLower() &&
 					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID &&
@@ -3571,6 +3615,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should update labels but not update providerID", func() {
 			elfMachine.Spec.VGPUDevices = []infrav1.VGPUDeviceSpec{{Type: "H300"}}
+			elfMachine.Status.ComputeCluster = infrav1.ComputeClusterStatus{
+				ClusterID: fake.UUID(),
+				Name:      fake.UUID(),
+			}
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
 			elfMachine.Status.Zone = infrav1.ZoneStatus{
@@ -3596,6 +3644,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: elfMachine.Name,
 					Labels: map[string]string{
+						infrav1.ComputeClusterIDLabel:            "old-cluster-id",
+						infrav1.ComputeClusterNameLabel:          "old-cluster-name",
 						infrav1.HostServerIDLabel:                "old-host-id",
 						infrav1.HostServerNameLabel:              "old-host-name",
 						infrav1.ZoneIDLabel:                      "old-zone-id",
@@ -3621,8 +3671,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 				}
 
 				return node.Spec.ProviderID == providerID &&
+					node.Labels[infrav1.ComputeClusterIDLabel] == elfMachine.Status.ComputeCluster.ClusterID &&
+					node.Labels[infrav1.ComputeClusterNameLabel] == elfMachine.Status.ComputeCluster.Name &&
 					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
-					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName &&
+					node.Labels[infrav1.HostServerNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.HostServerName) &&
 					node.Labels[infrav1.ZoneIDLabel] == elfMachine.Status.Zone.ZoneID &&
 					node.Labels[infrav1.ZoneTypeLabel] == elfMachine.Status.Zone.Type.ToLower() &&
 					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine) &&
@@ -3632,6 +3684,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should remove unused labels", func() {
+			elfMachine.Status.ComputeCluster = infrav1.ComputeClusterStatus{}
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
 			vm := fake.NewTowerVM()
@@ -3653,6 +3706,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: elfMachine.Name,
 					Labels: map[string]string{
+						infrav1.ComputeClusterIDLabel:            "old-cluster-id",
+						infrav1.ComputeClusterNameLabel:          "old-cluster-name",
 						infrav1.HostServerIDLabel:                elfMachine.Status.HostServerRef,
 						infrav1.HostServerNameLabel:              elfMachine.Status.HostServerName,
 						infrav1.TowerVMIDLabel:                   *vm.ID,
@@ -3679,9 +3734,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 				return node.Spec.ProviderID == providerID &&
 					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
-					node.Labels[infrav1.HostServerNameLabel] == elfMachine.Status.HostServerName &&
+					node.Labels[infrav1.HostServerNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.HostServerName) &&
 					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine) &&
 					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID &&
+					node.Labels[infrav1.ComputeClusterIDLabel] == "" &&
+					node.Labels[infrav1.ComputeClusterNameLabel] == "" &&
 					!labelsutil.HasLabel(node, infrav1.ZoneIDLabel) &&
 					!labelsutil.HasLabel(node, infrav1.ZoneTypeLabel) &&
 					!labelsutil.HasLabel(node, labelsutil.ClusterAutoscalerCAPIGPULabel)
@@ -3817,6 +3874,95 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err = reconciler.reconcileLabels(ctx, machineContext, vm)
 			Expect(ok).To(BeTrue())
 			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("reconcileFailureDomain", func() {
+		It("should return true when no failure domain is set", func() {
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := &context.MachineContext{
+				Cluster:    cluster,
+				Machine:    machine,
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+			}
+
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			Expect(reconciler.reconcileFailureDomain(ctx, machineContext)).To(BeTrue())
+		})
+
+		It("should return false when failure domain is set but cloud failure domain is not found", func() {
+			failureDomain := "fd-not-found"
+			machine.Spec.FailureDomain = &failureDomain
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := &context.MachineContext{
+				Cluster:    cluster,
+				Machine:    machine,
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+			}
+
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			Expect(reconciler.reconcileFailureDomain(ctx, machineContext)).To(BeFalse())
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Waiting for failure domain %s to be set", failureDomain)))
+		})
+
+		It("should set network from failure domain when machine network is empty", func() {
+			fdName := "fd-network-empty"
+			machine.Spec.FailureDomain = &fdName
+			fdNetwork := infrav1.NetworkSpec{
+				Devices: []infrav1.NetworkDeviceSpec{
+					{NetworkType: infrav1.NetworkTypeIPV4, Vlan: "vlan-1"},
+				},
+			}
+			elfMachine.Spec.FailureDomains = []infrav1.CloudFailureDomain{
+				{ComputeCluster: fdName, Network: fdNetwork},
+			}
+			elfMachine.Spec.Network.Devices = nil
+
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := &context.MachineContext{
+				Cluster:    cluster,
+				Machine:    machine,
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+			}
+
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			Expect(reconciler.reconcileFailureDomain(ctx, machineContext)).To(BeTrue())
+			Expect(elfMachine.Spec.Network).To(Equal(fdNetwork))
+			Expect(logBuffer.String()).To(ContainSubstring("Set network configuration from failure domain"))
+		})
+
+		It("should add new network devices from failure domain when machine has fewer devices", func() {
+			fdName := "fd-devices"
+			machine.Spec.FailureDomain = &fdName
+			fdNetwork := infrav1.NetworkSpec{
+				Devices: []infrav1.NetworkDeviceSpec{
+					{NetworkType: infrav1.NetworkTypeIPV4, Vlan: "vlan-1"},
+					{NetworkType: infrav1.NetworkTypeIPV4, Vlan: "vlan-2"},
+				},
+			}
+			elfMachine.Spec.FailureDomains = []infrav1.CloudFailureDomain{
+				{ComputeCluster: fdName, Network: fdNetwork},
+			}
+			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
+				{NetworkType: infrav1.NetworkTypeIPV4, Vlan: "vlan-1"},
+			}
+
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
+			machineContext := &context.MachineContext{
+				Cluster:    cluster,
+				Machine:    machine,
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+			}
+
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			Expect(reconciler.reconcileFailureDomain(ctx, machineContext)).To(BeTrue())
+			Expect(elfMachine.Spec.Network.Devices).To(HaveLen(2))
+			Expect(elfMachine.Spec.Network.Devices[1].Vlan).To(Equal("vlan-2"))
+			Expect(logBuffer.String()).To(ContainSubstring("Added new network devices from failure domain"))
 		})
 	})
 })

@@ -213,6 +213,10 @@ type ElfMachineStatus struct {
 	// Zone is the status of the zone.
 	// +optional
 	Zone ZoneStatus `json:"zone,omitempty"`
+
+	// ComputeCluster is the status of the compute cluster.
+	// +optional
+	ComputeCluster ComputeClusterStatus `json:"computeCluster,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -221,6 +225,7 @@ type ElfMachineStatus struct {
 //+kubebuilder:printcolumn:name="ProviderID",type="string",JSONPath=".spec.providerID",description="ElfMachine instance ID"
 //+kubebuilder:printcolumn:name="IP",type="string",JSONPath=".status.addresses[?(@.address!=\"240.255.0.1\")].address",description="IP addresses of the virtual machine"
 //+kubebuilder:printcolumn:name="HOST",type="string",JSONPath=".status.hostServerName",description="Name of host server where the virtual machine runs on"
+//+kubebuilder:printcolumn:name="COMPUTECLUSTER",type="string",JSONPath=".status.computeCluster.name",description="Name of compute cluster where the virtual machine runs on"
 //+kubebuilder:printcolumn:name="PLACEMENTGROUP",type="string",JSONPath=".status.placementGroupRef",description="ID of Tower placement group which this ElfMachine belongs to"
 //+kubebuilder:printcolumn:name="Machine",type="string",JSONPath=".metadata.ownerReferences[?(@.kind==\"Machine\")].name",description="Machine object which owns with this ElfMachine"
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of ElfMachine"

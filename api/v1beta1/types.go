@@ -289,6 +289,24 @@ func (z *ZoneStatus) IsZero() bool {
 	return z.ZoneID == "" && z.Type == ""
 }
 
+// ComputeClusterStatus is the status of a compute cluster.
+type ComputeClusterStatus struct {
+	// ClusterID is the ID of the compute cluster.
+	ClusterID string `json:"clusterId,omitempty"`
+
+	// Name is the name of the compute cluster.
+	Name string `json:"name,omitempty"`
+}
+
+// String returns a string representation of this ComputeClusterStatus.
+func (cc *ComputeClusterStatus) String() string {
+	return fmt.Sprintf("%s:%s", cc.ClusterID, cc.Name)
+}
+
+func (cc *ComputeClusterStatus) Equal(other *ComputeClusterStatus) bool {
+	return cc.ClusterID == other.ClusterID && cc.Name == other.Name
+}
+
 //+kubebuilder:object:generate=false
 
 // PatchStringValue is for patching resources.

@@ -132,11 +132,7 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (r
 
 		return reconcile.Result{}, nil
 	}
-	if machine.Spec.FailureDomain != nil {
-		log = log.WithValues("Machine", klog.KObj(machine), "failureDomain", *machine.Spec.FailureDomain)
-	} else {
-		log = log.WithValues("Machine", klog.KObj(machine))
-	}
+	log = log.WithValues("Machine", klog.KObj(machine))
 	ctx = ctrl.LoggerInto(ctx, log)
 
 	// Fetch the CAPI Cluster.
@@ -411,9 +407,7 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx goctx.Context, machineCtx *co
 		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, patchutil.AddFinalizerWithOptimisticLock(ctx, r.Client, machineCtx.ElfMachine, infrav1.MachineFinalizer)
 	}
 
-	if ok := r.reconcileFailureDomain(machineCtx); !ok {
-		log.Info(fmt.Sprintf("Waiting for failure domain %s to be set", machineCtx.GetFailureDomain()))
-
+	if ok := r.reconcileFailureDomain(ctx, machineCtx); !ok {
 		return reconcile.Result{}, nil
 	}
 
@@ -1085,11 +1079,22 @@ func (r *ElfMachineReconciler) reconcileHostAndZone(ctx goctx.Context, machineCt
 	log := ctrl.LoggerFrom(ctx)
 
 	// The host of the virtual machine may change, such as rescheduling caused by HA.
-	if vm.Host != nil && machineCtx.ElfMachine.Status.HostServerName != *vm.Host.Name {
+	if vm.Host != nil && machineCtx.ElfMachine.Status.HostServerName != service.GetTowerString(vm.Host.Name) {
 		hostName := machineCtx.ElfMachine.Status.HostServerName
 		machineCtx.ElfMachine.Status.HostServerRef = *vm.Host.ID
 		machineCtx.ElfMachine.Status.HostServerName = *vm.Host.Name
 		log.V(1).Info(fmt.Sprintf("Updated VM hostServerName from %s to %s", hostName, *vm.Host.Name))
+	}
+
+	if vm.Cluster != nil {
+		clusterStatus := infrav1.ComputeClusterStatus{
+			ClusterID: service.GetTowerString(vm.Cluster.Name),
+			Name:      service.GetTowerString(vm.Cluster.Name),
+		}
+		if !clusterStatus.Equal(&machineCtx.ElfMachine.Status.ComputeCluster) {
+			log.V(1).Info(fmt.Sprintf("Updated VM compute cluster from %s to %s", &machineCtx.ElfMachine.Status.ComputeCluster, clusterStatus))
+			machineCtx.ElfMachine.Status.ComputeCluster = clusterStatus
+		}
 	}
 
 	if !machineCtx.ElfCluster.IsStretched() {
@@ -1117,8 +1122,8 @@ func (r *ElfMachineReconciler) reconcileHostAndZone(ctx goctx.Context, machineCt
 	}
 
 	if !zoneStatus.Equal(&machineCtx.ElfMachine.Status.Zone) {
-		machineCtx.ElfMachine.Status.Zone = zoneStatus
 		log.V(1).Info(fmt.Sprintf("Updated VM zone from %s to %s", machineCtx.ElfMachine.Status.Zone, zoneStatus))
+		machineCtx.ElfMachine.Status.Zone = zoneStatus
 	}
 
 	return nil
@@ -1171,6 +1176,8 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 	}
 
 	keys := []string{
+		infrav1.ComputeClusterIDLabel,
+		infrav1.ComputeClusterNameLabel,
 		infrav1.HostServerIDLabel,
 		infrav1.HostServerNameLabel,
 		infrav1.TowerVMIDLabel,
@@ -1197,10 +1204,12 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 	}
 
 	expectedLabels := map[string]interface{}{
-		infrav1.HostServerIDLabel:   machineCtx.ElfMachine.Status.HostServerRef,
-		infrav1.HostServerNameLabel: machineCtx.ElfMachine.Status.HostServerName,
-		infrav1.TowerVMIDLabel:      *vm.ID,
-		infrav1.NodeGroupLabel:      machineutil.GetNodeGroupName(machineCtx.Machine),
+		infrav1.ComputeClusterIDLabel:   machineCtx.ElfMachine.Status.ComputeCluster.ClusterID,
+		infrav1.ComputeClusterNameLabel: labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Status.ComputeCluster.Name),
+		infrav1.HostServerIDLabel:       machineCtx.ElfMachine.Status.HostServerRef,
+		infrav1.HostServerNameLabel:     labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Status.HostServerName),
+		infrav1.TowerVMIDLabel:          service.GetTowerString(vm.ID),
+		infrav1.NodeGroupLabel:          machineutil.GetNodeGroupName(machineCtx.Machine),
 	}
 
 	if machineCtx.ElfMachine.Status.Zone.Type != "" {
@@ -1575,23 +1584,48 @@ func (r *ElfMachineReconciler) deleteVM(ctx goctx.Context, machineCtx *context.M
 	return nil
 }
 
-// reconcileFailureDomain overrides elfmachine.spec.Network with the Network
+// reconcileFailureDomain overrides elfmachine.spec.Network settings with the Network
 // from the FailureDomain configured in machine.spec.FailureDomain.
-// This ensures that downstream reconciliation logic uses the correct network
-// configuration for the selected failure domain.
-func (r *ElfMachineReconciler) reconcileFailureDomain(machineCtx *context.MachineContext) bool {
+func (r *ElfMachineReconciler) reconcileFailureDomain(ctx goctx.Context, machineCtx *context.MachineContext) bool {
 	fd := machineCtx.GetFailureDomain()
 	if fd == "" {
 		return true
 	}
 
+	log := ctrl.LoggerFrom(ctx)
+
 	failureDomain := machineCtx.GetCloudFailureDomain()
 	if failureDomain == nil {
+		log.Info(fmt.Sprintf("Waiting for failure domain %s to be set", machineCtx.GetFailureDomain()))
+
 		return false
 	}
 
 	if len(machineCtx.ElfMachine.Spec.Network.Devices) == 0 {
 		machineCtx.ElfMachine.Spec.Network = failureDomain.Network
+		log.V(1).Info("Set network configuration from failure domain",
+			"failureDomain", fd,
+			"network", failureDomain.Network,
+		)
+
+		return true
+	}
+
+	machineDeviceCount := len(machineCtx.ElfMachine.Spec.Network.Devices)
+	fdDeviceCount := len(failureDomain.Network.Devices)
+	if machineDeviceCount < fdDeviceCount {
+		newDevices := failureDomain.Network.Devices[machineDeviceCount:]
+
+		log.V(1).Info("Added new network devices from failure domain",
+			"failureDomain", fd,
+			"existingDevices", machineCtx.ElfMachine.Spec.Network.Devices,
+			"newDevices", newDevices,
+		)
+
+		machineCtx.ElfMachine.Spec.Network.Devices = append(
+			machineCtx.ElfMachine.Spec.Network.Devices,
+			newDevices...,
+		)
 	}
 
 	return true
