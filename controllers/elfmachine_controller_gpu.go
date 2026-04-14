@@ -23,8 +23,8 @@ import (
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
@@ -56,7 +56,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 	var availableHosts service.Hosts
 	defer func() {
 		if reterr != nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.SelectingGPUFailedReason, clusterv1.ConditionSeverityError, reterr.Error())
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.SelectingGPUFailedReason, clusterv1.ConditionSeverityError, "%s", reterr.Error())
 		} else if rethost == nil {
 			if availableHosts.Len() == 0 {
 				conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForELFClusterWithSufficientMemoryReason, clusterv1.ConditionSeverityWarning, "")
@@ -317,7 +317,7 @@ func (r *ElfMachineReconciler) addGPUDevicesForVM(ctx goctx.Context, machineCtx 
 
 	task, err := machineCtx.VMService.AddGPUDevices(machineCtx.ElfMachine.Status.VMRef, gpuDeviceInfos)
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.AttachingGPUFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.AttachingGPUFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 
 		unlockGPUDevicesLockedByVM(machineCtx.ElfCluster.Spec.Cluster, machineCtx.ElfMachine.Name)
 
@@ -365,7 +365,7 @@ func (r *ElfMachineReconciler) removeVMGPUDevices(ctx goctx.Context, machineCtx 
 		// the original error message will not be overwritten if the remove fails.
 		message := conditions.GetMessage(machineCtx.ElfMachine, infrav1.VMProvisionedCondition)
 		if !(service.IsGPUAssignFailed(message) || service.IsVGPUInsufficientError(message)) {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.DetachingGPUFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.DetachingGPUFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 		}
 
 		return errors.Wrapf(err, "failed to trigger detaching stale GPU devices for VM %s", machineCtx.ElfMachine.Status.VMRef)

@@ -17,7 +17,6 @@ limitations under the License.
 package machine
 
 import (
-	goctx "context"
 	"testing"
 
 	"github.com/onsi/gomega"
@@ -27,20 +26,19 @@ import (
 
 func TestGetKCPByMachine(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	ctx := goctx.TODO()
 	elfCluster, cluster := fake.NewClusterObjects()
 	_, cpMachine := fake.NewMachineObjects(elfCluster, cluster)
 	kubeadmCP := fake.NewKCP()
 	fake.ToCPMachine(cpMachine, kubeadmCP)
 	ctrlMgrCtx := fake.NewControllerManagerContext(kubeadmCP)
 	t.Run("should return kcp", func(t *testing.T) {
-		kcp, err := GetKCPByMachine(ctx, ctrlMgrCtx.Client, cpMachine)
+		kcp, err := GetKCPByMachine(t.Context(), ctrlMgrCtx.Client, cpMachine)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(kcp.Name).To(gomega.Equal(kubeadmCP.Name))
 	})
 
 	_, workerMachine := fake.NewMachineObjects(elfCluster, cluster)
 	t.Run("should panic when failed to get kcp name", func(t *testing.T) {
-		g.Expect(func() { _, _ = GetKCPByMachine(ctx, ctrlMgrCtx.Client, workerMachine) }).To(gomega.Panic())
+		g.Expect(func() { _, _ = GetKCPByMachine(t.Context(), ctrlMgrCtx.Client, workerMachine) }).To(gomega.Panic())
 	})
 }

@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/test/framework"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -35,10 +35,10 @@ import (
 // UpgradeMachineDeploymentsAndWaitInput is the input type for UpgradeMachineDeploymentsAndWait.
 type UpgradeMachineDeploymentsAndWaitInput struct {
 	ClusterProxy                framework.ClusterProxy
-	Cluster                     *clusterv1.Cluster
+	Cluster                     *clusterv2.Cluster
 	UpgradeVersion              string
 	VMTemplate                  string
-	MachineDeployments          []*clusterv1.MachineDeployment
+	MachineDeployments          []*clusterv2.MachineDeployment
 	WaitForMachinesToBeUpgraded []interface{}
 }
 
@@ -69,7 +69,7 @@ func UpgradeMachineDeploymentsAndWait(ctx context.Context, input UpgradeMachineD
 		elfMachineTemplateData, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&elfMachineTemplate)
 		Expect(err).NotTo(HaveOccurred())
 		infraObj := &unstructured.Unstructured{Object: elfMachineTemplateData}
-		infraObj.SetGroupVersionKind(infraRef.GroupVersionKind())
+		infraObj.SetGroupVersionKind(infrav1.GroupVersion.WithKind("ElfMachineTemplate"))
 
 		// Creates a new infra object
 		newInfraObj := infraObj
@@ -83,17 +83,17 @@ func UpgradeMachineDeploymentsAndWait(ctx context.Context, input UpgradeMachineD
 		Expect(err).ToNot(HaveOccurred())
 
 		oldVersion := deployment.Spec.Template.Spec.Version
-		deployment.Spec.Template.Spec.Version = &input.UpgradeVersion
+		deployment.Spec.Template.Spec.Version = input.UpgradeVersion
 		deployment.Spec.Template.Spec.InfrastructureRef.Name = newInfraObjName
 
 		Expect(patchHelper.Patch(ctx, deployment)).To(Succeed())
 
 		Logf("Waiting for Kubernetes versions of machines in MachineDeployment %s/%s to be upgraded from %s to %s, VM template from %s to %s",
-			deployment.Namespace, deployment.Name, *oldVersion, input.UpgradeVersion,
+			deployment.Namespace, deployment.Name, oldVersion, input.UpgradeVersion,
 			oldVMTemplate, input.VMTemplate)
 
 		Logf("Waiting for Kubernetes versions of machines in MachineDeployment %s/%s to be upgraded from %s to %s",
-			deployment.Namespace, deployment.Name, *oldVersion, input.UpgradeVersion)
+			deployment.Namespace, deployment.Name, oldVersion, input.UpgradeVersion)
 		framework.WaitForMachineDeploymentMachinesToBeUpgraded(ctx, framework.WaitForMachineDeploymentMachinesToBeUpgradedInput{
 			Lister:                   mgmtClient,
 			Cluster:                  input.Cluster,

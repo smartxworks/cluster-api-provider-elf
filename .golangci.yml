@@ -89,16 +89,22 @@ linters-settings:
       - pkg: sigs.k8s.io/controller-runtime/pkg/controller/controllerutil
         alias: ctrlutil
       # CAPI
-      - pkg: sigs.k8s.io/cluster-api/api/v1beta1
+      - pkg: sigs.k8s.io/cluster-api/api/core/v1beta1
         alias: clusterv1
+      - pkg: sigs.k8s.io/cluster-api/api/core/v1beta2
+        alias: clusterv2
       - pkg: sigs.k8s.io/cluster-api/errors
         alias: capierrors
       - pkg: sigs.k8s.io/cluster-api/util
         alias: capiutil
-      - pkg: sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1
+      - pkg: sigs.k8s.io/cluster-api/api/bootstrap/kubeadm/v1beta1
         alias: bootstrapv1
-      - pkg: sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1
+      - pkg: sigs.k8s.io/cluster-api/api/bootstrap/kubeadm/v1beta2
+        alias: bootstrapv2
+      - pkg: sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1
         alias: controlplanev1
+      - pkg: sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2
+        alias: controlplanev2
       - pkg: sigs.k8s.io/cluster-api/test/e2e
         alias: capie2e
       # CAPE
@@ -167,18 +173,29 @@ issues:
       text: should not use dot imports
     - path: _test\.go
       text: cyclomatic complexity
-    # Deprecations for FailureReason
+    # CAPI v1beta1 deprecations are currently tolerated globally while the project is still on v1beta1 APIs.
     - linters:
       - staticcheck
-      text: "SA1019: \"sigs.k8s.io/cluster-api/errors\" is deprecated:"
-    # Deprecations for FailureMessage, FailureReason, UnavailableReplicas
+      text: 'SA1019: "sigs.k8s.io/cluster-api/errors" is deprecated:'
     - linters:
-        - staticcheck
-      text: "SA1019: .*\\.Status\\.(FailureMessage|FailureReason|UnavailableReplicas) is deprecated: This field is deprecated and is going to be removed in the next apiVersion. Please see https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20240916-improve-status-in-CAPI-resources.md for more details."
+      - staticcheck
+      text: 'SA1019: "sigs.k8s.io/cluster-api/api/bootstrap/kubeadm/v1beta1" is deprecated:'
+    - linters:
+      - staticcheck
+      text: 'SA1019: "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1" is deprecated:'
+    - linters:
+      - staticcheck
+      text: 'SA1019: "sigs.k8s.io/cluster-api/api/core/v1beta1" is deprecated:'
+    - linters:
+      - staticcheck
+      text: 'SA1019: "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions" is deprecated:'
+    - linters:
+      - staticcheck
+      text: 'SA1019: .*\.Status\.(FailureMessage|FailureReason|UnavailableReplicas) is deprecated:'
 
 run:
   timeout: 10m
-  go: "1.23"
+  go: "1.25"
   skip-files:
   - "zz_generated.*\\.go$"
   allow-parallel-runners: true
