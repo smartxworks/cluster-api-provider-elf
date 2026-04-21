@@ -27,13 +27,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
-	capiutil "sigs.k8s.io/cluster-api/util"
+	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
-	"sigs.k8s.io/cluster-api/util/collections"
-	"sigs.k8s.io/cluster-api/util/conditions"
-	"sigs.k8s.io/cluster-api/util/patch"
+	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -43,6 +41,8 @@ import (
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
+	capieutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/capi"
+	capiecollections "github.com/smartxworks/cluster-api-provider-elf/pkg/util/capi/collections"
 	kcputil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/kcp"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 	typesutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/types"
@@ -276,7 +276,7 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx goctx.Context, mach
 	vmMap := make(map[string]string)
 	for i := range len(placementGroup.Vms) {
 		if elfMachine, ok := elfMachineMap[*placementGroup.Vms[i].Name]; ok {
-			machine, err := capiutil.GetOwnerMachine(ctx, r.Client, elfMachine.ObjectMeta)
+			machine, err := capieutil.GetOwnerMachine(ctx, r.Client, elfMachine.ObjectMeta)
 			if err != nil {
 				return "", err
 			}
@@ -286,7 +286,7 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx goctx.Context, mach
 		}
 	}
 
-	machines := collections.FromMachines(placementGroupMachines...)
+	machines := capiecollections.FromMachines(placementGroupMachines...)
 	newestMachine := machines.Newest()
 	if newestMachine == nil {
 		log.Info("Newest machine not found, skip selecting host for VM", "vmRef", machineCtx.ElfMachine.Status.VMRef)
@@ -394,7 +394,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx goctx.Context, machineCtx 
 
 	defer func() {
 		if reterr != nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.JoiningPlacementGroupFailedReason, clusterv1.ConditionSeverityWarning, reterr.Error())
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.JoiningPlacementGroupFailedReason, clusterv1.ConditionSeverityWarning, "%s", reterr.Error())
 		} else if !ret {
 			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.JoiningPlacementGroupReason, clusterv1.ConditionSeverityInfo, "")
 		}

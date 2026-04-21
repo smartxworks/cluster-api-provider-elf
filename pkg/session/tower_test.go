@@ -1,7 +1,6 @@
 package session
 
 import (
-	goctx "context"
 	"testing"
 	"time"
 
@@ -27,14 +26,14 @@ func TestGetOrCreate(t *testing.T) {
 		inactiveSessionKey := getSessionKey(inactiveTower)
 		sessionCache.Store(inactiveSessionKey, &cacheItem{Session: &TowerSession{}, LastUsedTime: time.Now().Add(-sessionIdleTime)})
 
-		session, err := GetOrCreate(goctx.Background(), tower)
+		session, err := GetOrCreate(t.Context(), tower)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(session).To(gomega.Equal(cachedSession))
 
 		_, ok := sessionCache.Load(inactiveSessionKey)
 		g.Expect(ok).To(gomega.BeFalse())
 
-		session, err = GetOrCreate(goctx.Background(), *invalidTower)
+		session, err = GetOrCreate(t.Context(), *invalidTower)
 		g.Expect(session).To(gomega.BeNil())
 		g.Expect(err).To(gomega.HaveOccurred())
 	})

@@ -17,7 +17,6 @@ limitations under the License.
 package webhooks
 
 import (
-	goctx "context"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -124,7 +123,7 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.Name, func(t *testing.T) {
-			warnings, err := validator.ValidateCreate(goctx.Background(), tc.EMT)
+			warnings, err := validator.ValidateCreate(t.Context(), tc.EMT)
 			g.Expect(warnings).To(BeEmpty())
 			expectTestCase(g, tc, err)
 		})
@@ -250,7 +249,7 @@ func TestElfMachineTemplateValidatorValidateUpdate(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.Name, func(t *testing.T) {
-			warnings, err := validator.ValidateUpdate(goctx.Background(), tc.OldEMT, tc.EMT)
+			warnings, err := validator.ValidateUpdate(t.Context(), tc.OldEMT, tc.EMT)
 			g.Expect(warnings).To(BeEmpty())
 			expectTestCase(g, tc, err)
 		})

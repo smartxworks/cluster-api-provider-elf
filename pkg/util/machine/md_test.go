@@ -17,18 +17,16 @@ limitations under the License.
 package machine
 
 import (
-	goctx "context"
 	"testing"
 
 	"github.com/onsi/gomega"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
 
 func TestGetMDByMachine(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	ctx := goctx.TODO()
 	elfCluster, cluster := fake.NewClusterObjects()
 	_, machine := fake.NewMachineObjects(elfCluster, cluster)
 	machineDeployment := fake.NewMD()
@@ -36,7 +34,7 @@ func TestGetMDByMachine(t *testing.T) {
 	ctrlMgrCtx := fake.NewControllerManagerContext(machineDeployment)
 
 	t.Run("should return md", func(t *testing.T) {
-		md, err := GetMDByMachine(ctx, ctrlMgrCtx.Client, machine)
+		md, err := GetMDByMachine(t.Context(), ctrlMgrCtx.Client, machine)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(md.Name).To(gomega.Equal(machineDeployment.Name))
 	})
@@ -44,7 +42,6 @@ func TestGetMDByMachine(t *testing.T) {
 
 func TestGetMDsForCluster(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	ctx := goctx.TODO()
 	_, cluster := fake.NewClusterObjects()
 	md1 := fake.NewMD()
 	md1.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
@@ -52,7 +49,7 @@ func TestGetMDsForCluster(t *testing.T) {
 	ctrlMgrCtx := fake.NewControllerManagerContext(md1, md2)
 
 	t.Run("should return mds", func(t *testing.T) {
-		mds, err := GetMDsForCluster(ctx, ctrlMgrCtx.Client, cluster.Namespace, cluster.Name)
+		mds, err := GetMDsForCluster(t.Context(), ctrlMgrCtx.Client, cluster.Namespace, cluster.Name)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(mds).To(gomega.HaveLen(1))
 		g.Expect(mds[0].Name).To(gomega.Equal(md1.Name))
