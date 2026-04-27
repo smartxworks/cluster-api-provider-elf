@@ -70,6 +70,13 @@ spec:
                               description: computeCluster as the failure domain
                               minLength: 1
                               type: string
+                            hostNamePrefix:
+                              description: HostNamePrefix is the prefix of the hostname
+                                for nodes in this failure domain.
+                              maxLength: 57
+                              minLength: 1
+                              pattern: ^[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?)*$
+                              type: string
                             network:
                               description: Network is the network configuration.
                               properties:
@@ -228,12 +235,19 @@ spec:
                           Required when cloneMode is FullClone.
                           Defaults to AUTO_SCHEDULE.
                         type: string
+                      hostNamePrefix:
+                        description: HostNamePrefix is the prefix of the hostname
+                          for nodes in this machine.
+                        maxLength: 57
+                        minLength: 1
+                        pattern: ^[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?)*$
+                        type: string
                       memoryMiB:
                         format: int64
                         type: integer
                       network:
                         description: Network is the network configuration for this
-                          machin's VM.
+                          machine's VM.
                         properties:
                           devices:
                             description: Devices is the list of network devices used

@@ -24,19 +24,23 @@ import (
 	goruntime "runtime"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
+	corev1 "k8s.io/api/core/v1"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/logs"
 	logsv1 "k8s.io/component-base/logs/api/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/controllers/clustercache"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 	"sigs.k8s.io/cluster-api/feature"
 	"sigs.k8s.io/cluster-api/util/apiwarnings"
 	capiflags "sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
@@ -65,10 +69,13 @@ var (
 	syncPeriod                  time.Duration
 	webhookOpts                 webhook.Options
 	watchNamespace              string
+	clusterCacheClientQPS       float32
+	clusterCacheClientBurst     int
 
 	elfClusterConcurrency         int
 	elfMachineConcurrency         int
 	elfMachineTemplateConcurrency int
+	clusterCacheConcurrency       int
 
 	managerOptions = capiflags.ManagerOptions{}
 
@@ -140,6 +147,15 @@ func InitFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&restConfigBurst, "kube-api-burst", 30,
 		"Maximum number of queries that should be allowed in one burst from the controller client to the Kubernetes API server. Default 30")
+
+	fs.Float32Var(&clusterCacheClientQPS, "clustercache-client-qps", 20,
+		"Maximum queries per second from the cluster cache clients to the Kubernetes API server of workload clusters.")
+
+	fs.IntVar(&clusterCacheClientBurst, "clustercache-client-burst", 30,
+		"Maximum number of queries that should be allowed in one burst from the cluster cache clients to the Kubernetes API server of workload clusters.")
+
+	fs.IntVar(&clusterCacheConcurrency, "clustercache-concurrency", 100,
+		"Number of clusters to process simultaneously")
 
 	fs.IntVar(&webhookOpts.Port, "webhook-port", 9443,
 		"Webhook Server port.")
@@ -238,11 +254,16 @@ func main() {
 		}
 
 		if os.Getenv("ENABLE_CONTROLLERS") != "false" {
+			clusterCache, err := setupClusterCache(ctx, mgr)
+			if err != nil {
+				return err
+			}
+
 			if err := controllers.AddClusterControllerToManager(ctx, ctrlMgrCtx, mgr, controller.Options{MaxConcurrentReconciles: elfClusterConcurrency}); err != nil {
 				return err
 			}
 
-			if err := controllers.AddMachineControllerToManager(ctx, ctrlMgrCtx, mgr, controller.Options{MaxConcurrentReconciles: elfMachineConcurrency}); err != nil {
+			if err := controllers.AddMachineControllerToManager(ctx, ctrlMgrCtx, mgr, clusterCache, controller.Options{MaxConcurrentReconciles: elfMachineConcurrency}); err != nil {
 				return err
 			}
 		}
@@ -290,4 +311,39 @@ func setupChecks(mgr ctrlmgr.Manager) {
 		setupLog.Error(err, "unable to create health check")
 		os.Exit(1)
 	}
+}
+
+func setupClusterCache(ctx goctx.Context, mgr ctrl.Manager) (clustercache.ClusterCache, error) {
+	secretCachingClient, err := client.New(mgr.GetConfig(), client.Options{
+		HTTPClient: mgr.GetHTTPClient(),
+		Cache: &client.CacheOptions{
+			Reader: mgr.GetCache(),
+		},
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create secret caching client")
+	}
+
+	clusterCache, err := clustercache.SetupWithManager(ctx, mgr, clustercache.Options{
+		SecretClient: secretCachingClient,
+		Cache: clustercache.CacheOptions{
+			Indexes: []clustercache.CacheOptionsIndex{clustercache.NodeProviderIDIndex},
+		},
+		Client: clustercache.ClientOptions{
+			QPS:       clusterCacheClientQPS,
+			Burst:     clusterCacheClientBurst,
+			UserAgent: remote.DefaultClusterAPIUserAgent(controllerName),
+			Cache: clustercache.ClientCacheOptions{
+				DisableFor: []client.Object{
+					&corev1.Pod{},
+				},
+			},
+		},
+		WatchFilterValue: managerOpts.WatchFilterValue,
+	}, controller.Options{MaxConcurrentReconciles: clusterCacheConcurrency})
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create ClusterCache")
+	}
+
+	return clusterCache, nil
 }

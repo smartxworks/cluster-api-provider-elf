@@ -32,8 +32,11 @@ import (
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/controllers/clustercache"
+	"sigs.k8s.io/cluster-api/controllers/remote"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
@@ -49,6 +52,7 @@ const (
 
 var (
 	testEnv         *helpers.TestEnvironment
+	clusterCache    clustercache.ClusterCache
 	ctx             = ctrl.SetupSignalHandler()
 	unexpectedError = errors.New("unexpected error")
 )
@@ -73,6 +77,8 @@ func TestMain(m *testing.M) {
 }
 
 func setup() {
+	var err error
+
 	// set log
 	klog.InitFlags(nil)
 	if err := flag.Set("logtostderr", "false"); err != nil {
@@ -113,10 +119,36 @@ func setup() {
 
 	controllerOpts := controller.Options{MaxConcurrentReconciles: 10}
 
+	clusterCache, err = clustercache.SetupWithManager(ctx, testEnv.Manager, clustercache.Options{
+		SecretClient: testEnv.Manager.GetClient(),
+		Cache: clustercache.CacheOptions{
+			Indexes: []clustercache.CacheOptionsIndex{clustercache.NodeProviderIDIndex},
+		},
+		Client: clustercache.ClientOptions{
+			UserAgent: remote.DefaultClusterAPIUserAgent("test-controller-manager"),
+			Cache: clustercache.ClientCacheOptions{
+				DisableFor: []client.Object{
+					&corev1.Pod{},
+				},
+			},
+		},
+	}, controllerOpts)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create ClusterCache: %v", err))
+	}
+	go func() {
+		<-ctx.Done()
+		clusterCache.(interface{ Shutdown() }).Shutdown()
+	}()
+	// Setting ConnectionCreationRetryInterval to 2 seconds, otherwise client creation is
+	// only retried every 30s. If we get unlucky tests are then failing with timeout.
+	clusterCache.(interface{ SetConnectionCreationRetryInterval(time.Duration) }).
+		SetConnectionCreationRetryInterval(2 * time.Second)
+
 	if err := AddClusterControllerToManager(ctx, testEnv.GetControllerManagerContext(), testEnv.Manager, controllerOpts); err != nil {
 		panic(fmt.Sprintf("unable to setup ElfCluster controller: %v", err))
 	}
-	if err := AddMachineControllerToManager(ctx, testEnv.GetControllerManagerContext(), testEnv.Manager, controllerOpts); err != nil {
+	if err := AddMachineControllerToManager(ctx, testEnv.GetControllerManagerContext(), testEnv.Manager, clusterCache, controllerOpts); err != nil {
 		panic(fmt.Sprintf("unable to setup ElfMachine controller: %v", err))
 	}
 }

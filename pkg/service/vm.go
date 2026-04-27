@@ -58,6 +58,7 @@ type CloneVMInfo struct {
 	Host       string           `json:"host,omitempty"`
 	CloudInit  string           `json:"cloudInit,omitempty"`
 	GPUDevices []*GPUDeviceInfo `json:"gpuDevices,omitempty"`
+	HostName   string           `json:"hostName,omitempty"`
 }
 
 type VMService interface {
@@ -324,7 +325,7 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 
 	nameservers := elfMachine.GetLimitedNameservers(config.VM.NameserverLimit)
 	cloudInit := &models.TemplateCloudInit{
-		Hostname: TowerString(elfMachine.Name),
+		Hostname: TowerString(vmInfo.HostName),
 		UserData: TowerString(vmInfo.CloudInit),
 		Networks: networks,
 	}

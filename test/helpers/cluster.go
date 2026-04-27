@@ -3,6 +3,7 @@ package helpers
 import (
 	goctx "context"
 	"os"
+	"time"
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -82,4 +83,22 @@ func NewKubeConfigSecret(testEnv *TestEnvironment, namespace, clusterName string
 		},
 		Type: clusterv1.ClusterSecretType,
 	}, nil
+}
+
+func EnsureClusterForClusterCacheTest(ctx goctx.Context, testEnv *TestEnvironment, cluster *clusterv1.Cluster) error {
+	clusterCopy := cluster.DeepCopy()
+	clusterCopy.ResourceVersion = ""
+	if err := testEnv.CreateAndWait(ctx, clusterCopy); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return err
+		}
+	}
+	patch := client.MergeFrom(clusterCopy.DeepCopy())
+	cluster.Status.InfrastructureReady = true
+	clusterCopy.Status = cluster.Status
+	if err := testEnv.Status().Patch(ctx, clusterCopy, patch); err != nil {
+		return err
+	}
+	time.Sleep(200 * time.Millisecond) // wait for clusterCache accessor
+	return nil
 }

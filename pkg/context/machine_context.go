@@ -21,10 +21,15 @@ import (
 	"fmt"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
+)
+
+const (
+	cloudInitHostnameRandomLength = 5
 )
 
 // MachineContext is a Go context used with an ElfMachine.
@@ -87,4 +92,26 @@ func (c *MachineContext) GetElfClusterID() string {
 	}
 
 	return ""
+}
+
+// GenerateHostname generates a hostname for the machine.
+// If a HostNamePrefix is specified in the failure domain or machine spec, the hostname will be generated as <prefix>-<random string>.
+// Otherwise, the machine name will be used as the hostname.
+func (c *MachineContext) GenerateHostname() string {
+	if c == nil || c.ElfMachine == nil {
+		return ""
+	}
+
+	var prefix string
+	if failureDomain := c.GetCloudFailureDomain(); failureDomain != nil {
+		prefix = failureDomain.HostNamePrefix
+	}
+	if prefix == "" {
+		prefix = c.ElfMachine.Spec.HostNamePrefix
+	}
+	if prefix != "" {
+		return fmt.Sprintf("%s-%s", prefix, capiutil.RandomString(cloudInitHostnameRandomLength))
+	}
+
+	return c.ElfMachine.Name
 }
