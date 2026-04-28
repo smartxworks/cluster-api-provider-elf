@@ -90,13 +90,7 @@ spec:
     initConfiguration:
       nodeRegistration:
         kubeletExtraArgs:
-        name: '{{ ds.meta_data.hostname }}'
     preKubeadmCommands:
-      - hostname "{{ ds.meta_data.hostname }}"
-      - echo "::1         ipv6-localhost ipv6-loopback" >/etc/hosts
-      - echo "127.0.0.1   localhost" >>/etc/hosts
-      - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
-      - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
       - /etc/kube-vip-prepare.sh
       #! If you need to expand the system disk capacity (based on the capacity of
       #! the virtual machine template disk) when creating a node virtual machine,
@@ -263,13 +257,7 @@ spec:
       joinConfiguration:
         nodeRegistration:
           kubeletExtraArgs:
-          name: '{{ ds.meta_data.hostname }}'
       preKubeadmCommands:
-        - hostname "{{ ds.meta_data.hostname }}"
-        - echo "::1         ipv6-localhost ipv6-loopback" >/etc/hosts
-        - echo "127.0.0.1   localhost" >>/etc/hosts
-        - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
-        - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
       #! If you need to expand the system disk capacity (based on the capacity of
       #! the virtual machine template disk) when creating a node virtual machine,
       #! you need to set the following commands. CAPE will add new disk capacity

@@ -82,7 +82,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 	Context("reconcileVMResources", func() {
 		It("should mark ResourcesHotUpdatedCondition to true", func() {
-			agentJob := hostagent.GenerateExpandRootPartitionJob(elfMachine, "")
+			agentJob := hostagent.GenerateExpandRootPartitionJob(elfMachine, "", "test-node")
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
 			Expect(testEnv.Get(ctx, client.ObjectKey{Namespace: agentJob.Namespace, Name: agentJob.Name}, agentJob)).NotTo(HaveOccurred())
 			agentJobPatchSource := agentJob.DeepCopy()
@@ -90,7 +90,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(testEnv.PatchAndWait(ctx, agentJob, agentJobPatchSource)).To(Succeed())
 			kubeConfigSecret, err := helpers.NewKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)
 			Expect(err).ShouldNot(HaveOccurred())
-			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: "test-node"}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -266,7 +266,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should create agent job to expand root partition", func() {
-			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: "test-node"}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret, hostAgentJobsConfig)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -289,9 +289,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should retry when job failed", func() {
-			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: "test-node"}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
-			agentJob := hostagent.GenerateExpandRootPartitionJob(elfMachine, "")
+			agentJob := hostagent.GenerateExpandRootPartitionJob(elfMachine, "", "test-node")
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret, hostAgentJobsConfig)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -329,9 +329,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should record job succeeded", func() {
-			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: "test-node"}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
-			agentJob := hostagent.GenerateExpandRootPartitionJob(elfMachine, "")
+			agentJob := hostagent.GenerateExpandRootPartitionJob(elfMachine, "", "test-node")
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
 			Expect(testEnv.Get(ctx, client.ObjectKey{Namespace: agentJob.Namespace, Name: agentJob.Name}, agentJob)).NotTo(HaveOccurred())
 			agentJobPatchSource := agentJob.DeepCopy()
@@ -384,7 +384,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should create agent job to restart kubelet", func() {
-			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: "test-node"}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret, hostAgentJobsConfig)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -407,9 +407,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should retry when job failed", func() {
-			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: "test-node"}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
-			agentJob := hostagent.GenerateRestartKubeletJob(elfMachine, "")
+			agentJob := hostagent.GenerateRestartKubeletJob(elfMachine, "", "test-node")
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -447,9 +447,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should record job succeeded", func() {
-			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: "test-node"}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
-			agentJob := hostagent.GenerateRestartKubeletJob(elfMachine, "")
+			agentJob := hostagent.GenerateRestartKubeletJob(elfMachine, "", "test-node")
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
 			Expect(testEnv.Get(ctx, client.ObjectKey{Namespace: agentJob.Namespace, Name: agentJob.Name}, agentJob)).NotTo(HaveOccurred())
 			agentJobPatchSource := agentJob.DeepCopy()
@@ -563,8 +563,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vmNic.IPAddress = ptr.To("")
 			vmNics := []*models.VMNic{vmNic}
 			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(vmNics, nil)
-			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
-			agentJob := hostagent.GenerateSetNetworkDeviceConfigJob(elfMachine, "", nil)
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: "test-node"}
+			agentJob := hostagent.GenerateSetNetworkDeviceConfigJob(elfMachine, "", nil, "test-node")
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).To(Succeed())
 			agentJobPatchSource := agentJob.DeepCopy()
 			agentJob.Status.Phase = agentv1.PhaseSucceeded
@@ -724,7 +724,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			nic2 := fake.NewVMNic()
 			macTypes := []hostagent.MacType{{Mac: *nic1.MacAddress}, {Mac: *nic2.MacAddress}}
 			elfMachine.Spec.Network.Devices = append(elfMachine.Spec.Network.Devices, infrav1.NetworkDeviceSpec{NetworkType: infrav1.NetworkTypeIPV4})
-			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: "test-node"}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceReason, clusterv1.ConditionSeverityInfo, "")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret, hostAgentJobsConfig)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -748,9 +748,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			nic2 := fake.NewVMNic()
 			macTypes := []hostagent.MacType{{Mac: *nic1.MacAddress}, {Mac: *nic2.MacAddress}}
 			elfMachine.Spec.Network.Devices = append(elfMachine.Spec.Network.Devices, infrav1.NetworkDeviceSpec{NetworkType: infrav1.NetworkTypeIPV4})
-			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: "test-node"}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceReason, clusterv1.ConditionSeverityInfo, "")
-			agentJob := hostagent.GenerateSetNetworkDeviceConfigJob(elfMachine, "", macTypes)
+			agentJob := hostagent.GenerateSetNetworkDeviceConfigJob(elfMachine, "", macTypes, "test-node")
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret, hostAgentJobsConfig)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -793,9 +793,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			nic2 := fake.NewVMNic()
 			macTypes := []hostagent.MacType{{Mac: *nic1.MacAddress}, {Mac: *nic2.MacAddress}}
 			elfMachine.Spec.Network.Devices = append(elfMachine.Spec.Network.Devices, infrav1.NetworkDeviceSpec{NetworkType: infrav1.NetworkTypeIPV4})
-			machine.Status.NodeInfo = &corev1.NodeSystemInfo{}
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: "test-node"}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceReason, clusterv1.ConditionSeverityInfo, "")
-			agentJob := hostagent.GenerateSetNetworkDeviceConfigJob(elfMachine, "", macTypes)
+			agentJob := hostagent.GenerateSetNetworkDeviceConfigJob(elfMachine, "", macTypes, "test-node")
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
 			Expect(testEnv.Get(ctx, client.ObjectKey{Namespace: agentJob.Namespace, Name: agentJob.Name}, agentJob)).NotTo(HaveOccurred())
 			agentJobPatchSource := agentJob.DeepCopy()

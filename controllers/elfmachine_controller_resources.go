@@ -244,11 +244,12 @@ func (r *ElfMachineReconciler) reconcileHostJob(ctx goctx.Context, machineCtx *c
 	log := ctrl.LoggerFrom(ctx)
 
 	// Agent needs to wait for the node exists before it can run and execute commands.
-	if machineCtx.Machine.Status.NodeInfo == nil {
+	if machineCtx.Machine.Status.NodeRef == nil {
 		log.Info("Waiting for node exists for host agent job", "jobType", jobType)
 
 		return false, nil
 	}
+	nodeName := machineCtx.Machine.Status.NodeRef.Name
 
 	failReason := ""
 	switch jobType {
@@ -273,7 +274,7 @@ func (r *ElfMachineReconciler) reconcileHostJob(ctx goctx.Context, machineCtx *c
 	}
 
 	if agentJob == nil {
-		agentJob, err = hostagent.GenerateJob(ctx, r.Client, machineCtx.ElfMachine, jobType, macTypes)
+		agentJob, err = hostagent.GenerateJob(ctx, r.Client, machineCtx.ElfMachine, jobType, macTypes, nodeName)
 		if err != nil {
 			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "failed to generate host agent job: "+err.Error())
 			return false, err

@@ -88,14 +88,14 @@ func GetJobName(elfMachine *infrav1.ElfMachine, jobType HostAgentJobType, macTyp
 	}
 }
 
-func GenerateExpandRootPartitionJob(elfMachine *infrav1.ElfMachine, playbook string) *agentv1.HostOperationJob {
+func GenerateExpandRootPartitionJob(elfMachine *infrav1.ElfMachine, playbook string, nodeName string) *agentv1.HostOperationJob {
 	return &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetExpandRootPartitionJobName(elfMachine),
 			Namespace: "default",
 		},
 		Spec: agentv1.HostOperationJobSpec{
-			NodeName: elfMachine.Name,
+			NodeName: nodeName,
 			Operation: agentv1.Operation{
 				Ansible: &agentv1.Ansible{
 					LocalPlaybookText: &agentv1.YAMLText{
@@ -108,14 +108,14 @@ func GenerateExpandRootPartitionJob(elfMachine *infrav1.ElfMachine, playbook str
 	}
 }
 
-func GenerateRestartKubeletJob(elfMachine *infrav1.ElfMachine, playbook string) *agentv1.HostOperationJob {
+func GenerateRestartKubeletJob(elfMachine *infrav1.ElfMachine, playbook string, nodeName string) *agentv1.HostOperationJob {
 	return &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetRestartKubeletJobName(elfMachine),
 			Namespace: "default",
 		},
 		Spec: agentv1.HostOperationJobSpec{
-			NodeName: elfMachine.Name,
+			NodeName: nodeName,
 			Operation: agentv1.Operation{
 				Ansible: &agentv1.Ansible{
 					LocalPlaybookText: &agentv1.YAMLText{
@@ -128,14 +128,14 @@ func GenerateRestartKubeletJob(elfMachine *infrav1.ElfMachine, playbook string) 
 	}
 }
 
-func GenerateSetNetworkDeviceConfigJob(elfMachine *infrav1.ElfMachine, playbook string, macTypes []MacType) *agentv1.HostOperationJob {
+func GenerateSetNetworkDeviceConfigJob(elfMachine *infrav1.ElfMachine, playbook string, macTypes []MacType, nodeName string) *agentv1.HostOperationJob {
 	return &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetSetNetworkDeviceConfigJobName(elfMachine, macTypes),
 			Namespace: "default",
 		},
 		Spec: agentv1.HostOperationJobSpec{
-			NodeName: elfMachine.Name,
+			NodeName: nodeName,
 			Operation: agentv1.Operation{
 				Ansible: &agentv1.Ansible{
 					LocalPlaybookText: &agentv1.YAMLText{
@@ -153,7 +153,7 @@ type MacType struct {
 	Type string
 }
 
-func GenerateJob(ctx goctx.Context, cli client.Client, elfMachine *infrav1.ElfMachine, jobType HostAgentJobType, macTypes []MacType) (*agentv1.HostOperationJob, error) {
+func GenerateJob(ctx goctx.Context, cli client.Client, elfMachine *infrav1.ElfMachine, jobType HostAgentJobType, macTypes []MacType, nodeName string) (*agentv1.HostOperationJob, error) {
 	var configmap corev1.ConfigMap
 	if err := cli.Get(ctx, client.ObjectKey{Namespace: constants.NamespaceCape, Name: HostAgentJobsConfigName}, &configmap); err != nil {
 		return nil, err
@@ -166,9 +166,9 @@ func GenerateJob(ctx goctx.Context, cli client.Client, elfMachine *infrav1.ElfMa
 
 	switch jobType {
 	case HostAgentJobTypeExpandRootPartition:
-		return GenerateExpandRootPartitionJob(elfMachine, playbook), nil
+		return GenerateExpandRootPartitionJob(elfMachine, playbook, nodeName), nil
 	case HostAgentJobTypeRestartKubelet:
-		return GenerateRestartKubeletJob(elfMachine, playbook), nil
+		return GenerateRestartKubeletJob(elfMachine, playbook, nodeName), nil
 	case HostAgentJobTypeSetNetworkDeviceConfig:
 		if len(macTypes) > 0 {
 			var sb strings.Builder
@@ -179,7 +179,7 @@ func GenerateJob(ctx goctx.Context, cli client.Client, elfMachine *infrav1.ElfMa
 			playbook = strings.Replace(playbook, "mac_types: {}", sb.String(), 1)
 		}
 
-		return GenerateSetNetworkDeviceConfigJob(elfMachine, playbook, macTypes), nil
+		return GenerateSetNetworkDeviceConfigJob(elfMachine, playbook, macTypes, nodeName), nil
 	default:
 		return nil, fmt.Errorf("unknown job type: %s", jobType)
 	}

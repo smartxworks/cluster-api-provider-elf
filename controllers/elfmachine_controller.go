@@ -34,6 +34,8 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/api/v1beta1/index"
+	"sigs.k8s.io/cluster-api/controllers/clustercache"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
@@ -62,6 +64,8 @@ import (
 
 const failedToUpsertLabelMsg = "failed to upsert label"
 
+var ErrNodeNotFound = errors.New("cannot find node with matching ProviderID")
+
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfmachines/finalizers,verbs=update
@@ -76,11 +80,12 @@ const failedToUpsertLabelMsg = "failed to upsert label"
 type ElfMachineReconciler struct {
 	*context.ControllerManagerContext
 	NewVMService service.NewVMServiceFunc
+	ClusterCache clustercache.ClusterCache
 }
 
 // AddMachineControllerToManager adds the machine controller to the provided
 // manager.
-func AddMachineControllerToManager(ctx goctx.Context, ctrlMgrCtx *context.ControllerManagerContext, mgr ctrlmgr.Manager, options controller.Options) error {
+func AddMachineControllerToManager(ctx goctx.Context, ctrlMgrCtx *context.ControllerManagerContext, mgr ctrlmgr.Manager, clusterCache clustercache.ClusterCache, options controller.Options) error {
 	var (
 		controlledType     = &infrav1.ElfMachine{}
 		controlledTypeName = reflect.TypeOf(controlledType).Elem().Name()
@@ -90,6 +95,7 @@ func AddMachineControllerToManager(ctx goctx.Context, ctrlMgrCtx *context.Contro
 	reconciler := &ElfMachineReconciler{
 		ControllerManagerContext: ctrlMgrCtx,
 		NewVMService:             service.NewVMService,
+		ClusterCache:             clusterCache,
 	}
 	predicateLog := ctrl.LoggerFrom(ctx).WithValues("controller", "elfmachine")
 
@@ -298,7 +304,7 @@ func (r *ElfMachineReconciler) reconcileDeleteVM(ctx goctx.Context, machineCtx *
 	}
 
 	// Before destroying VM, attempt to delete kubernetes node.
-	err = r.deleteNode(ctx, machineCtx, machineCtx.ElfMachine.Name)
+	err = r.deleteNode(ctx, machineCtx)
 	if err != nil {
 		return err
 	}
@@ -492,14 +498,8 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx goctx.Context, machineCtx *co
 	machineCtx.ElfMachine.Status.Ready = true
 	conditions.MarkTrue(machineCtx.ElfMachine, infrav1.VMProvisionedCondition)
 
-	if ok, err := r.reconcileNode(ctx, machineCtx, vm); !ok {
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
-		log.Info("Node providerID is not reconciled")
-
-		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
+	if err := r.reconcileNode(ctx, machineCtx, vm); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	if result, err := r.deleteDuplicateVMs(ctx, machineCtx); err != nil || !result.IsZero() {
@@ -531,7 +531,9 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.CloningReason, clusterv1.ConditionSeverityInfo, "")
 		}
 
-		bootstrapData, err := r.getBootstrapData(ctx, machineCtx)
+		hostName := machineCtx.GenerateHostname()
+
+		bootstrapData, err := r.getBootstrapData(ctx, machineCtx, hostName)
 		if err != nil {
 			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.CloningFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
 
@@ -576,12 +578,13 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 			}
 		}
 
-		log.Info("Create VM for ElfMachine")
+		log.Info("Create VM for ElfMachine", "hostName", hostName)
 		vmInfo := &service.CloneVMInfo{
 			Cluster:    machineCtx.GetElfClusterID(),
 			Host:       service.GetTowerString(hostID),
 			CloudInit:  bootstrapData,
 			GPUDevices: gpuDeviceInfos,
+			HostName:   hostName,
 		}
 		withTaskVM, err := machineCtx.VMService.Clone(machineCtx.ElfCluster, machineCtx.ElfMachine, vmInfo)
 		if err != nil {
@@ -1088,7 +1091,7 @@ func (r *ElfMachineReconciler) reconcileHostAndZone(ctx goctx.Context, machineCt
 
 	if vm.Cluster != nil {
 		clusterStatus := infrav1.ComputeClusterStatus{
-			ClusterID: service.GetTowerString(vm.Cluster.Name),
+			ClusterID: service.GetTowerString(vm.Cluster.ID),
 			Name:      service.GetTowerString(vm.Cluster.Name),
 		}
 		if !clusterStatus.Equal(&machineCtx.ElfMachine.Status.ComputeCluster) {
@@ -1151,13 +1154,13 @@ func (r *ElfMachineReconciler) reconcileProviderID(ctx goctx.Context, machineCtx
 	return nil
 }
 
-// reconcileNode sets providerID and host server labels for node.
-func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) (bool, error) {
+// reconcileNode sets labels on the corresponding K8s Node according to the VM information.
+func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) error {
 	log := ctrl.LoggerFrom(ctx)
 
 	providerID := machineutil.ConvertUUIDToProviderID(*vm.LocalID)
 	if providerID == "" {
-		return false, errors.Errorf("invalid VM UUID %s from %s %s/%s for %s",
+		return errors.Errorf("invalid VM UUID %s from %s %s/%s for %s",
 			*vm.LocalID,
 			machineCtx.ElfCluster.GroupVersionKind(),
 			machineCtx.ElfCluster.GetNamespace(),
@@ -1165,14 +1168,14 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 			ctx)
 	}
 
-	kubeClient, err := util.NewKubeClient(ctx, r.Client, machineCtx.Cluster)
+	remoteClient, err := r.ClusterCache.GetClient(ctx, client.ObjectKeyFromObject(machineCtx.Cluster))
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to get client for Cluster %s", klog.KObj(machineCtx.Cluster))
+		return errors.Wrapf(err, "failed to get client for Cluster %s", klog.KObj(machineCtx.Cluster))
 	}
 
-	node, err := kubeClient.CoreV1().Nodes().Get(ctx, machineCtx.ElfMachine.Name, metav1.GetOptions{})
+	node, err := r.getNode(ctx, remoteClient, providerID)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to get node %s for setting providerID and labels", machineCtx.ElfMachine.Name)
+		return errors.Wrapf(err, "failed to get node by providerID %s", providerID)
 	}
 
 	keys := []string{
@@ -1243,8 +1246,8 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 		expectedLabels[labelsutil.ClusterAutoscalerCAPIGPULabel] = nil
 	}
 
-	if node.Spec.ProviderID != "" && reflect.DeepEqual(actualLabels, expectedLabels) {
-		return true, nil
+	if reflect.DeepEqual(actualLabels, expectedLabels) {
+		return nil
 	}
 
 	payloads := map[string]interface{}{
@@ -1252,26 +1255,20 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 			"labels": expectedLabels,
 		},
 	}
-	// providerID cannot be modified after setting a valid value.
-	if node.Spec.ProviderID == "" {
-		payloads["spec"] = map[string]interface{}{
-			"providerID": providerID,
-		}
-	}
 
 	payloadBytes, err := json.Marshal(payloads)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	_, err = kubeClient.CoreV1().Nodes().Patch(ctx, node.Name, apitypes.MergePatchType, payloadBytes, metav1.PatchOptions{})
+	err = remoteClient.Patch(ctx, node, client.RawPatch(apitypes.MergePatchType, payloadBytes))
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	log.Info("Setting node providerID and labels succeeded", "providerID", providerID, "labels", expectedLabels)
+	log.Info("Setting node labels succeeded", "labels", expectedLabels)
 
-	return true, nil
+	return nil
 }
 
 // Ensure all the VM's NICs that need IP have obtained IP addresses and VM network ready, otherwise requeue.
@@ -1329,7 +1326,7 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx goctx.Context, machineCtx *c
 
 	if len(ipToMachineAddressMap) < len(networkDevicesWithIP) {
 		// Try to get VM NIC IP address from the K8s Node.
-		nodeIP, err := r.getK8sNodeIP(ctx, machineCtx, machineCtx.ElfMachine.Name)
+		nodeIP, err := r.getK8sNodeIP(ctx, machineCtx)
 		if err == nil && nodeIP != "" {
 			ipToMachineAddressMap[nodeIP] = clusterv1.MachineAddress{
 				Address: nodeIP,
@@ -1364,7 +1361,7 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx goctx.Context, machineCtx *c
 	return true, nil
 }
 
-func (r *ElfMachineReconciler) getBootstrapData(ctx goctx.Context, machineCtx *context.MachineContext) (string, error) {
+func (r *ElfMachineReconciler) getBootstrapData(ctx goctx.Context, machineCtx *context.MachineContext, hostName string) (string, error) {
 	secret := &corev1.Secret{}
 	secretKey := apitypes.NamespacedName{
 		Namespace: machineCtx.Machine.Namespace,
@@ -1380,7 +1377,7 @@ func (r *ElfMachineReconciler) getBootstrapData(ctx goctx.Context, machineCtx *c
 		return "", errors.New("error retrieving bootstrap data: secret value key is missing")
 	}
 
-	return string(value), nil
+	return patchCloudInitBootstrapData(ctx, string(value), cloudInitMutationContext{hostName: hostName})
 }
 
 func (r *ElfMachineReconciler) reconcileLabels(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) (bool, error) {
@@ -1441,7 +1438,7 @@ func (r *ElfMachineReconciler) isWaitingForStaticIPAllocation(machineCtx *contex
 // This is necessary since CAPI does not set the nodeRef field on the owner Machine object
 // until the node moves to Ready state. Hence, on Machine deletion it is unable to delete
 // the kubernetes node corresponding to the VM.
-func (r *ElfMachineReconciler) deleteNode(ctx goctx.Context, machineCtx *context.MachineContext, nodeName string) error {
+func (r *ElfMachineReconciler) deleteNode(ctx goctx.Context, machineCtx *context.MachineContext) error {
 	// When the cluster needs to be deleted, there is no need to delete the k8s node.
 	if machineCtx.Cluster.DeletionTimestamp != nil {
 		return nil
@@ -1452,39 +1449,47 @@ func (r *ElfMachineReconciler) deleteNode(ctx goctx.Context, machineCtx *context
 		return nil
 	}
 
-	kubeClient, err := util.NewKubeClient(ctx, r.Client, machineCtx.Cluster)
+	remoteClient, err := r.ClusterCache.GetClient(ctx, client.ObjectKeyFromObject(machineCtx.Cluster))
 	if err != nil {
 		return errors.Wrapf(err, "failed to get client for Cluster %s", klog.KObj(machineCtx.Cluster))
 	}
 
+	node, err := r.getNode(ctx, remoteClient, *machineCtx.ElfMachine.Spec.ProviderID)
+	if err != nil {
+		if err == ErrNodeNotFound {
+			return nil
+		}
+		return errors.Wrapf(err, "failed to get node by providerID %s", *machineCtx.ElfMachine.Spec.ProviderID)
+	}
+
 	// Attempt to delete the corresponding node.
-	err = kubeClient.CoreV1().Nodes().Delete(ctx, nodeName, metav1.DeleteOptions{})
+	err = remoteClient.Delete(ctx, node)
 	// k8s node is already deleted.
 	if err != nil && apierrors.IsNotFound(err) {
 		return nil
 	}
 
 	if err != nil {
-		return errors.Wrapf(err, "failed to delete K8s node %s for Cluster %s/", nodeName, klog.KObj(machineCtx.Cluster))
+		return errors.Wrapf(err, "failed to delete K8s node %s for Cluster %s/", node.Name, klog.KObj(machineCtx.Cluster))
 	}
 
 	return nil
 }
 
 // getK8sNodeIP get the default network IP of K8s Node.
-func (r *ElfMachineReconciler) getK8sNodeIP(ctx goctx.Context, machineCtx *context.MachineContext, nodeName string) (string, error) {
-	kubeClient, err := util.NewKubeClient(ctx, r.Client, machineCtx.Cluster)
+func (r *ElfMachineReconciler) getK8sNodeIP(ctx goctx.Context, machineCtx *context.MachineContext) (string, error) {
+	if machineCtx.ElfMachine.Spec.ProviderID == nil {
+		return "", nil
+	}
+
+	remoteClient, err := r.ClusterCache.GetClient(ctx, client.ObjectKeyFromObject(machineCtx.Cluster))
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to get client for Cluster %s", klog.KObj(machineCtx.Cluster))
 	}
 
-	k8sNode, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-	if err != nil && apierrors.IsNotFound(err) {
-		return "", nil
-	}
-
+	k8sNode, err := r.getNode(ctx, remoteClient, *machineCtx.ElfMachine.Spec.ProviderID)
 	if err != nil {
-		return "", errors.Wrapf(err, "failed to get K8s Node %s for Cluster %s", nodeName, klog.KObj(machineCtx.Cluster))
+		return "", errors.Wrapf(err, "failed to get node by providerID %s", *machineCtx.ElfMachine.Spec.ProviderID)
 	}
 
 	if len(k8sNode.Status.Addresses) == 0 {
@@ -1629,4 +1634,34 @@ func (r *ElfMachineReconciler) reconcileFailureDomain(ctx goctx.Context, machine
 	}
 
 	return true
+}
+
+// getNode gets the K8s Node corresponding to the VM by providerID.
+// ref: https://github.com/kubernetes-sigs/cluster-api/blob/7043215020b378a110ecd2c10782a5ca58d5456b/internal/controllers/machine/machine_controller_noderef.go#L218-L245.
+func (r *ElfMachineReconciler) getNode(ctx goctx.Context, c client.Reader, providerID string) (*corev1.Node, error) {
+	nodeList := corev1.NodeList{}
+	if err := c.List(ctx, &nodeList, client.MatchingFields{index.NodeProviderIDField: providerID}); err != nil {
+		return nil, err
+	}
+	if len(nodeList.Items) == 0 {
+		// If for whatever reason the index isn't registered or available, we fallback to loop over the whole list.
+		nl := corev1.NodeList{}
+		if err := c.List(ctx, &nl); err != nil {
+			return nil, err
+		}
+
+		for _, node := range nl.Items {
+			if providerID == node.Spec.ProviderID {
+				return &node, nil
+			}
+		}
+
+		return nil, ErrNodeNotFound
+	}
+
+	if len(nodeList.Items) != 1 {
+		return nil, fmt.Errorf("unexpectedly found more than one Node matching the providerID %s", providerID)
+	}
+
+	return &nodeList.Items[0], nil
 }

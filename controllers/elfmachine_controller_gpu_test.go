@@ -462,16 +462,21 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 
 		BeforeEach(func() {
 			elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{Model: gpuModel, Count: 1})
+			Expect(helpers.CreateKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)).To(Succeed())
+			Expect(helpers.EnsureClusterForClusterCacheTest(ctx, testEnv, cluster)).To(Succeed())
 		})
 
 		AfterEach(func() {
 			Expect(testEnv.Delete(ctx, node)).To(Succeed())
+			Expect(testEnv.Delete(ctx, cluster)).To(Succeed())
+			Expect(helpers.DeleteKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)).To(Succeed())
 		})
 
 		It("should set clusterAutoscaler GPU label for node", func() {
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			providerID := machineutil.ConvertUUIDToProviderID(*vm.LocalID)
 			ctrlMgrCtx := &context.ControllerManagerContext{
 				Client:                  testEnv.Client,
 				Name:                    fake.ControllerManagerName,
@@ -491,13 +496,12 @@ var _ = Describe("ElfMachineReconciler-GPU", func() {
 					Name:   elfMachine.Name,
 					Labels: map[string]string{},
 				},
+				Spec: corev1.NodeSpec{ProviderID: providerID},
 			}
 			Expect(testEnv.CreateAndWait(ctx, node)).To(Succeed())
-			Expect(helpers.CreateKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)).To(Succeed())
 
-			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
-			ok, err := reconciler.reconcileNode(ctx, machineContext, vm)
-			Expect(ok).Should(BeTrue())
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService, ClusterCache: clusterCache}
+			err := reconciler.reconcileNode(ctx, machineContext, vm)
 			Expect(err).ToNot(HaveOccurred())
 			Eventually(func() bool {
 				if err := testEnv.Get(ctx, client.ObjectKey{Namespace: node.Namespace, Name: node.Name}, node); err != nil {

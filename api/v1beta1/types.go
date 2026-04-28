@@ -325,4 +325,11 @@ type CloudFailureDomain struct {
 	// Network is the network configuration.
 	// +optional
 	Network NetworkSpec `json:"network,omitempty"`
+
+	// HostNamePrefix is the prefix of the hostname for nodes in this failure domain.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=57
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?)*$`
+	// +optional
+	HostNamePrefix string `json:"hostNamePrefix,omitempty"`
 }

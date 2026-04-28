@@ -59,6 +59,13 @@ type ElfMachineSpec struct {
 	// FailureDomains is a list of failure domain objects.
 	FailureDomains []CloudFailureDomain `json:"failureDomains,omitempty"`
 
+	// HostNamePrefix is the prefix of the hostname for nodes in this machine.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=57
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?)*$`
+	// +optional
+	HostNamePrefix string `json:"hostNamePrefix,omitempty"`
+
 	// Template is the name or ID of the template used to clone new machines.
 	Template string `json:"template"`
 
@@ -68,7 +75,7 @@ type ElfMachineSpec struct {
 	// +optional
 	OSType string `json:"osType,omitempty"`
 
-	// Network is the network configuration for this machin's VM.
+	// Network is the network configuration for this machine's VM.
 	// +optional
 	Network NetworkSpec `json:"network,omitempty"`
 
