@@ -1636,6 +1636,8 @@ func (r *ElfMachineReconciler) reconcileFailureDomain(ctx goctx.Context, machine
 	return true
 }
 
+// getNode gets the K8s Node corresponding to the VM by providerID.
+// ref: https://github.com/kubernetes-sigs/cluster-api/blob/7043215020b378a110ecd2c10782a5ca58d5456b/internal/controllers/machine/machine_controller_noderef.go#L218-L245.
 func (r *ElfMachineReconciler) getNode(ctx goctx.Context, c client.Reader, providerID string) (*corev1.Node, error) {
 	nodeList := corev1.NodeList{}
 	if err := c.List(ctx, &nodeList, client.MatchingFields{index.NodeProviderIDField: providerID}); err != nil {
