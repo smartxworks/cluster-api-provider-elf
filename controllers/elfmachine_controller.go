@@ -1154,7 +1154,7 @@ func (r *ElfMachineReconciler) reconcileProviderID(ctx goctx.Context, machineCtx
 	return nil
 }
 
-// reconcileNode sets providerID and host server labels for node.
+// reconcileNode sets labels on the corresponding K8s Node according to the VM information.
 func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM) error {
 	log := ctrl.LoggerFrom(ctx)
 
