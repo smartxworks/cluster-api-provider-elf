@@ -1934,6 +1934,87 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 	})
 
+	Context("Get providerID", func() {
+		It("should get providerID from Spec or VMRef", func() {
+			const (
+				vmRef           = "12345678-1234-1234-1234-123456789abc"
+				providerID      = "elf://12345678-1234-1234-1234-123456789abc"
+				otherProviderID = "elf://12345678-1234-1234-1234-123456789def"
+			)
+
+			tests := []struct {
+				name       string
+				machineCtx *context.MachineContext
+				expected   string
+			}{
+				{
+					name:     "nil context returns empty string",
+					expected: "",
+				},
+				{
+					name:       "nil ElfMachine returns empty string",
+					machineCtx: &context.MachineContext{},
+					expected:   "",
+				},
+				{
+					name: "Spec ProviderID takes precedence",
+					machineCtx: &context.MachineContext{
+						ElfMachine: &infrav1.ElfMachine{
+							Spec: infrav1.ElfMachineSpec{
+								ProviderID: ptr.To(otherProviderID),
+							},
+							Status: infrav1.ElfMachineStatus{
+								VMRef: vmRef,
+							},
+						},
+					},
+					expected: otherProviderID,
+				},
+				{
+					name: "empty Spec ProviderID falls back to VMRef",
+					machineCtx: &context.MachineContext{
+						ElfMachine: &infrav1.ElfMachine{
+							Spec: infrav1.ElfMachineSpec{
+								ProviderID: ptr.To(""),
+							},
+							Status: infrav1.ElfMachineStatus{
+								VMRef: vmRef,
+							},
+						},
+					},
+					expected: providerID,
+				},
+				{
+					name: "nil Spec ProviderID falls back to VMRef",
+					machineCtx: &context.MachineContext{
+						ElfMachine: &infrav1.ElfMachine{
+							Status: infrav1.ElfMachineStatus{
+								VMRef: vmRef,
+							},
+						},
+					},
+					expected: providerID,
+				},
+				{
+					name: "invalid VMRef returns empty string",
+					machineCtx: &context.MachineContext{
+						ElfMachine: &infrav1.ElfMachine{
+							Status: infrav1.ElfMachineStatus{
+								VMRef: "not-a-uuid",
+							},
+						},
+					},
+					expected: "",
+				},
+			}
+
+			reconciler := &ElfMachineReconciler{}
+			for _, tc := range tests {
+				Expect(reconciler.getProviderID(tc.machineCtx)).To(Equal(tc.expected), tc.name)
+			}
+		})
+	})
+
 	Context("Reconcile ElfMachine network", func() {
 		BeforeEach(func() {
 			cluster.Status.InfrastructureReady = true
@@ -1987,7 +2068,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			providerID := machineutil.ConvertUUIDToProviderID(*vm.LocalID)
 			vm.EntityAsyncStatus = nil
 			elfMachine.Status.VMRef = *vm.LocalID
-			elfMachine.Spec.ProviderID = ptr.To(providerID)
+			Expect(elfMachine.Spec.ProviderID).To(BeNil())
 
 			k8sNode.Spec.ProviderID = providerID
 			Expect(testEnv.CreateAndWait(ctx, k8sNode)).To(Succeed())
@@ -1995,6 +2076,16 @@ var _ = Describe("ElfMachineReconciler", func() {
 				patchSource := k8sNode.DeepCopy()
 				k8sNode.Status.Addresses = addresses
 				Expect(testEnv.PatchAndWait(ctx, k8sNode, patchSource)).To(Succeed())
+
+				remoteClient, err := clusterCache.GetClient(ctx, client.ObjectKeyFromObject(cluster))
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(func() []corev1.NodeAddress {
+					latestNode := &corev1.Node{}
+					if err := remoteClient.Get(ctx, client.ObjectKeyFromObject(k8sNode), latestNode); err != nil {
+						return nil
+					}
+					return latestNode.Status.Addresses
+				}, timeout).Should(Equal(addresses))
 			}
 
 			// test elfMachine has one network device with DHCP type
@@ -2938,7 +3029,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Waiting for the placement group %s to be deleted", *placementGroup.Name)))
 		})
 
-		It("should delete k8s node before destroying VM.", func() {
+		It("should delete k8s node before destroying VM when providerID is only in VMRef", func() {
 			vm := fake.NewTowerVM()
 			providerID := machineutil.ConvertUUIDToProviderID(*vm.LocalID)
 			vm.EntityAsyncStatus = nil
@@ -2946,7 +3037,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.Status = &status
 			task := fake.NewTowerTask("")
 			elfMachine.Status.VMRef = *vm.LocalID
-			elfMachine.Spec.ProviderID = ptr.To(providerID)
+			Expect(elfMachine.Spec.ProviderID).To(BeNil())
 			cluster.Status.ControlPlaneReady = true
 
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -2991,6 +3082,21 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+		})
+
+		It("should skip deleting k8s node when providerID is unavailable", func() {
+			vm := fake.NewTowerVM()
+			elfMachine.Status.VMRef = *vm.ID
+			cluster.Status.ControlPlaneReady = true
+
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler := &ElfMachineReconciler{}
+
+			var err error
+			Expect(func() {
+				err = reconciler.deleteNode(ctx, machineContext)
+			}).NotTo(Panic())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should not delete k8s node when cluster is deleting", func() {

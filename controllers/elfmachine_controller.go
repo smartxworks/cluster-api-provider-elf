@@ -1449,17 +1449,24 @@ func (r *ElfMachineReconciler) deleteNode(ctx goctx.Context, machineCtx *context
 		return nil
 	}
 
+	providerID := r.getProviderID(machineCtx)
+	if providerID == "" {
+		log := ctrl.LoggerFrom(ctx)
+		log.V(1).Info("providerID is not set, skip deleting node for " + machineCtx.ElfMachine.Name)
+		return nil
+	}
+
 	remoteClient, err := r.ClusterCache.GetClient(ctx, client.ObjectKeyFromObject(machineCtx.Cluster))
 	if err != nil {
 		return errors.Wrapf(err, "failed to get client for Cluster %s", klog.KObj(machineCtx.Cluster))
 	}
 
-	node, err := r.getNode(ctx, remoteClient, *machineCtx.ElfMachine.Spec.ProviderID)
+	node, err := r.getNode(ctx, remoteClient, providerID)
 	if err != nil {
 		if err == ErrNodeNotFound {
 			return nil
 		}
-		return errors.Wrapf(err, "failed to get node by providerID %s", *machineCtx.ElfMachine.Spec.ProviderID)
+		return errors.Wrapf(err, "failed to get node by providerID %s", providerID)
 	}
 
 	// Attempt to delete the corresponding node.
@@ -1478,7 +1485,8 @@ func (r *ElfMachineReconciler) deleteNode(ctx goctx.Context, machineCtx *context
 
 // getK8sNodeIP get the default network IP of K8s Node.
 func (r *ElfMachineReconciler) getK8sNodeIP(ctx goctx.Context, machineCtx *context.MachineContext) (string, error) {
-	if machineCtx.ElfMachine.Spec.ProviderID == nil {
+	providerID := r.getProviderID(machineCtx)
+	if providerID == "" {
 		return "", nil
 	}
 
@@ -1487,9 +1495,9 @@ func (r *ElfMachineReconciler) getK8sNodeIP(ctx goctx.Context, machineCtx *conte
 		return "", errors.Wrapf(err, "failed to get client for Cluster %s", klog.KObj(machineCtx.Cluster))
 	}
 
-	k8sNode, err := r.getNode(ctx, remoteClient, *machineCtx.ElfMachine.Spec.ProviderID)
+	k8sNode, err := r.getNode(ctx, remoteClient, providerID)
 	if err != nil {
-		return "", errors.Wrapf(err, "failed to get node by providerID %s", *machineCtx.ElfMachine.Spec.ProviderID)
+		return "", errors.Wrapf(err, "failed to get node by providerID %s", providerID)
 	}
 
 	if len(k8sNode.Status.Addresses) == 0 {
@@ -1664,4 +1672,16 @@ func (r *ElfMachineReconciler) getNode(ctx goctx.Context, c client.Reader, provi
 	}
 
 	return &nodeList.Items[0], nil
+}
+
+func (r *ElfMachineReconciler) getProviderID(machineCtx *context.MachineContext) string {
+	if machineCtx == nil || machineCtx.ElfMachine == nil {
+		return ""
+	}
+
+	if machineCtx.ElfMachine.Spec.ProviderID != nil && *machineCtx.ElfMachine.Spec.ProviderID != "" {
+		return *machineCtx.ElfMachine.Spec.ProviderID
+	}
+
+	return machineutil.ConvertUUIDToProviderID(machineCtx.ElfMachine.Status.VMRef)
 }
