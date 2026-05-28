@@ -97,6 +97,20 @@ spec:
                     description: Password is the password used to access the tower
                       server.
                     type: string
+                  secretRef:
+                    description: SecretRef is the reference to the secret containing
+                      the tower information.
+                    properties:
+                      name:
+                        description: name is unique within a namespace to reference
+                          a secret resource.
+                        type: string
+                      namespace:
+                        description: namespace defines the space within which the
+                          secret name must be unique.
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
                   server:
                     description: Server is address of the tower server.
                     type: string

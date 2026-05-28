@@ -23,7 +23,7 @@ kind: KubeProxyConfiguration
 metricsBindAddress: 0.0.0.0:10249
 `)
 
-	changed, err := ensureKubeadmConfigContent(content, "")
+	changed, err := ensureKubeadmConfigContent(content)
 	if err != nil {
 		t.Fatalf("ensureKubeadmConfigContent() error = %v", err)
 	}
@@ -73,7 +73,7 @@ nodeRegistration:
       value: "0"
 `)
 
-	changed, err := ensureKubeadmConfigContent(content, "")
+	changed, err := ensureKubeadmConfigContent(content)
 	if err != nil {
 		t.Fatalf("ensureKubeadmConfigContent() error = %v", err)
 	}

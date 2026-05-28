@@ -35,6 +35,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -71,7 +72,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 		// mock
 		mockCtrl = gomock.NewController(GinkgoT())
 		mockVMService = mock_services.NewMockVMService(mockCtrl)
-		mockNewVMService = func(_ goctx.Context, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+		mockNewVMService = func(_ goctx.Context, _ client.Client, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
 			return mockVMService, nil
 		}
 	})
@@ -218,7 +219,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 		})
 
 		It("should delete failed when tower is out of service", func() {
-			mockNewVMService = func(_ goctx.Context, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+			mockNewVMService = func(_ goctx.Context, _ client.Client, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
 				return mockVMService, errors.New("get vm service failed")
 			}
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster)
@@ -234,7 +235,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 		})
 
 		It("should force delete when tower is out of service and cluster need to force delete", func() {
-			mockNewVMService = func(_ goctx.Context, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+			mockNewVMService = func(_ goctx.Context, _ client.Client, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
 				return mockVMService, errors.New("get vm service failed")
 			}
 			elfCluster.Annotations = map[string]string{
@@ -275,16 +276,16 @@ var _ = Describe("ElfClusterReconciler", func() {
 			mockVMService.EXPECT().CleanUnusedLabels(keys).Return(nil, unexpectedError)
 			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			reconciler.cleanOrphanLabels(ctx, clusterCtx)
-			Expect(logBuffer.String()).To(ContainSubstring("Warning: failed to clean orphan labels in Tower " + elfCluster.Spec.Tower.Server))
+			Expect(logBuffer.String()).To(ContainSubstring("Warning: failed to clean orphan labels in Tower " + elfCluster.Spec.Tower.String()))
 
 			logBuffer.Reset()
 			mockVMService.EXPECT().CleanUnusedLabels(keys).Return(nil, nil)
 			reconciler.cleanOrphanLabels(ctx, clusterCtx)
-			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Labels of Tower %s are cleaned successfully", elfCluster.Spec.Tower.Server)))
+			Expect(logBuffer.String()).To(ContainSubstring(fmt.Sprintf("Labels of Tower %s are cleaned successfully", elfCluster.Spec.Tower.String())))
 
 			logBuffer.Reset()
 			reconciler.cleanOrphanLabels(ctx, clusterCtx)
-			Expect(logBuffer.String()).NotTo(ContainSubstring(fmt.Sprintf("Cleaning orphan labels in Tower %s created by CAPE", elfCluster.Spec.Tower.Server)))
+			Expect(logBuffer.String()).NotTo(ContainSubstring(fmt.Sprintf("Cleaning orphan labels in Tower %s created by CAPE", elfCluster.Spec.Tower.String())))
 		})
 	})
 

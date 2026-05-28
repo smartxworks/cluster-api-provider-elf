@@ -76,6 +76,22 @@ func (z ElfClusterZoneType) ToLower() string {
 }
 
 type Tower struct {
+	TowerClientConfig `json:",inline"`
+
+	// SecretRef is the reference to the secret containing the tower information.
+	SecretRef *corev1.SecretReference `json:"secretRef,omitempty"`
+}
+
+func (t *Tower) String() string {
+	if t.SecretRef != nil {
+		return fmt.Sprintf("%s/%s", t.SecretRef.Namespace, t.SecretRef.Name)
+	}
+
+	return t.TowerClientConfig.Server
+}
+
+// TowerClientConfig is the connection information for the tower server.
+type TowerClientConfig struct {
 	// Server is address of the tower server.
 	Server string `json:"server,omitempty"`
 
