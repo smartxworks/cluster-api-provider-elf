@@ -149,7 +149,7 @@ func (r *ElfClusterReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 	// If ElfCluster is being deleting and ForceDeleteCluster flag is set, skip creating the VMService object,
 	// because Tower server may be out of service. So we can force delete ElfCluster.
 	if elfCluster.ObjectMeta.DeletionTimestamp.IsZero() || !elfCluster.HasForceDeleteCluster() {
-		vmService, err := r.NewVMService(ctx, elfCluster.GetTower(), log)
+		vmService, err := r.NewVMService(ctx, r.Client, elfCluster.GetTower(), log)
 		if err != nil {
 			conditions.MarkFalse(&elfCluster, infrav1.TowerAvailableCondition, infrav1.TowerUnreachableReason, clusterv1.ConditionSeverityError, err.Error())
 
@@ -283,25 +283,25 @@ func (r *ElfClusterReconciler) cleanOrphanLabels(ctx goctx.Context, clusterCtx *
 	log := ctrl.LoggerFrom(ctx)
 
 	// Locking ensures that only one coroutine cleans at the same time
-	if ok := acquireLockForGCTowerLabels(clusterCtx.ElfCluster.Spec.Tower.Server); ok {
-		defer releaseLockForForGCTowerLabels(clusterCtx.ElfCluster.Spec.Tower.Server)
+	if ok := acquireLockForGCTowerLabels(clusterCtx.ElfCluster.Spec.Tower.String()); ok {
+		defer releaseLockForForGCTowerLabels(clusterCtx.ElfCluster.Spec.Tower.String())
 	} else {
 		return
 	}
 
-	log.V(1).Info(fmt.Sprintf("Cleaning orphan labels in Tower %s created by CAPE", clusterCtx.ElfCluster.Spec.Tower.Server))
+	log.V(1).Info(fmt.Sprintf("Cleaning orphan labels in Tower %s created by CAPE", clusterCtx.ElfCluster.Spec.Tower.String()))
 
 	keys := []string{towerresources.GetVMLabelClusterName(), towerresources.GetVMLabelVIP(), towerresources.GetVMLabelNamespace()}
 	labelIDs, err := clusterCtx.VMService.CleanUnusedLabels(keys)
 	if err != nil {
-		log.Error(err, "Warning: failed to clean orphan labels in Tower "+clusterCtx.ElfCluster.Spec.Tower.Server)
+		log.Error(err, "Warning: failed to clean orphan labels in Tower "+clusterCtx.ElfCluster.Spec.Tower.String())
 
 		return
 	}
 
-	recordGCTimeForTowerLabels(clusterCtx.ElfCluster.Spec.Tower.Server)
+	recordGCTimeForTowerLabels(clusterCtx.ElfCluster.Spec.Tower.String())
 
-	log.V(1).Info(fmt.Sprintf("Labels of Tower %s are cleaned successfully", clusterCtx.ElfCluster.Spec.Tower.Server), "labelCount", len(labelIDs))
+	log.V(1).Info(fmt.Sprintf("Labels of Tower %s are cleaned successfully", clusterCtx.ElfCluster.Spec.Tower.String()), "labelCount", len(labelIDs))
 }
 
 func (r *ElfClusterReconciler) reconcileNormal(ctx goctx.Context, clusterCtx *context.ClusterContext) (reconcile.Result, error) { //nolint:unparam
