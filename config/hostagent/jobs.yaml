@@ -61,6 +61,21 @@ data:
       become: true
       gather_facts: false
       tasks:
+      - name: wait for CPU and memory online
+        shell: |-
+          for i in $(seq 1 180); do
+            if ! grep -q '^0$' /sys/devices/system/cpu/cpu[0-9]*/online 2>/dev/null && \
+               ! grep -qv '^online' /sys/devices/system/memory/memory*/state; then
+              echo "CPU and memory are online"
+              exit 0
+            fi
+
+            echo "Waiting for CPU and memory online"
+            sleep 1
+          done
+
+          echo "Timed out waiting for CPU and memory online" >&2
+          exit 1
       - ansible.builtin.service:
           name: kubelet
           state: restarted
