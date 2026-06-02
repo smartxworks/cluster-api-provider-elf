@@ -127,8 +127,16 @@ e2e-templates: kustomize ## Generate e2e cluster templates
 	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization/cluster-template-node-drain > $(E2E_TEMPLATE_DIR)/cluster-template-node-drain.yaml
 	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization/conformance > $(E2E_TEMPLATE_DIR)/cluster-template-conformance.yaml
 
-test: generate ## Run tests.
-	source ./hack/fetch_ext_bins.sh; fetch_tools; setup_envs; go test -v ./api/... ./webhooks/... ./controllers/... ./pkg/... -coverprofile=cover.out
+ENVTEST ?= $(BIN_DIR)/setup-envtest
+ENVTEST_K8S_VERSION ?= 1.33.0
+ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
+
+.PHONY: envtest
+envtest: ## Download setup-envtest locally if necessary.
+	$(call go-get-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@$(ENVTEST_VERSION))
+
+test: generate envtest ## Run tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(BIN_DIR) -p path)" go test -v ./api/... ./webhooks/... ./controllers/... ./pkg/... -coverprofile=cover.out
 
 .PHONY: e2e-image
 e2e-image: docker-pull-prerequisites ## Build the e2e manager image. Docker ignores docker.io causing CAPI to fail to load local e2e image.
@@ -155,7 +163,7 @@ kustomize: ## Download kustomize locally if necessary.
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.18.0)
+	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.17.2)
 
 GINKGO := $(shell pwd)/bin/ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
@@ -163,7 +171,7 @@ ginkgo: ## Download ginkgo locally if necessary.
 
 KIND := $(shell pwd)/bin/kind
 kind: ## Download kind locally if necessary.
-	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@v0.30.0)
+	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@v0.27.0)
 
 GOLANGCI_LINT := $(shell pwd)/bin/golangci-lint
 golangci-lint: ## Download golangci-lint locally if necessary.
