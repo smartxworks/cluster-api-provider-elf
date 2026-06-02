@@ -102,7 +102,7 @@ func GenerateExpandRootPartitionJob(elfMachine *infrav1.ElfMachine, playbook str
 						Inline: playbook,
 					},
 				},
-				Timeout: metav1.Duration{Duration: defaultTimeout},
+				Timeout: metav1.Duration{Duration: JobTimeouts.TimeoutFor(HostAgentJobTypeExpandRootPartition)},
 			},
 		},
 	}
@@ -122,7 +122,7 @@ func GenerateRestartKubeletJob(elfMachine *infrav1.ElfMachine, playbook string, 
 						Inline: playbook,
 					},
 				},
-				Timeout: metav1.Duration{Duration: defaultTimeout},
+				Timeout: metav1.Duration{Duration: JobTimeouts.TimeoutFor(HostAgentJobTypeRestartKubelet)},
 			},
 		},
 	}
@@ -142,7 +142,7 @@ func GenerateSetNetworkDeviceConfigJob(elfMachine *infrav1.ElfMachine, playbook 
 						Inline: playbook,
 					},
 				},
-				Timeout: metav1.Duration{Duration: defaultTimeout},
+				Timeout: metav1.Duration{Duration: JobTimeouts.TimeoutFor(HostAgentJobTypeSetNetworkDeviceConfig)},
 			},
 		},
 	}

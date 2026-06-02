@@ -64,8 +64,63 @@ data:
       - ansible.builtin.service:
           name: kubelet
           state: restarted
+      - name: set cpuset.cpus
+        shell: |-
+          #!/bin/bash
 
-  set-network-device-config: |
+          CGROUP_ROOT="/sys/fs/cgroup"
+
+          if [ "$(stat -fc %T "$CGROUP_ROOT")" != "tmpfs" ]; then
+            echo "Not cgroup v1 (stat -fc %T $CGROUP_ROOT != tmpfs), abort."
+            exit 0
+          fi
+
+          KUBEPODS_SLICE="$CGROUP_ROOT/cpuset/kubepods.slice"
+          KUBEPODS_CPUS_FILE="$KUBEPODS_SLICE/cpuset.cpus"
+
+          if [ ! -f "$KUBEPODS_CPUS_FILE" ]; then
+            echo "Error: $KUBEPODS_CPUS_FILE not found"
+            exit 1
+          fi
+
+          NEW_CPUS=$(cat "$CGROUP_ROOT/cpuset/cpuset.cpus")
+          echo "Detected NEW_CPUS: $NEW_CPUS"
+
+          if echo "$NEW_CPUS" | grep -q ","; then
+            echo "the NEW_CPUS contains ',', which is abnormal"
+            exit 1
+          fi
+
+          OLD_CPUS=$(cat "$KUBEPODS_CPUS_FILE")
+
+          echo "$NEW_CPUS" > "$KUBEPODS_CPUS_FILE"
+          echo "Updated $KUBEPODS_CPUS_FILE: $OLD_CPUS -> $NEW_CPUS"
+
+          for qos in besteffort burstable; do
+            SLICE="$KUBEPODS_SLICE/kubepods-$${qos}.slice"
+            SLICE_CPUS_FILE="$SLICE/cpuset.cpus"
+            if [ -f "$SLICE_CPUS_FILE" ]; then
+              SLICE_OLD_CPUS=$(cat "$SLICE_CPUS_FILE")
+              echo "$NEW_CPUS" > "$SLICE_CPUS_FILE"
+              echo "Updated $SLICE_CPUS_FILE: $SLICE_OLD_CPUS -> $NEW_CPUS"
+            fi
+          done
+
+          find "$KUBEPODS_SLICE" -name cpuset.cpus \
+            | awk '{print length($0) " " $0}' \
+            | sort -n \
+            | awk '{print $2}' \
+            | while read file; do
+              CUR_CPUS=$(cat "$file")
+              if [ "$CUR_CPUS" = "$OLD_CPUS" ]; then
+                echo "$NEW_CPUS" > "$file"
+                echo "Updated: $file ($CUR_CPUS -> $NEW_CPUS)"
+              else
+                echo "Skipped: $file ($CUR_CPUS)"
+              fi
+            done
+
+  set-network-device-config: |-
     - name: Set network device configuration
       hosts: all
       become: true
@@ -76,18 +131,27 @@ data:
         shell: |
           set -e
           shopt -s nullglob
-
-          declare -A mac_type_map
-          mac_type_map=(
+          export LANG=C
+          declare -a mac_configs
+          mac_configs=(
           {% for mac, type in mac_types.items() %}
-            ["{{ mac }}"]="{{ type }}"
+            "{{ mac }}|{{ type }}"
           {% endfor %}
           )
 
-          echo "Find NICs for MACs"
+          declare -A mac_type_map
+          for config in "$${mac_configs[@]}"; do
+            mac=$${config%%|*}
+            type=$${config##*|}
+            mac_type_map["$mac"]=$type
+            echo "Input data $mac = $type"
+          done
 
           declare -A mac_nic_map
           for i in /sys/class/net/{enp*,ens*}/address; do
+            if [ ! -f "$i" ];then
+                continue
+            fi
             nic=$(basename $(dirname "$i"))
             mac=$(cat "$i")
             mac_nic_map["$mac"]="$nic"
@@ -106,8 +170,25 @@ data:
             nic_type_map["$nic"]="$${mac_type_map[$mac]}"
           done
 
-          for nic in "$${!nic_type_map[@]}"; do
-            echo "Set network configuration for NIC: $nic, Type: $${nic_type_map[$nic]}"
+          wait_nic_ip_ready(){
+            echo "Waiting for network interface $1 IP to be ready"
+            local retry_count=1
+            until ip -4 addr show $1 | grep -qe 'inet ' || ((retry_count > 10))
+            do
+                sleep 1
+                retry_count=$((retry_count+1))
+            done
+            if ((retry_count > 10));then
+                echo "Waiting for network interface $1 IP to be ready timed out"
+                return 0
+            fi
+            echo "Network interface $1 IP is ready"
+          }
+
+          for config in "$${mac_configs[@]}"; do
+            mac=$${config%%|*}
+            nic=$${mac_nic_map[$mac]}
+            echo "Start process network for NIC: raw name $nic, Type: $${nic_type_map[$nic]}"
 
             if [[ "$${nic_type_map[$nic]}" == "NONE" || "$${nic_type_map[$nic]}" == "IPV4_DHCP" ]]; then
               if result=$(nmcli connection delete "$nic" 2>&1); then
@@ -118,29 +199,77 @@ data:
               fi
             fi
 
+            if [ "$${nic_type_map[$nic]}" == "IPV4" ]; then
+              con_name=$(nmcli -g GENERAL.CONNECTION device show "$nic")
+              nic_addr=$(ip -4 addr show $nic | awk '/inet /{print $2}')
+            fi
+
+            # compute the expected interface name
+            nic_prefix=$(echo $nic | grep -oP '^[a-z]+')
+            echo "nic prefix $nic_prefix"
+            all_nics=$(ifconfig | grep -Poe "$${nic_prefix}\d+([a-z]+\d+)?:" | tr -d ':')
+            for _nic in "$${!nic_type_map[@]}"
+            do
+                # Exclude the interfaces added this time
+                all_nics=$(echo "$all_nics" | grep -v $_nic)
+            done
+            last_nic=$(echo "$all_nics" | tail -n 1)
+            echo "last nic $last_nic"
+            last_number=$(echo $last_nic | grep -oP '^[a-z]+\K\d+')
+            echo "last number $last_number"
+            nic_suffix=$${last_nic##$nic_prefix$last_number}
+            echo "nic suffix $nic_suffix"
+            except_nic="$${nic_prefix}$((last_number+1))$nic_suffix"
+            echo "except interface name $nic is $except_nic"
+
+            if [ "$except_nic" != "$nic" ];then
+              echo "rename nic name from $nic to $except_nic"
+              nic_mac=$(ip link show $nic | grep link/ether | awk '{print $2}')
+              nic_device_type=$(cat /sys/class/net/$nic/type)
+              echo "SUBSYSTEM==\"net\", ACTION==\"add\", ATTR{address}==\"$nic_mac\", ATTR{type}==\"$nic_device_type\", NAME=\"$except_nic\"" >> /etc/udev/rules.d/70-persistent-net.rules
+
+              ip link set $nic down
+
+              udevadm control --reload-rules
+              udevadm trigger --type=devices --action=add
+
+              echo 1 > /sys/bus/pci/rescan
+              sleep 1
+              systemctl restart systemd-udevd
+              sleep 1
+              until ip link set $except_nic up
+              do
+                  echo "wait link $except_nic ready"
+                  sleep 1
+              done
+            fi
+
             if [ "$${nic_type_map[$nic]}" == "NONE" ]; then
-              nmcli connection add type ethernet con-name "$nic" \
-                ifname "$nic" \
+              nmcli connection add type ethernet con-name "$except_nic" \
+                ifname "$except_nic" \
                 ipv4.method disabled \
                 ipv6.method ignore
             elif [ "$${nic_type_map[$nic]}" == "IPV4" ]; then
-              con_name=$(nmcli -g GENERAL.CONNECTION device show "$nic")
-              nmcli connection modify "$con_name" \
+              # delete elf added connect configuration, add new config
+              nmcli connection delete "$con_name" || true
+              nmcli connection add type ethernet con-name $except_nic ifname $except_nic ip4 $nic_addr \
                 ipv4.never-default yes \
                 ipv6.never-default yes \
                 ipv4.ignore-auto-dns yes \
                 ipv6.ignore-auto-dns yes
+              wait_nic_ip_ready "$except_nic"
             elif [ "$${nic_type_map[$nic]}" == "IPV4_DHCP" ]; then
-              nmcli connection add type ethernet con-name "$nic" \
-                ifname "$nic" \
+              nmcli connection add type ethernet con-name "$except_nic" \
+                ifname "$except_nic" \
                 ipv4.never-default yes \
                 ipv6.never-default yes \
                 ipv4.ignore-auto-dns yes \
                 ipv6.ignore-auto-dns yes
+              wait_nic_ip_ready "$except_nic"
             else
               echo "Error: Unknown NIC type $${nic_type_map[$nic]}"
               exit 1
             fi
           done
-
+          systemctl restart SVT.service
           echo "Set network configuration for nics done"
