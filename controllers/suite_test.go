@@ -31,10 +31,11 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/controllers/clustercache"
 	"sigs.k8s.io/cluster-api/controllers/remote"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -93,6 +94,7 @@ func setup() {
 
 	utilruntime.Must(infrav1.AddToScheme(cgscheme.Scheme))
 	utilruntime.Must(clusterv1.AddToScheme(cgscheme.Scheme))
+	utilruntime.Must(clusterv2.AddToScheme(cgscheme.Scheme))
 
 	testEnv = helpers.NewTestEnvironment(ctx)
 
@@ -106,6 +108,7 @@ func setup() {
 		}
 	}()
 	<-testEnv.Manager.Elected()
+	testEnv.WaitForWebhooks(ctx)
 
 	// create manager pod namespace
 	ns := &corev1.Namespace{
@@ -142,7 +145,7 @@ func setup() {
 	}()
 	// Setting ConnectionCreationRetryInterval to 2 seconds, otherwise client creation is
 	// only retried every 30s. If we get unlucky tests are then failing with timeout.
-	clusterCache.(interface{ SetConnectionCreationRetryInterval(time.Duration) }).
+	clusterCache.(interface{ SetConnectionCreationRetryInterval(interval time.Duration) }).
 		SetConnectionCreationRetryInterval(2 * time.Second)
 
 	if err := AddClusterControllerToManager(ctx, testEnv.GetControllerManagerContext(), testEnv.Manager, controllerOpts); err != nil {
