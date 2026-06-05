@@ -5,7 +5,6 @@ import (
 	goctx "context"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -17,6 +16,7 @@ const (
 	kubeadmAPIVersionV1Beta3 = "kubeadm.k8s.io/v1beta3"
 	kubeadmAPIVersionV1Beta4 = "kubeadm.k8s.io/v1beta4"
 	kubeadmProviderIDValue   = "elf://{{ ds.meta_data.instance_id }}"
+	yamlTagString            = "!!str"
 )
 
 type cloudInitMutationContext struct {
@@ -107,7 +107,7 @@ func ensureKubeadmConfigInWriteFiles(root *yaml.Node, mutationCtx cloudInitMutat
 			continue
 		}
 
-		updated, err := ensureKubeadmConfigContent(content, mutationCtx.hostName)
+		updated, err := ensureKubeadmConfigContent(content)
 		if err != nil {
 			return false, err
 		}
@@ -119,8 +119,8 @@ func ensureKubeadmConfigInWriteFiles(root *yaml.Node, mutationCtx cloudInitMutat
 	return changed, nil
 }
 
-func ensureKubeadmConfigContent(content *yaml.Node, hostname string) (bool, error) {
-	if content.Kind != yaml.ScalarNode || (content.Tag != "" && content.Tag != "!!str") {
+func ensureKubeadmConfigContent(content *yaml.Node) (bool, error) {
+	if content.Kind != yaml.ScalarNode || (content.Tag != "" && content.Tag != yamlTagString) {
 		return false, nil
 	}
 
@@ -130,7 +130,7 @@ func ensureKubeadmConfigContent(content *yaml.Node, hostname string) (bool, erro
 		return false, nil
 	}
 
-	if !ensureKubeadmNodeRegistrationDocuments(documents, hostname) {
+	if !ensureKubeadmNodeRegistrationDocuments(documents) {
 		return false, nil
 	}
 
@@ -139,20 +139,20 @@ func ensureKubeadmConfigContent(content *yaml.Node, hostname string) (bool, erro
 		return false, errors.Wrap(err, "failed to marshal kubeadm config after ensuring provider-id")
 	}
 
-	content.Tag = "!!str"
+	content.Tag = yamlTagString
 	content.Value = marshaled
 
 	return true, nil
 }
 
-func ensureKubeadmNodeRegistrationDocuments(documents []*yaml.Node, hostname string) bool {
+func ensureKubeadmNodeRegistrationDocuments(documents []*yaml.Node) bool {
 	changed := false
 	for _, document := range documents {
 		if !isKubeadmNodeRegistrationDocument(document) {
 			continue
 		}
 
-		if ensureKubeadmNodeRegistration(document, hostname) {
+		if ensureKubeadmNodeRegistration(document) {
 			changed = true
 		}
 	}
@@ -169,7 +169,7 @@ func isKubeadmNodeRegistrationDocument(root *yaml.Node) bool {
 	}
 }
 
-func ensureKubeadmNodeRegistration(root *yaml.Node, hostname string) bool {
+func ensureKubeadmNodeRegistration(root *yaml.Node) bool {
 	changed := false
 	nodeRegistration, _ := ensureYAMLMappingValue(root, "nodeRegistration")
 	if ensureKubeletProviderID(root, nodeRegistration) {
@@ -368,7 +368,7 @@ func upsertYAMLMapString(parent *yaml.Node, key, value string) bool {
 		return false
 	}
 
-	existing.Tag = "!!str"
+	existing.Tag = yamlTagString
 	existing.Value = value
 
 	return true
@@ -392,14 +392,6 @@ func upsertNamedValueSequenceItem(sequence *yaml.Node, name, value string) bool 
 	return true
 }
 
-func newBoolYAMLNode(value bool) *yaml.Node {
-	return &yaml.Node{
-		Kind:  yaml.ScalarNode,
-		Tag:   "!!bool",
-		Value: strconv.FormatBool(value),
-	}
-}
-
 func newScalarNodes(values []string) []*yaml.Node {
 	nodes := make([]*yaml.Node, 0, len(values))
 	for _, value := range values {
@@ -420,7 +412,7 @@ func newNamedValueMappingNode(name, value string) *yaml.Node {
 func newStringYAMLNode(value string) *yaml.Node {
 	return &yaml.Node{
 		Kind:  yaml.ScalarNode,
-		Tag:   "!!str",
+		Tag:   yamlTagString,
 		Value: value,
 	}
 }

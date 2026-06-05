@@ -49,6 +49,7 @@ import (
 	"github.com/smartxworks/cluster-api-provider-elf/controllers"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/hostagent"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/manager"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/version"
 	"github.com/smartxworks/cluster-api-provider-elf/webhooks"
@@ -110,6 +111,18 @@ func InitFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&config.MaxConcurrentVMCreations, "max-concurrent-vm-creations", config.MaxConcurrentVMCreations,
 		"The maximum number of concurrent virtual machine creations.")
+
+	fs.DurationVar(&hostagent.JobTimeouts.Default, "host-agent-job-default-timeout", hostagent.JobTimeouts.Default,
+		"Default timeout for host agent jobs when a job-specific timeout is not set (duration string).")
+
+	fs.DurationVar(&hostagent.JobTimeouts.ExpandRootPartition, "host-agent-job-expand-root-partition-timeout", hostagent.JobTimeouts.ExpandRootPartition,
+		"Timeout for the expand-root-partition host agent job (duration string).")
+
+	fs.DurationVar(&hostagent.JobTimeouts.RestartKubelet, "host-agent-job-restart-kubelet-timeout", hostagent.JobTimeouts.RestartKubelet,
+		"Timeout for the restart-kubelet host agent job (duration string).")
+
+	fs.DurationVar(&hostagent.JobTimeouts.SetNetworkDeviceConfig, "host-agent-job-set-network-device-config-timeout", hostagent.JobTimeouts.SetNetworkDeviceConfig,
+		"Timeout for the set-network-device-config host agent job (duration string).")
 
 	// Flags common between CAPI and CAPE
 

@@ -142,7 +142,7 @@ func setup() {
 	}()
 	// Setting ConnectionCreationRetryInterval to 2 seconds, otherwise client creation is
 	// only retried every 30s. If we get unlucky tests are then failing with timeout.
-	clusterCache.(interface{ SetConnectionCreationRetryInterval(time.Duration) }).
+	clusterCache.(interface{ SetConnectionCreationRetryInterval(interval time.Duration) }).
 		SetConnectionCreationRetryInterval(2 * time.Second)
 
 	if err := AddClusterControllerToManager(ctx, testEnv.GetControllerManagerContext(), testEnv.Manager, controllerOpts); err != nil {
