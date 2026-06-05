@@ -139,7 +139,7 @@ func (in *ElfClusterStatus) DeepCopyInto(out *ElfClusterStatus) {
 	*out = *in
 	if in.FailureDomains != nil {
 		in, out := &in.FailureDomains, &out.FailureDomains
-		*out = make(apiv1beta1.FailureDomains, len(*in))
+		*out = make(corev1beta1.FailureDomains, len(*in))
 		for key, val := range *in {
 			(*out)[key] = *val.DeepCopy()
 		}
