@@ -304,7 +304,7 @@ func (r *ElfClusterReconciler) cleanOrphanLabels(ctx goctx.Context, clusterCtx *
 	log.V(1).Info(fmt.Sprintf("Labels of Tower %s are cleaned successfully", clusterCtx.ElfCluster.Spec.Tower.Server), "labelCount", len(labelIDs))
 }
 
-func (r *ElfClusterReconciler) reconcileNormal(ctx goctx.Context, clusterCtx *context.ClusterContext) (reconcile.Result, error) { //nolint:unparam
+func (r *ElfClusterReconciler) reconcileNormal(ctx goctx.Context, clusterCtx *context.ClusterContext) (reconcile.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 	log.Info("Reconciling ElfCluster")
 
@@ -323,7 +323,7 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx goctx.Context, clusterCtx *co
 	if ok, err := r.reconcileFailureDomains(ctx, clusterCtx); err != nil {
 		return reconcile.Result{}, err
 	} else if !ok {
-		return reconcile.Result{}, nil
+		return reconcile.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 	}
 
 	// Reconcile the ElfCluster resource's ready state.
