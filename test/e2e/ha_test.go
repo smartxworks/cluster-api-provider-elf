@@ -88,7 +88,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 
 		Logf("Shut down VM")
 		ShutDownVM(ctx, ShutDownVMInput{
-			UUID:               machineutil.ConvertProviderIDToUUID(machines[0].Spec.ProviderID),
+			UUID:               machineutil.ConvertProviderIDToUUID(ptr.To(machines[0].Spec.ProviderID)),
 			VMService:          vmService,
 			WaitVMJobIntervals: e2eConfig.GetIntervals(specName, "wait-vm-job"),
 		})
@@ -107,7 +107,7 @@ var _ = Describe("CAPE HA e2e test", func() {
 		Byf("Wait for control plane nodes ready")
 		Logf("Powering on VM")
 		PowerOnVM(ctx, PowerOnVMInput{
-			UUID:               machineutil.ConvertProviderIDToUUID(machines[0].Spec.ProviderID),
+			UUID:               machineutil.ConvertProviderIDToUUID(ptr.To(machines[0].Spec.ProviderID)),
 			VMService:          vmService,
 			WaitVMJobIntervals: e2eConfig.GetIntervals(specName, "wait-vm-job"),
 		})
