@@ -12,7 +12,7 @@ require (
 	github.com/onsi/gomega v1.38.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
-	github.com/smartxworks/cloudtower-go-sdk/v2 v2.21.0-rc.2
+	github.com/smartxworks/cloudtower-go-sdk/v2 v2.24.0-rc.4
 	github.com/smartxworks/host-config-agent-api v0.0.0-20240410021405-be1517a07889
 	golang.org/x/mod v0.31.0
 	golang.org/x/tools v0.40.0
@@ -23,8 +23,8 @@ require (
 	k8s.io/client-go v0.33.3
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
-	sigs.k8s.io/cluster-api v1.11.8
-	sigs.k8s.io/cluster-api/test v1.11.8
+	sigs.k8s.io/cluster-api v1.11.11
+	sigs.k8s.io/cluster-api/test v1.11.11
 	sigs.k8s.io/controller-runtime v0.21.0
 )
 
