@@ -107,7 +107,15 @@ type VMService interface {
 type NewVMServiceFunc func(ctx goctx.Context, k8sClient client.Client, tower infrav1.Tower, logger logr.Logger) (VMService, error)
 
 func NewVMService(ctx goctx.Context, k8sClient client.Client, tower infrav1.Tower, logger logr.Logger) (VMService, error) {
-	towerClient, err := cloudtower.NewTowerClient(ctx, k8sClient, tower)
+	var (
+		towerClient *towerclient.Cloudtower
+		err         error
+	)
+	if tower.SecretRef != nil {
+		towerClient, err = cloudtower.NewTowerClient(ctx, k8sClient, tower.SecretKey())
+	} else {
+		towerClient, err = cloudtower.NewTowerClientWithConfig(ctx, tower.TowerClientConfig)
+	}
 	if err != nil {
 		return nil, err
 	}
