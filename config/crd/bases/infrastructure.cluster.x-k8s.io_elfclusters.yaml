@@ -84,6 +84,28 @@ spec:
                 - host
                 - port
                 type: object
+              storageCluster:
+                description: |-
+                  StorageCluster defines the storage configuration used for VM disks.
+                  If unset, the compute cluster's storage is used.
+                properties:
+                  datastoreID:
+                    description: DatastoreID is the ID of a VCFS datastore used for
+                      VM disks.
+                    maxLength: 128
+                    minLength: 1
+                    type: string
+                  storageClusterID:
+                    description: StorageClusterID is the ID of a clustered storage
+                      resource used for VM disks.
+                    maxLength: 128
+                    minLength: 1
+                    type: string
+                type: object
+                x-kubernetes-validations:
+                - message: exactly one of datastoreID or storageClusterID must be
+                    specified
+                  rule: has(self.datastoreID) != has(self.storageClusterID)
               tower:
                 description: Tower is the config of tower.
                 properties:

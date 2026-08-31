@@ -75,6 +75,23 @@ func (z ElfClusterZoneType) ToLower() string {
 	return strings.ToLower(string(z))
 }
 
+// StorageConfig defines the target storage for VM disks.
+// Exactly one of DatastoreID or StorageClusterID must be specified.
+// +kubebuilder:validation:XValidation:rule="has(self.datastoreID) != has(self.storageClusterID)",message="exactly one of datastoreID or storageClusterID must be specified"
+type StorageConfig struct {
+	// DatastoreID is the ID of a VCFS datastore used for VM disks.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=128
+	// +optional
+	DatastoreID string `json:"datastoreID,omitempty"`
+
+	// StorageClusterID is the ID of a clustered storage resource used for VM disks.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=128
+	// +optional
+	StorageClusterID string `json:"storageClusterID,omitempty"`
+}
+
 type Tower struct {
 	TowerClientConfig `json:",inline"`
 
