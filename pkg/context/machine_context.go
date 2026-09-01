@@ -94,6 +94,20 @@ func (c *MachineContext) GetElfClusterID() string {
 	return ""
 }
 
+// GetStorageConfig returns the cluster-level storage configuration for the machine.
+func (c *MachineContext) GetStorageConfig() *infrav1.StorageConfig {
+	if c == nil || c.ElfCluster == nil {
+		return nil
+	}
+
+	sc := &c.ElfCluster.Spec.StorageCluster
+	if sc.DatastoreID == "" && sc.StorageClusterID == "" {
+		return nil
+	}
+
+	return sc
+}
+
 // GenerateHostname generates a hostname for the machine.
 // If a HostNamePrefix is specified in the failure domain or machine spec, the hostname will be generated as <prefix>-<random string>.
 // Otherwise, the machine name will be used as the hostname.

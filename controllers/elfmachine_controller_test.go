@@ -336,6 +336,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm := fake.NewTowerVM()
 			vm.Name = &elfMachine.Name
 			elfCluster.Spec.Cluster = clusterInsufficientStorageKey
+			storageConfig := infrav1.StorageConfig{StorageClusterID: storageClusterKey}
+			elfCluster.Spec.StorageCluster = storageConfig
 			task := fake.NewTowerTask("")
 			withTaskVM := fake.NewWithTaskVM(vm, task)
 			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
@@ -368,7 +370,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
-			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any()).Return(withTaskVM, nil)
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ *infrav1.ElfCluster, _ *infrav1.ElfMachine, vmInfo *service.CloneVMInfo) (*models.WithTaskVM, error) {
+					Expect(vmInfo.StorageConfig).To(Equal(&storageConfig))
+
+					return withTaskVM, nil
+				})
 			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
 			mockVMService.EXPECT().GetTask(*task.ID).Return(task, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)

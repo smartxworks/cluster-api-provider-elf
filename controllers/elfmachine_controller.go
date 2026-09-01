@@ -580,11 +580,12 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 
 		log.Info("Create VM for ElfMachine", "hostName", hostName)
 		vmInfo := &service.CloneVMInfo{
-			Cluster:    machineCtx.GetElfClusterID(),
-			Host:       service.GetTowerString(hostID),
-			CloudInit:  bootstrapData,
-			GPUDevices: gpuDeviceInfos,
-			HostName:   hostName,
+			Cluster:       machineCtx.GetElfClusterID(),
+			StorageConfig: machineCtx.GetStorageConfig(),
+			Host:          service.GetTowerString(hostID),
+			CloudInit:     bootstrapData,
+			GPUDevices:    gpuDeviceInfos,
+			HostName:      hostName,
 		}
 		withTaskVM, err := machineCtx.VMService.Clone(machineCtx.ElfCluster, machineCtx.ElfMachine, vmInfo)
 		if err != nil {

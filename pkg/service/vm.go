@@ -56,11 +56,12 @@ var (
 )
 
 type CloneVMInfo struct {
-	Cluster    string           `json:"cluster,omitempty"`
-	Host       string           `json:"host,omitempty"`
-	CloudInit  string           `json:"cloudInit,omitempty"`
-	GPUDevices []*GPUDeviceInfo `json:"gpuDevices,omitempty"`
-	HostName   string           `json:"hostName,omitempty"`
+	Cluster       string                 `json:"cluster,omitempty"`
+	StorageConfig *infrav1.StorageConfig `json:"storageConfig,omitempty"`
+	Host          string                 `json:"host,omitempty"`
+	CloudInit     string                 `json:"cloudInit,omitempty"`
+	GPUDevices    []*GPUDeviceInfo       `json:"gpuDevices,omitempty"`
+	HostName      string                 `json:"hostName,omitempty"`
 }
 
 type VMService interface {
@@ -203,12 +204,20 @@ func (svr *TowerVMService) Clone(
 		return nil, err
 	}
 
+	var storageConfig *models.StorageConfig
+	if storageConfigSpec := vmInfo.StorageConfig; storageConfigSpec != nil {
+		storageConfig = &models.StorageConfig{
+			DatastoreID:      TowerString(storageConfigSpec.DatastoreID),
+			StorageClusterID: TowerString(storageConfigSpec.StorageClusterID),
+		}
+	}
+
 	template, err := svr.GetVMTemplate(elfMachine.Spec.Template)
 	if err != nil {
 		return nil, err
 	}
 
-	createVMFromTemplateParams, err := svr.createVMFromTemplateParams(elfCluster, elfMachine, cluster, template, vmInfo)
+	createVMFromTemplateParams, err := svr.createVMFromTemplateParams(elfCluster, elfMachine, cluster, template, vmInfo, storageConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +234,8 @@ func (svr *TowerVMService) Clone(
 
 func (svr *TowerVMService) createVMFromTemplateParams(
 	elfCluster *infrav1.ElfCluster, elfMachine *infrav1.ElfMachine,
-	cluster *models.Cluster, template *models.ContentLibraryVMTemplate, vmInfo *CloneVMInfo) (*models.VMCreateVMFromContentLibraryTemplateParams, error) {
+	cluster *models.Cluster, template *models.ContentLibraryVMTemplate, vmInfo *CloneVMInfo,
+	storageConfig *models.StorageConfig) (*models.VMCreateVMFromContentLibraryTemplateParams, error) {
 	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
 	cpuSocketCores := TowerCPUSocketCores(elfMachine.Spec.NumCoresPerSocket, *vCPU)
 	cpuSockets := TowerCPUSockets(*vCPU, *cpuSocketCores)
@@ -364,12 +374,12 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 		}
 	}
 
-	var diskOperate *models.VMDiskOperate
+	var diskOperate *models.ContentLibraryVMTemplateDiskOperate
 	if elfCluster.IsStretched() {
 		// https://gist.github.com/Sczlog/f89763d27711fb2bbe28182f05b99334
-		diskOperate = &models.VMDiskOperate{
-			RemoveDisks: &models.VMDiskOperateRemoveDisks{},
-			NewDisks:    &models.VMDiskParams{},
+		diskOperate = &models.ContentLibraryVMTemplateDiskOperate{
+			RemoveDisks: &models.ContentLibraryVMTemplateDiskOperateRemoveDisks{},
+			NewDisks:    &models.ContentLibraryVMTemplateDiskParams{},
 		}
 		for _, disk := range template.VMDisks {
 			if *disk.Type != models.VMDiskTypeDISK {
@@ -378,39 +388,43 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 
 			diskOperate.RemoveDisks.DiskIndex = append(diskOperate.RemoveDisks.DiskIndex, *disk.Index)
 
-			diskOperate.NewDisks.MountNewCreateDisks = append(diskOperate.NewDisks.MountNewCreateDisks, &models.MountNewCreateDisksParams{
-				Boot:  disk.Boot,
-				Bus:   disk.Bus,
-				Index: disk.Index,
-				VMVolume: &models.MountNewCreateDisksParamsVMVolume{
-					Name:             TowerString(fmt.Sprintf("%s-%d", elfMachine.Name, *disk.Index+1)),
-					Size:             disk.Size,
-					ElfStoragePolicy: models.NewVMVolumeElfStoragePolicyType(models.VMVolumeElfStoragePolicyTypeREPLICA3THINPROVISION),
+			diskOperate.NewDisks.MountNewCreateDisks = append(diskOperate.NewDisks.MountNewCreateDisks, &models.ContentLibraryVMTemplateMountNewCreateDisksParams{
+				MountNewCreateDisksParams: models.MountNewCreateDisksParams{
+					Boot:  disk.Boot,
+					Bus:   disk.Bus,
+					Index: disk.Index,
+					VMVolume: &models.MountNewCreateDisksParamsVMVolume{
+						Name:             TowerString(fmt.Sprintf("%s-%d", elfMachine.Name, *disk.Index+1)),
+						Size:             disk.Size,
+						ElfStoragePolicy: models.NewVMVolumeElfStoragePolicyType(models.VMVolumeElfStoragePolicyTypeREPLICA3THINPROVISION),
+					},
 				},
+				StorageConfig: storageConfig,
 			})
 		}
 	}
 
 	return &models.VMCreateVMFromContentLibraryTemplateParams{
-		ClusterID:   cluster.ID,
-		HostID:      TowerString(hostID),
-		Name:        TowerString(elfMachine.Name),
-		Description: TowerString(config.VMDescription),
-		Owner:       owner,
-		Vcpu:        vCPU,
-		CPUCores:    cpuSocketCores,
-		CPUSockets:  cpuSockets,
-		Memory:      TowerMemory(elfMachine.Spec.MemoryMiB),
-		GpuDevices:  gpuDevices,
-		Status:      models.NewVMStatus(models.VMStatusSTOPPED),
-		Ha:          ha,
-		HaPriority:  haPriority,
-		IsFullCopy:  TowerBool(isFullCopy),
-		TemplateID:  template.ID,
-		GuestOsType: models.NewVMGuestsOperationSystem(models.VMGuestsOperationSystem(elfMachine.Spec.OSType)),
-		VMNics:      nics,
-		DiskOperate: diskOperate,
-		CloudInit:   cloudInit,
+		ClusterID:     cluster.ID,
+		HostID:        TowerString(hostID),
+		Name:          TowerString(elfMachine.Name),
+		Description:   TowerString(config.VMDescription),
+		Owner:         owner,
+		Vcpu:          vCPU,
+		CPUCores:      cpuSocketCores,
+		CPUSockets:    cpuSockets,
+		Memory:        TowerMemory(elfMachine.Spec.MemoryMiB),
+		GpuDevices:    gpuDevices,
+		Status:        models.NewVMStatus(models.VMStatusSTOPPED),
+		Ha:            ha,
+		HaPriority:    haPriority,
+		IsFullCopy:    TowerBool(isFullCopy),
+		TemplateID:    template.ID,
+		GuestOsType:   models.NewVMGuestsOperationSystem(models.VMGuestsOperationSystem(elfMachine.Spec.OSType)),
+		VMNics:        nics,
+		DiskOperate:   diskOperate,
+		StorageConfig: storageConfig,
+		CloudInit:     cloudInit,
 	}, nil
 }
 
