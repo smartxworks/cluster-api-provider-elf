@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	towerclient "github.com/smartxworks/cloudtower-go-sdk/v2/client"
 	clientcluster "github.com/smartxworks/cloudtower-go-sdk/v2/client/cluster"
 	clientvmtemplate "github.com/smartxworks/cloudtower-go-sdk/v2/client/content_library_vm_template"
 	clientgpu "github.com/smartxworks/cloudtower-go-sdk/v2/client/gpu_device"
@@ -38,10 +39,11 @@ import (
 	clientzone "github.com/smartxworks/cloudtower-go-sdk/v2/client/zone"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/cloudtower"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/session"
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 )
 
@@ -54,11 +56,12 @@ var (
 )
 
 type CloneVMInfo struct {
-	Cluster    string           `json:"cluster,omitempty"`
-	Host       string           `json:"host,omitempty"`
-	CloudInit  string           `json:"cloudInit,omitempty"`
-	GPUDevices []*GPUDeviceInfo `json:"gpuDevices,omitempty"`
-	HostName   string           `json:"hostName,omitempty"`
+	Cluster       string                 `json:"cluster,omitempty"`
+	StorageConfig *infrav1.StorageConfig `json:"storageConfig,omitempty"`
+	Host          string                 `json:"host,omitempty"`
+	CloudInit     string                 `json:"cloudInit,omitempty"`
+	GPUDevices    []*GPUDeviceInfo       `json:"gpuDevices,omitempty"`
+	HostName      string                 `json:"hostName,omitempty"`
 }
 
 type VMService interface {
@@ -102,20 +105,20 @@ type VMService interface {
 	GetVMGPUAllocationInfo(id string) (*models.VMGpuInfo, error)
 }
 
-type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
+type NewVMServiceFunc func(ctx goctx.Context, k8sClient client.Client, tower infrav1.Tower, logger logr.Logger) (VMService, error)
 
-func NewVMService(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error) {
-	authSession, err := session.GetOrCreate(ctx, auth)
+func NewVMService(ctx goctx.Context, k8sClient client.Client, tower infrav1.Tower, logger logr.Logger) (VMService, error) {
+	towerClient, err := cloudtower.NewTowerClient(ctx, k8sClient, tower)
 	if err != nil {
 		return nil, err
 	}
 
-	return &TowerVMService{authSession, logger}, nil
+	return &TowerVMService{towerClient, logger}, nil
 }
 
 type TowerVMService struct {
-	Session *session.TowerSession `json:"session"`
-	Logger  logr.Logger           `json:"logger"`
+	Client *towerclient.Cloudtower `json:"towerClient"`
+	Logger logr.Logger             `json:"logger"`
 }
 
 func (svr *TowerVMService) UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachine) (*models.WithTaskVM, error) {
@@ -135,7 +138,7 @@ func (svr *TowerVMService) UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachin
 		Where: &models.VMWhereInput{ID: TowerString(*vm.ID)},
 	}
 
-	updateVMResp, err := svr.Session.VM.UpdateVM(updateVMParams)
+	updateVMResp, err := svr.Client.VM.UpdateVM(updateVMParams)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +153,7 @@ func (svr *TowerVMService) GetVMDisks(vmDiskIDs []string) ([]*models.VMDisk, err
 		OrderBy: models.NewVMDiskOrderByInput(models.VMDiskOrderByInputBootASC),
 	}
 
-	getVMDisksResp, err := svr.Session.VMDisk.GetVMDisks(getVMDisksParams)
+	getVMDisksResp, err := svr.Client.VMDisk.GetVMDisks(getVMDisksParams)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +167,7 @@ func (svr *TowerVMService) GetVMVolume(volumeID string) (*models.VMVolume, error
 		Where: &models.VMVolumeWhereInput{ID: TowerString(volumeID)},
 	}
 
-	getVMVolumesResp, err := svr.Session.VMVolume.GetVMVolumes(getVMVolumesParams)
+	getVMVolumesResp, err := svr.Client.VMVolume.GetVMVolumes(getVMVolumesParams)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +188,7 @@ func (svr *TowerVMService) ResizeVMVolume(vmVolumeID string, size int64) (*model
 		Where: &models.VMVolumeWhereInput{ID: TowerString(vmVolumeID)},
 	}
 
-	updateVMVolumeResp, err := svr.Session.VMVolume.UpdateVMVolume(updateVMVolumeParams)
+	updateVMVolumeResp, err := svr.Client.VMVolume.UpdateVMVolume(updateVMVolumeParams)
 	if err != nil {
 		return nil, err
 	}
@@ -201,19 +204,27 @@ func (svr *TowerVMService) Clone(
 		return nil, err
 	}
 
+	var storageConfig *models.StorageConfig
+	if storageConfigSpec := vmInfo.StorageConfig; storageConfigSpec != nil {
+		storageConfig = &models.StorageConfig{
+			DatastoreID:      TowerString(storageConfigSpec.DatastoreID),
+			StorageClusterID: TowerString(storageConfigSpec.StorageClusterID),
+		}
+	}
+
 	template, err := svr.GetVMTemplate(elfMachine.Spec.Template)
 	if err != nil {
 		return nil, err
 	}
 
-	createVMFromTemplateParams, err := svr.createVMFromTemplateParams(elfCluster, elfMachine, cluster, template, vmInfo)
+	createVMFromTemplateParams, err := svr.createVMFromTemplateParams(elfCluster, elfMachine, cluster, template, vmInfo, storageConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	createVMFromContentLibraryTemplateParams := clientvm.NewCreateVMFromContentLibraryTemplateParams()
 	createVMFromContentLibraryTemplateParams.RequestBody = []*models.VMCreateVMFromContentLibraryTemplateParams{createVMFromTemplateParams}
-	createVMFromTemplateResp, err := svr.Session.VM.CreateVMFromContentLibraryTemplate(createVMFromContentLibraryTemplateParams)
+	createVMFromTemplateResp, err := svr.Client.VM.CreateVMFromContentLibraryTemplate(createVMFromContentLibraryTemplateParams)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +234,8 @@ func (svr *TowerVMService) Clone(
 
 func (svr *TowerVMService) createVMFromTemplateParams(
 	elfCluster *infrav1.ElfCluster, elfMachine *infrav1.ElfMachine,
-	cluster *models.Cluster, template *models.ContentLibraryVMTemplate, vmInfo *CloneVMInfo) (*models.VMCreateVMFromContentLibraryTemplateParams, error) {
+	cluster *models.Cluster, template *models.ContentLibraryVMTemplate, vmInfo *CloneVMInfo,
+	storageConfig *models.StorageConfig) (*models.VMCreateVMFromContentLibraryTemplateParams, error) {
 	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
 	cpuSocketCores := TowerCPUSocketCores(elfMachine.Spec.NumCoresPerSocket, *vCPU)
 	cpuSockets := TowerCPUSockets(*vCPU, *cpuSocketCores)
@@ -362,12 +374,12 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 		}
 	}
 
-	var diskOperate *models.VMDiskOperate
+	var diskOperate *models.ContentLibraryVMTemplateDiskOperate
 	if elfCluster.IsStretched() {
 		// https://gist.github.com/Sczlog/f89763d27711fb2bbe28182f05b99334
-		diskOperate = &models.VMDiskOperate{
-			RemoveDisks: &models.VMDiskOperateRemoveDisks{},
-			NewDisks:    &models.VMDiskParams{},
+		diskOperate = &models.ContentLibraryVMTemplateDiskOperate{
+			RemoveDisks: &models.ContentLibraryVMTemplateDiskOperateRemoveDisks{},
+			NewDisks:    &models.ContentLibraryVMTemplateDiskParams{},
 		}
 		for _, disk := range template.VMDisks {
 			if *disk.Type != models.VMDiskTypeDISK {
@@ -376,39 +388,43 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 
 			diskOperate.RemoveDisks.DiskIndex = append(diskOperate.RemoveDisks.DiskIndex, *disk.Index)
 
-			diskOperate.NewDisks.MountNewCreateDisks = append(diskOperate.NewDisks.MountNewCreateDisks, &models.MountNewCreateDisksParams{
-				Boot:  disk.Boot,
-				Bus:   disk.Bus,
-				Index: disk.Index,
-				VMVolume: &models.MountNewCreateDisksParamsVMVolume{
-					Name:             TowerString(fmt.Sprintf("%s-%d", elfMachine.Name, *disk.Index+1)),
-					Size:             disk.Size,
-					ElfStoragePolicy: models.NewVMVolumeElfStoragePolicyType(models.VMVolumeElfStoragePolicyTypeREPLICA3THINPROVISION),
+			diskOperate.NewDisks.MountNewCreateDisks = append(diskOperate.NewDisks.MountNewCreateDisks, &models.ContentLibraryVMTemplateMountNewCreateDisksParams{
+				MountNewCreateDisksParams: models.MountNewCreateDisksParams{
+					Boot:  disk.Boot,
+					Bus:   disk.Bus,
+					Index: disk.Index,
+					VMVolume: &models.MountNewCreateDisksParamsVMVolume{
+						Name:             TowerString(fmt.Sprintf("%s-%d", elfMachine.Name, *disk.Index+1)),
+						Size:             disk.Size,
+						ElfStoragePolicy: models.NewVMVolumeElfStoragePolicyType(models.VMVolumeElfStoragePolicyTypeREPLICA3THINPROVISION),
+					},
 				},
+				StorageConfig: storageConfig,
 			})
 		}
 	}
 
 	return &models.VMCreateVMFromContentLibraryTemplateParams{
-		ClusterID:   cluster.ID,
-		HostID:      TowerString(hostID),
-		Name:        TowerString(elfMachine.Name),
-		Description: TowerString(fmt.Sprintf(config.VMDescription, elfCluster.Spec.Tower.Server)),
-		Owner:       owner,
-		Vcpu:        vCPU,
-		CPUCores:    cpuSocketCores,
-		CPUSockets:  cpuSockets,
-		Memory:      TowerMemory(elfMachine.Spec.MemoryMiB),
-		GpuDevices:  gpuDevices,
-		Status:      models.NewVMStatus(models.VMStatusSTOPPED),
-		Ha:          ha,
-		HaPriority:  haPriority,
-		IsFullCopy:  TowerBool(isFullCopy),
-		TemplateID:  template.ID,
-		GuestOsType: models.NewVMGuestsOperationSystem(models.VMGuestsOperationSystem(elfMachine.Spec.OSType)),
-		VMNics:      nics,
-		DiskOperate: diskOperate,
-		CloudInit:   cloudInit,
+		ClusterID:     cluster.ID,
+		HostID:        TowerString(hostID),
+		Name:          TowerString(elfMachine.Name),
+		Description:   TowerString(config.VMDescription),
+		Owner:         owner,
+		Vcpu:          vCPU,
+		CPUCores:      cpuSocketCores,
+		CPUSockets:    cpuSockets,
+		Memory:        TowerMemory(elfMachine.Spec.MemoryMiB),
+		GpuDevices:    gpuDevices,
+		Status:        models.NewVMStatus(models.VMStatusSTOPPED),
+		Ha:            ha,
+		HaPriority:    haPriority,
+		IsFullCopy:    TowerBool(isFullCopy),
+		TemplateID:    template.ID,
+		GuestOsType:   models.NewVMGuestsOperationSystem(models.VMGuestsOperationSystem(elfMachine.Spec.OSType)),
+		VMNics:        nics,
+		DiskOperate:   diskOperate,
+		StorageConfig: storageConfig,
+		CloudInit:     cloudInit,
 	}, nil
 }
 
@@ -423,7 +439,7 @@ func (svr *TowerVMService) Migrate(vmID, hostID string) (*models.WithTaskVM, err
 		},
 	}
 
-	migrateVMResp, err := svr.Session.VM.MigrateVM(migrateVMParams)
+	migrateVMResp, err := svr.Client.VM.MigrateVM(migrateVMParams)
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +456,7 @@ func (svr *TowerVMService) Delete(id string) (*models.Task, error) {
 		},
 	}
 
-	deleteVMResp, err := svr.Session.VM.DeleteVM(deleteVMParams)
+	deleteVMResp, err := svr.Client.VM.DeleteVM(deleteVMParams)
 	if err != nil {
 		return nil, err
 	}
@@ -461,7 +477,7 @@ func (svr *TowerVMService) PowerOff(id string) (*models.Task, error) {
 		},
 	}
 
-	poweroffVMResp, err := svr.Session.VM.PoweroffVM(poweroffVMParams)
+	poweroffVMResp, err := svr.Client.VM.PoweroffVM(poweroffVMParams)
 	if err != nil {
 		return nil, err
 	}
@@ -489,7 +505,7 @@ func (svr *TowerVMService) PowerOn(id string, hostID string) (*models.Task, erro
 		startVMParams.RequestBody.Data = &models.VMStartParamsData{HostID: TowerString(hostID)}
 	}
 
-	startVMResp, err := svr.Session.VM.StartVM(startVMParams)
+	startVMResp, err := svr.Client.VM.StartVM(startVMParams)
 	if err != nil {
 		return nil, err
 	}
@@ -510,7 +526,7 @@ func (svr *TowerVMService) ShutDown(id string) (*models.Task, error) {
 		},
 	}
 
-	shutDownVMResp, err := svr.Session.VM.ShutDownVM(shutDownVMParams)
+	shutDownVMResp, err := svr.Client.VM.ShutDownVM(shutDownVMParams)
 	if err != nil {
 		return nil, err
 	}
@@ -531,7 +547,7 @@ func (svr *TowerVMService) RemoveGPUDevices(id string, gpus []*models.VMGpuOpera
 		},
 	}
 
-	temoveVMGPUDeviceResp, err := svr.Session.VM.RemoveVMGpuDevice(removeVMGpuDeviceParams)
+	temoveVMGPUDeviceResp, err := svr.Client.VM.RemoveVMGpuDevice(removeVMGpuDeviceParams)
 	if err != nil {
 		return nil, err
 	}
@@ -560,7 +576,7 @@ func (svr *TowerVMService) AddGPUDevices(id string, gpuDeviceInfos []*GPUDeviceI
 		},
 	}
 
-	addVMGpuDeviceResp, err := svr.Session.VM.AddVMGpuDevice(addVMGpuDeviceParams)
+	addVMGpuDeviceResp, err := svr.Client.VM.AddVMGpuDevice(addVMGpuDeviceParams)
 	if err != nil {
 		return nil, err
 	}
@@ -581,7 +597,7 @@ func (svr *TowerVMService) Get(id string) (*models.VM, error) {
 		},
 	}
 
-	getVmsResp, err := svr.Session.VM.GetVms(getVmsParams)
+	getVmsResp, err := svr.Client.VM.GetVms(getVmsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -602,7 +618,7 @@ func (svr *TowerVMService) GetByName(name string) (*models.VM, error) {
 		},
 	}
 
-	getVmsResp, err := svr.Session.VM.GetVms(getVmsParams)
+	getVmsResp, err := svr.Client.VM.GetVms(getVmsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -627,7 +643,7 @@ func (svr *TowerVMService) FindByIDs(ids []string) ([]*models.VM, error) {
 		},
 	}
 
-	getVmsResp, err := svr.Session.VM.GetVms(getVmsParams)
+	getVmsResp, err := svr.Client.VM.GetVms(getVmsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -648,7 +664,7 @@ func (svr *TowerVMService) FindVMsByName(name string) ([]*models.VM, error) {
 		},
 	}
 
-	getVmsResp, err := svr.Session.VM.GetVms(getVmsParams)
+	getVmsResp, err := svr.Client.VM.GetVms(getVmsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -668,7 +684,7 @@ func (svr *TowerVMService) GetVMNics(vmID string) ([]*models.VMNic, error) {
 		OrderBy: models.NewVMNicOrderByInput(models.VMNicOrderByInputOrderASC),
 	}
 
-	getVMNicsResp, err := svr.Session.VMNic.GetVMNics(getVMNicsParams)
+	getVMNicsResp, err := svr.Client.VMNic.GetVMNics(getVMNicsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -687,7 +703,7 @@ func (svr *TowerVMService) AddVMNics(vmID string, nics []*models.VMNicParams) (*
 		},
 	}
 
-	addVMNicResp, err := svr.Session.VM.AddVMNic(addVMNicParams)
+	addVMNicResp, err := svr.Client.VM.AddVMNic(addVMNicParams)
 	if err != nil {
 		return nil, err
 	}
@@ -708,7 +724,7 @@ func (svr *TowerVMService) GetCluster(id string) (*models.Cluster, error) {
 		},
 	}
 
-	getClustersResp, err := svr.Session.Cluster.GetClusters(getClustersParams)
+	getClustersResp, err := svr.Client.Cluster.GetClusters(getClustersParams)
 	if err != nil {
 		return nil, err
 	}
@@ -730,7 +746,7 @@ func (svr *TowerVMService) GetClusterZones(clusterID string) ([]*models.Zone, er
 		},
 	}
 
-	getZonesResp, err := svr.Session.Zone.GetZones(getZonesParams)
+	getZonesResp, err := svr.Client.Zone.GetZones(getZonesParams)
 	if err != nil {
 		return nil, err
 	}
@@ -746,7 +762,7 @@ func (svr *TowerVMService) GetHost(id string) (*models.Host, error) {
 		},
 	}
 
-	getHostsResp, err := svr.Session.Host.GetHosts(getHostsParams)
+	getHostsResp, err := svr.Client.Host.GetHosts(getHostsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -768,7 +784,7 @@ func (svr *TowerVMService) GetHostsByCluster(clusterID string) (Hosts, error) {
 		},
 	}
 
-	getHostsResp, err := svr.Session.Host.GetHosts(getHostsParams)
+	getHostsResp, err := svr.Client.Host.GetHosts(getHostsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -789,7 +805,7 @@ func (svr *TowerVMService) GetVlan(id string) (*models.Vlan, error) {
 		},
 	}
 
-	getVlansResp, err := svr.Session.Vlan.GetVlans(getVlansParams)
+	getVlansResp, err := svr.Client.Vlan.GetVlans(getVlansParams)
 	if err != nil {
 		return nil, err
 	}
@@ -820,7 +836,7 @@ func (svr *TowerVMService) GetVMTemplate(template string) (*models.ContentLibrar
 		},
 	}
 
-	getVMTemplatesResp, err := svr.Session.ContentLibraryVMTemplate.GetContentLibraryVMTemplates(getVMTemplatesParams)
+	getVMTemplatesResp, err := svr.Client.ContentLibraryVMTemplate.GetContentLibraryVMTemplates(getVMTemplatesParams)
 	if err != nil {
 		return nil, err
 	}
@@ -849,7 +865,7 @@ func (svr *TowerVMService) GetTask(id string) (*models.Task, error) {
 		},
 	}
 
-	getTasksResp, err := svr.Session.Task.GetTasks(getTasksParams)
+	getTasksResp, err := svr.Client.Task.GetTasks(getTasksParams)
 	if err != nil {
 		return nil, err
 	}
@@ -894,7 +910,7 @@ func (svr *TowerVMService) UpsertLabel(key, value string) (*models.Label, error)
 			Value: TowerString(value),
 		},
 	}
-	getLabelResp, err := svr.Session.Label.GetLabels(getLabelParams)
+	getLabelResp, err := svr.Client.Label.GetLabels(getLabelParams)
 	if err != nil {
 		return nil, err
 	}
@@ -906,7 +922,7 @@ func (svr *TowerVMService) UpsertLabel(key, value string) (*models.Label, error)
 	createLabelParams.RequestBody = []*models.LabelCreationParams{
 		{Key: &key, Value: &value},
 	}
-	createLabelResp, err := svr.Session.Label.CreateLabel(createLabelParams)
+	createLabelResp, err := svr.Client.Label.CreateLabel(createLabelParams)
 	if err != nil {
 		return nil, err
 	}
@@ -936,7 +952,7 @@ func (svr *TowerVMService) DeleteLabel(key, value string, strict bool) (string, 
 		)
 	}
 
-	deleteLabelResp, err := svr.Session.Label.DeleteLabel(deleteLabelParams)
+	deleteLabelResp, err := svr.Client.Label.DeleteLabel(deleteLabelParams)
 	if err != nil {
 		return "", err
 	}
@@ -960,7 +976,7 @@ func (svr *TowerVMService) CleanUnusedLabels(keys []string) ([]string, error) {
 		},
 	}
 
-	deleteLabelResp, err := svr.Session.Label.DeleteLabel(deleteLabelParams)
+	deleteLabelResp, err := svr.Client.Label.DeleteLabel(deleteLabelParams)
 	if err != nil {
 		return nil, err
 	}
@@ -986,7 +1002,7 @@ func (svr *TowerVMService) AddLabelsToVM(vmID string, labelIds []string) (*model
 			},
 		},
 	}
-	addLabelsResp, err := svr.Session.Label.AddLabelsToResources(addLabelsParams)
+	addLabelsResp, err := svr.Client.Label.AddLabelsToResources(addLabelsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -1009,7 +1025,7 @@ func (svr *TowerVMService) CreateVMPlacementGroup(name, clusterID string, vmPoli
 		VMVMPolicyEnabled:   TowerBool(true),
 		VMVMPolicy:          &vmPolicy,
 	}}
-	createVMPlacementGroupResp, err := svr.Session.VMPlacementGroup.CreateVMPlacementGroup(createVMPlacementGroupParams)
+	createVMPlacementGroupResp, err := svr.Client.VMPlacementGroup.CreateVMPlacementGroup(createVMPlacementGroupParams)
 	if err != nil {
 		return nil, err
 	}
@@ -1026,7 +1042,7 @@ func (svr *TowerVMService) GetVMPlacementGroup(name string) (*models.VMPlacement
 		},
 	}
 
-	getVMPlacementGroupsResp, err := svr.Session.VMPlacementGroup.GetVMPlacementGroups(getVMPlacementGroupsParams)
+	getVMPlacementGroupsResp, err := svr.Client.VMPlacementGroup.GetVMPlacementGroups(getVMPlacementGroupsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -1057,7 +1073,7 @@ func (svr *TowerVMService) AddVMsToPlacementGroup(placementGroup *models.VMPlace
 		},
 	}
 
-	updateVMPlacementGroupResp, err := svr.Session.VMPlacementGroup.UpdateVMPlacementGroup(updateVMPlacementGroupParams)
+	updateVMPlacementGroupResp, err := svr.Client.VMPlacementGroup.UpdateVMPlacementGroup(updateVMPlacementGroupParams)
 	if err != nil {
 		return nil, err
 	}
@@ -1078,7 +1094,7 @@ func (svr *TowerVMService) DeleteVMPlacementGroupByID(ctx goctx.Context, id stri
 		},
 	}
 
-	getVMPlacementGroupsResp, err := svr.Session.VMPlacementGroup.GetVMPlacementGroups(getVMPlacementGroupsParams)
+	getVMPlacementGroupsResp, err := svr.Client.VMPlacementGroup.GetVMPlacementGroups(getVMPlacementGroupsParams)
 	if err != nil {
 		return false, err
 	}
@@ -1096,7 +1112,7 @@ func (svr *TowerVMService) DeleteVMPlacementGroupByID(ctx goctx.Context, id stri
 		},
 	}
 
-	if _, err := svr.Session.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams); err != nil {
+	if _, err := svr.Client.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams); err != nil {
 		return false, err
 	}
 
@@ -1120,7 +1136,7 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context
 		},
 	}
 
-	getVMPlacementGroupsResp, err := svr.Session.VMPlacementGroup.GetVMPlacementGroups(getVMPlacementGroupsParams)
+	getVMPlacementGroupsResp, err := svr.Client.VMPlacementGroup.GetVMPlacementGroups(getVMPlacementGroupsParams)
 	if err != nil {
 		return nil, err
 	} else if len(getVMPlacementGroupsResp.Payload) == 0 {
@@ -1135,7 +1151,7 @@ func (svr *TowerVMService) DeleteVMPlacementGroupsByNamePrefix(ctx goctx.Context
 		},
 	}
 
-	deleteVMPlacementGroupResp, err := svr.Session.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams)
+	deleteVMPlacementGroupResp, err := svr.Client.VMPlacementGroup.DeleteVMPlacementGroup(deleteVMPlacementGroupParams)
 	if err != nil {
 		return nil, err
 	}
@@ -1180,7 +1196,7 @@ func (svr *TowerVMService) GetGPUDevicesAllocationInfoByIDs(gpuIDs []string) (GP
 		},
 	}
 
-	getDetailVMInfoByGpuDevicesResp, err := svr.Session.GpuDevice.GetDetailVMInfoByGpuDevices(getDetailVMInfoByGpuDevicesParams)
+	getDetailVMInfoByGpuDevicesResp, err := svr.Client.GpuDevice.GetDetailVMInfoByGpuDevices(getDetailVMInfoByGpuDevicesParams)
 	if err != nil {
 		return nil, err
 	}
@@ -1209,7 +1225,7 @@ func (svr *TowerVMService) GetGPUDevicesAllocationInfoByHostIDs(hostIDs []string
 		getDetailVMInfoByGpuDevicesParams.RequestBody.Where.AvailableVgpusNumGt = TowerInt32(0)
 	}
 
-	getDetailVMInfoByGpuDevicesResp, err := svr.Session.GpuDevice.GetDetailVMInfoByGpuDevices(getDetailVMInfoByGpuDevicesParams)
+	getDetailVMInfoByGpuDevicesResp, err := svr.Client.GpuDevice.GetDetailVMInfoByGpuDevices(getDetailVMInfoByGpuDevicesParams)
 	if err != nil {
 		return nil, err
 	}
@@ -1226,7 +1242,7 @@ func (svr *TowerVMService) GetVMGPUAllocationInfo(id string) (*models.VMGpuInfo,
 		},
 	}
 
-	getVMGpuDeviceInfoResp, err := svr.Session.VM.GetVMGpuDeviceInfo(getVMGpuDeviceInfoParams)
+	getVMGpuDeviceInfoResp, err := svr.Client.VM.GetVMGpuDeviceInfo(getVMGpuDeviceInfoParams)
 	if err != nil {
 		return nil, err
 	}

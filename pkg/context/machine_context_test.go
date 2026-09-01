@@ -237,6 +237,44 @@ func TestGetElfClusterID(t *testing.T) {
 	}
 }
 
+func TestGetStorageConfig(t *testing.T) {
+	tests := []struct {
+		name       string
+		elfCluster *infrav1.ElfCluster
+		expected   *infrav1.StorageConfig
+	}{
+		{
+			name:       "When ElfCluster is nil should return nil",
+			elfCluster: nil,
+			expected:   nil,
+		},
+		{
+			name:       "When storage config is not set should return nil",
+			elfCluster: &infrav1.ElfCluster{},
+			expected:   nil,
+		},
+		{
+			name: "When one storage config is set should return it",
+			elfCluster: &infrav1.ElfCluster{
+				Spec: infrav1.ElfClusterSpec{
+					StorageCluster: infrav1.StorageConfig{StorageClusterID: "storage-cluster"},
+				},
+			},
+			expected: &infrav1.StorageConfig{StorageClusterID: "storage-cluster"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			ctx := &MachineContext{
+				ElfCluster: tc.elfCluster,
+			}
+			g.Expect(ctx.GetStorageConfig()).To(Equal(tc.expected))
+		})
+	}
+}
+
 // strPtr is a helper to get a pointer to a string literal.
 func strPtr(s string) *string {
 	return &s
