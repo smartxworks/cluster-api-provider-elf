@@ -12,7 +12,7 @@ require (
 	github.com/onsi/gomega v1.38.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
-	github.com/smartxworks/cloudtower-go-sdk/v2 v2.24.0-rc.4
+	github.com/smartxworks/cloudtower-go-sdk/v2 v2.24.0-rc.8
 	github.com/smartxworks/host-config-agent-api v0.0.0-20240410021405-be1517a07889
 	golang.org/x/mod v0.31.0
 	golang.org/x/sync v0.19.0
