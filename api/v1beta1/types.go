@@ -22,6 +22,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	apitypes "k8s.io/apimachinery/pkg/types"
 )
 
 // CloneMode is the type of clone operation used to clone a VM from a template.
@@ -88,6 +89,14 @@ func (t *Tower) String() string {
 	}
 
 	return t.TowerClientConfig.Server
+}
+
+func (t *Tower) SecretKey() apitypes.NamespacedName {
+	if t.SecretRef == nil {
+		return apitypes.NamespacedName{}
+	}
+
+	return apitypes.NamespacedName{Namespace: t.SecretRef.Namespace, Name: t.SecretRef.Name}
 }
 
 // TowerClientConfig is the connection information for the tower server.
