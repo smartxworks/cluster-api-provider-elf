@@ -31,7 +31,7 @@ func TestCreateVMFromTemplateParams(t *testing.T) {
 	t.Run("when storage cluster is set should use top-level storage config", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 
-		params := newTestCreateVMFromTemplateParams(t, infrav1.ElfClusterTypeStandard, &infrav1.StorageConfig{StorageClusterID: "storage-cluster"})
+		params := newTestCreateVMFromTemplateParams(t, infrav1.ElfClusterTypeStandard, &models.StorageConfig{StorageClusterID: TowerString("storage-cluster")})
 
 		g.Expect(params.StorageConfig).NotTo(gomega.BeNil())
 		g.Expect(*params.StorageConfig.StorageClusterID).To(gomega.Equal("storage-cluster"))
@@ -49,12 +49,11 @@ func TestCreateVMFromTemplateParams(t *testing.T) {
 	t.Run("when datastore is set should use top-level storage config", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 
-		params := newTestCreateVMFromTemplateParams(t, infrav1.ElfClusterTypeStandard, &infrav1.StorageConfig{DatastoreID: "datastore"})
+		params := newTestCreateVMFromTemplateParams(t, infrav1.ElfClusterTypeStandard, &models.StorageConfig{DatastoreID: TowerString("datastore")})
 
 		g.Expect(params.StorageConfig).NotTo(gomega.BeNil())
 		g.Expect(*params.StorageConfig.DatastoreID).To(gomega.Equal("datastore"))
 		g.Expect(params.StorageConfig.StorageClusterID).To(gomega.BeNil())
-
 	})
 
 	t.Run("when storage cluster is unset should omit storage config", func(t *testing.T) {
@@ -74,7 +73,7 @@ func TestCreateVMFromTemplateParams(t *testing.T) {
 	t.Run("when stretched and storage cluster is set should use disk storage config", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 
-		params := newTestCreateVMFromTemplateParams(t, infrav1.ElfClusterTypeStretched, &infrav1.StorageConfig{StorageClusterID: "storage-cluster"})
+		params := newTestCreateVMFromTemplateParams(t, infrav1.ElfClusterTypeStretched, &models.StorageConfig{StorageClusterID: TowerString("storage-cluster")})
 
 		g.Expect(params.DiskOperate).NotTo(gomega.BeNil())
 		g.Expect(params.DiskOperate.NewDisks.MountNewCreateDisks).To(gomega.HaveLen(1))
@@ -100,19 +99,8 @@ func TestCreateVMFromTemplateParams(t *testing.T) {
 	})
 }
 
-func newTestCreateVMFromTemplateParams(t *testing.T, clusterType infrav1.ElfClusterType, config *infrav1.StorageConfig) *models.VMCreateVMFromContentLibraryTemplateParams {
+func newTestCreateVMFromTemplateParams(t *testing.T, clusterType infrav1.ElfClusterType, config *models.StorageConfig) *models.VMCreateVMFromContentLibraryTemplateParams {
 	t.Helper()
-
-	var storageConfig *models.StorageConfig
-	if config != nil {
-		storageConfig = &models.StorageConfig{}
-		if config.DatastoreID != "" {
-			storageConfig.DatastoreID = TowerString(config.DatastoreID)
-		}
-		if config.StorageClusterID != "" {
-			storageConfig.StorageClusterID = TowerString(config.StorageClusterID)
-		}
-	}
 
 	service := &TowerVMService{}
 	elfCluster := &infrav1.ElfCluster{
@@ -147,8 +135,7 @@ func newTestCreateVMFromTemplateParams(t *testing.T, clusterType infrav1.ElfClus
 		elfMachine,
 		&models.Cluster{ID: TowerString("compute-cluster")},
 		template,
-		&CloneVMInfo{},
-		storageConfig,
+		&CloneVMInfo{StorageConfig: config},
 	)
 	if err != nil {
 		t.Fatalf("createVMFromTemplateParams() error = %v", err)

@@ -20,10 +20,12 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
 func TestMachineContextString(t *testing.T) {
@@ -241,7 +243,7 @@ func TestGetStorageConfig(t *testing.T) {
 	tests := []struct {
 		name       string
 		elfCluster *infrav1.ElfCluster
-		expected   *infrav1.StorageConfig
+		expected   *models.StorageConfig
 	}{
 		{
 			name:       "When ElfCluster is nil should return nil",
@@ -260,7 +262,7 @@ func TestGetStorageConfig(t *testing.T) {
 					StorageCluster: infrav1.StorageConfig{StorageClusterID: "storage-cluster"},
 				},
 			},
-			expected: &infrav1.StorageConfig{StorageClusterID: "storage-cluster"},
+			expected: &models.StorageConfig{StorageClusterID: service.TowerString("storage-cluster")},
 		},
 	}
 
