@@ -56,12 +56,12 @@ var (
 )
 
 type CloneVMInfo struct {
-	Cluster       string                 `json:"cluster,omitempty"`
-	StorageConfig *infrav1.StorageConfig `json:"storageConfig,omitempty"`
-	Host          string                 `json:"host,omitempty"`
-	CloudInit     string                 `json:"cloudInit,omitempty"`
-	GPUDevices    []*GPUDeviceInfo       `json:"gpuDevices,omitempty"`
-	HostName      string                 `json:"hostName,omitempty"`
+	Cluster       string                `json:"cluster,omitempty"`
+	StorageConfig *models.StorageConfig `json:"storageConfig,omitempty"`
+	Host          string                `json:"host,omitempty"`
+	CloudInit     string                `json:"cloudInit,omitempty"`
+	GPUDevices    []*GPUDeviceInfo      `json:"gpuDevices,omitempty"`
+	HostName      string                `json:"hostName,omitempty"`
 }
 
 type VMService interface {
@@ -204,20 +204,12 @@ func (svr *TowerVMService) Clone(
 		return nil, err
 	}
 
-	var storageConfig *models.StorageConfig
-	if storageConfigSpec := vmInfo.StorageConfig; storageConfigSpec != nil {
-		storageConfig = &models.StorageConfig{
-			DatastoreID:      TowerString(storageConfigSpec.DatastoreID),
-			StorageClusterID: TowerString(storageConfigSpec.StorageClusterID),
-		}
-	}
-
 	template, err := svr.GetVMTemplate(elfMachine.Spec.Template)
 	if err != nil {
 		return nil, err
 	}
 
-	createVMFromTemplateParams, err := svr.createVMFromTemplateParams(elfCluster, elfMachine, cluster, template, vmInfo, storageConfig)
+	createVMFromTemplateParams, err := svr.createVMFromTemplateParams(elfCluster, elfMachine, cluster, template, vmInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -232,10 +224,10 @@ func (svr *TowerVMService) Clone(
 	return createVMFromTemplateResp.Payload[0], nil
 }
 
+//nolint:maintidx
 func (svr *TowerVMService) createVMFromTemplateParams(
 	elfCluster *infrav1.ElfCluster, elfMachine *infrav1.ElfMachine,
-	cluster *models.Cluster, template *models.ContentLibraryVMTemplate, vmInfo *CloneVMInfo,
-	storageConfig *models.StorageConfig) (*models.VMCreateVMFromContentLibraryTemplateParams, error) {
+	cluster *models.Cluster, template *models.ContentLibraryVMTemplate, vmInfo *CloneVMInfo) (*models.VMCreateVMFromContentLibraryTemplateParams, error) {
 	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
 	cpuSocketCores := TowerCPUSocketCores(elfMachine.Spec.NumCoresPerSocket, *vCPU)
 	cpuSockets := TowerCPUSockets(*vCPU, *cpuSocketCores)
@@ -399,7 +391,7 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 						ElfStoragePolicy: models.NewVMVolumeElfStoragePolicyType(models.VMVolumeElfStoragePolicyTypeREPLICA3THINPROVISION),
 					},
 				},
-				StorageConfig: storageConfig,
+				StorageConfig: vmInfo.StorageConfig,
 			})
 		}
 	}
@@ -423,7 +415,7 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 		GuestOsType:   models.NewVMGuestsOperationSystem(models.VMGuestsOperationSystem(elfMachine.Spec.OSType)),
 		VMNics:        nics,
 		DiskOperate:   diskOperate,
-		StorageConfig: storageConfig,
+		StorageConfig: vmInfo.StorageConfig,
 		CloudInit:     cloudInit,
 	}, nil
 }
