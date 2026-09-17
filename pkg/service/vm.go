@@ -23,7 +23,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	towerclient "github.com/smartxworks/cloudtower-go-sdk/v2/client"
 	clientcluster "github.com/smartxworks/cloudtower-go-sdk/v2/client/cluster"
 	clientvmtemplate "github.com/smartxworks/cloudtower-go-sdk/v2/client/content_library_vm_template"
 	clientgpu "github.com/smartxworks/cloudtower-go-sdk/v2/client/gpu_device"
@@ -39,11 +38,10 @@ import (
 	clientzone "github.com/smartxworks/cloudtower-go-sdk/v2/client/zone"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
-	"github.com/smartxworks/cluster-api-provider-elf/pkg/cloudtower"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/session"
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 )
 
@@ -105,20 +103,20 @@ type VMService interface {
 	GetVMGPUAllocationInfo(id string) (*models.VMGpuInfo, error)
 }
 
-type NewVMServiceFunc func(ctx goctx.Context, k8sClient client.Client, tower infrav1.Tower, logger logr.Logger) (VMService, error)
+type NewVMServiceFunc func(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error)
 
-func NewVMService(ctx goctx.Context, k8sClient client.Client, tower infrav1.Tower, logger logr.Logger) (VMService, error) {
-	towerClient, err := cloudtower.NewTowerClient(ctx, k8sClient, tower)
+func NewVMService(ctx goctx.Context, auth infrav1.Tower, logger logr.Logger) (VMService, error) {
+	authSession, err := session.GetOrCreate(ctx, auth)
 	if err != nil {
 		return nil, err
 	}
 
-	return &TowerVMService{towerClient, logger}, nil
+	return &TowerVMService{authSession, logger}, nil
 }
 
 type TowerVMService struct {
-	Client *towerclient.Cloudtower `json:"towerClient"`
-	Logger logr.Logger             `json:"logger"`
+	Client *session.TowerSession `json:"session"`
+	Logger logr.Logger           `json:"logger"`
 }
 
 func (svr *TowerVMService) UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachine) (*models.WithTaskVM, error) {

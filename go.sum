@@ -410,8 +410,8 @@ github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6Mwd
 github.com/sirupsen/logrus v1.7.0/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
 github.com/sirupsen/logrus v1.9.3/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVsIT4qYEQ=
-github.com/smartxworks/cloudtower-go-sdk/v2 v2.21.0-rc.2 h1:jM/uytG4DXkkgfJ9FlGS7/BaYE8IyDvj/73TMoemwmc=
-github.com/smartxworks/cloudtower-go-sdk/v2 v2.21.0-rc.2/go.mod h1:X6R9+L438SMnLJXykSCV3fJ+AZul0hlyjITsZgrSRtM=
+github.com/smartxworks/cloudtower-go-sdk/v2 v2.24.0-rc.8 h1:So8v68JR/IynMptuPvzbwu+AoZXVkK4Bt8X5M4D1lS8=
+github.com/smartxworks/cloudtower-go-sdk/v2 v2.24.0-rc.8/go.mod h1:X6R9+L438SMnLJXykSCV3fJ+AZul0hlyjITsZgrSRtM=
 github.com/smartxworks/host-config-agent-api v0.0.0-20240410021405-be1517a07889 h1:kXlP3d9BEE6q31cR3qAehK0BKNVuCZ6jT2t+Jf5Gwrs=
 github.com/smartxworks/host-config-agent-api v0.0.0-20240410021405-be1517a07889/go.mod h1:oexROTOhF0Ium/iTwRbwXwZy+eGkzYE5a5qe3HvvKug=
 github.com/soheilhy/cmux v0.1.5 h1:jjzc5WVemNEDTLwv9tlmemhC73tI08BNOIGwBOo10Js=
