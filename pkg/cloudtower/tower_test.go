@@ -50,26 +50,86 @@ func TestClearClientCache(t *testing.T) {
 }
 
 func TestNewTowerClient(t *testing.T) {
-	t.Run("should get cached session and clear inactive session", func(t *testing.T) {
+	t.Run("returns error when secret does not exist", func(t *testing.T) {
+		g := gomega.NewGomegaWithT(t)
+		resetTowerCache(t)
+
+		k8sClient := fake.NewClientBuilder().Build()
+		secretKey := apitypes.NamespacedName{Namespace: "sks-system", Name: "missing-secret"}
+
+		client, err := NewTowerClient(t.Context(), k8sClient, secretKey)
+		g.Expect(client).To(gomega.BeNil())
+		g.Expect(err).To(gomega.HaveOccurred())
+		g.Expect(err.Error()).To(gomega.ContainSubstring("failed to get tower secret sks-system/missing-secret"))
+	})
+
+	t.Run("should cache a secret client by secret key and reuse it while the secret is unchanged", func(t *testing.T) {
+		g := gomega.NewGomegaWithT(t)
+		resetTowerCache(t)
+
+		secretKey := apitypes.NamespacedName{Namespace: "sks-system", Name: "cloudtower-server"}
+		secret := newTowerSecret(secretKey.Name, secretKey.Namespace, "127.0.0.1", "tower", "tower")
+		k8sClient := fake.NewClientBuilder().WithObjects(secret).Build()
+		cacheKey := getTowerSecretCacheKey(secretKey)
+		cachedClient := &towerclient.Cloudtower{}
+		cacheMap.Store(cacheKey, &cacheItem{
+			LastUsedTime: time.Now(),
+			TowerClient:  cachedClient,
+			TowerConfig:  &infrav1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "tower", AuthMode: "LOCAL", SkipTLSVerify: true},
+		})
+
+		client, err := NewTowerClient(t.Context(), k8sClient, secretKey)
+		g.Expect(err).ToNot(gomega.HaveOccurred())
+		g.Expect(client).To(gomega.Equal(cachedClient))
+
+		item, ok := loadCacheItem(cacheKey)
+		g.Expect(ok).To(gomega.BeTrue())
+		g.Expect(item.TowerClient).To(gomega.Equal(cachedClient))
+	})
+
+	t.Run("should drop the cached client when the secret config changes", func(t *testing.T) {
+		g := gomega.NewGomegaWithT(t)
+		resetTowerCache(t)
+
+		secretKey := apitypes.NamespacedName{Namespace: "sks-system", Name: "cloudtower-server"}
+		secret := newTowerSecret(secretKey.Name, secretKey.Namespace, "127.0.0.1", "tower", "new-password")
+		k8sClient := fake.NewClientBuilder().WithObjects(secret).Build()
+		cacheKey := getTowerSecretCacheKey(secretKey)
+		cacheMap.Store(cacheKey, &cacheItem{
+			LastUsedTime: time.Now(),
+			TowerClient:  &towerclient.Cloudtower{},
+			TowerConfig:  &infrav1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "old-password", AuthMode: "LOCAL", SkipTLSVerify: true},
+		})
+
+		_, err := NewTowerClient(t.Context(), k8sClient, secretKey)
+		g.Expect(err).To(gomega.HaveOccurred())
+
+		_, ok := cacheMap.Load(cacheKey)
+		g.Expect(ok).To(gomega.BeFalse())
+	})
+}
+
+func TestNewTowerClientWithConfig(t *testing.T) {
+	t.Run("should get cached client and clear inactive sessions", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 		resetTowerCache(t)
 
 		lastGCTime = time.Now().Add(-gcMinInterval - time.Second)
-		tower := infrav1.Tower{TowerClientConfig: infrav1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "tower"}}
-		inactiveTowerConfig := tower.TowerClientConfig
-		inactiveTowerConfig.Username = "inactive"
-		invalidTower := tower.DeepCopy()
-		invalidTower.Username = "invalid"
+		config := infrav1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "tower"}
+		inactiveConfig := config
+		inactiveConfig.Username = "inactive"
+		invalidConfig := config
+		invalidConfig.Username = "invalid"
 
-		clientKey := getTowerClientCacheKey(&tower.TowerClientConfig)
+		clientKey := getTowerClientCacheKey(&config)
 		cachedClient := &towerclient.Cloudtower{}
 		cacheMap.Store(clientKey, &cacheItem{TowerClient: cachedClient})
-		inactiveClientKey := getTowerClientCacheKey(&inactiveTowerConfig)
+		inactiveClientKey := getTowerClientCacheKey(&inactiveConfig)
 		cacheMap.Store(inactiveClientKey, &cacheItem{TowerClient: &towerclient.Cloudtower{}, LastUsedTime: time.Now().Add(-cacheIdleTime - time.Second)})
 		inactiveSecretKey := getTowerSecretCacheKey(apitypes.NamespacedName{Namespace: "default", Name: "inactive-secret"})
 		cacheMap.Store(inactiveSecretKey, &cacheItem{TowerConfig: &infrav1.TowerClientConfig{}, LastUsedTime: time.Now().Add(-cacheIdleTime - time.Second)})
 
-		client, err := NewTowerClient(t.Context(), nil, tower)
+		client, err := NewTowerClientWithConfig(t.Context(), config)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(client).To(gomega.Equal(cachedClient))
 
@@ -80,55 +140,24 @@ func TestNewTowerClient(t *testing.T) {
 		_, ok = cacheMap.Load(inactiveSecretKey)
 		g.Expect(ok).To(gomega.BeFalse())
 
-		client, err = NewTowerClient(t.Context(), nil, *invalidTower)
+		client, err = NewTowerClientWithConfig(t.Context(), invalidConfig)
 		g.Expect(client).To(gomega.BeNil())
 		g.Expect(err).To(gomega.HaveOccurred())
 	})
 }
 
 func TestGetTowerClientConfig(t *testing.T) {
-	t.Run("returns inline config without requiring secret lookup", func(t *testing.T) {
-		g := gomega.NewGomegaWithT(t)
-		resetTowerCache(t)
-
-		tower := infrav1.Tower{TowerClientConfig: infrav1.TowerClientConfig{
-			Server:        "127.0.0.1",
-			Username:      "tower",
-			Password:      "tower-password",
-			AuthMode:      "LDAP",
-			SkipTLSVerify: true,
-		}}
-
-		config, err := GetTowerClientConfig(t.Context(), nil, tower)
-		g.Expect(err).ToNot(gomega.HaveOccurred())
-		g.Expect(config).To(gomega.Equal(&tower.TowerClientConfig))
-	})
-
-	t.Run("reads secret config and reuses cached immutable secret", func(t *testing.T) {
+	t.Run("reads secret config without caching it", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 		resetTowerCache(t)
 		ctx := t.Context()
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "cloudtower-server",
-				Namespace: "sks-system",
-				Annotations: map[string]string{
-					CloudTowerServerVersionAnnotation: CloudTowerServerVersion1_0_0,
-				},
-			},
-			Data: map[string][]byte{
-				"cloudtower.yaml": []byte("authMode: LOCAL\npassword: K5yt3hcjtUE4Teqe\nserver: 10.255.0.4\nskipTLSVerify: true\nusername: system-service\n"),
-			},
-		}
+		secretKey := apitypes.NamespacedName{Namespace: "sks-system", Name: "cloudtower-server"}
+		secret := newTowerSecret(secretKey.Name, secretKey.Namespace, "10.255.0.4", "system-service", "K5yt3hcjtUE4Teqe")
 		k8sClient := fake.NewClientBuilder().WithObjects(secret).Build()
 
-		tower := infrav1.Tower{
-			TowerClientConfig: infrav1.TowerClientConfig{Server: "127.0.0.1", Username: "ignored", Password: "ignored"},
-			SecretRef:         &corev1.SecretReference{Name: "cloudtower-server", Namespace: "sks-system"},
-		}
-		config, err := GetTowerClientConfig(ctx, k8sClient, tower)
+		config, err := GetTowerClientConfig(ctx, k8sClient, secretKey)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
-		g.Expect(config).To(gomega.Equal(&infrav1.TowerClientConfig{
+		g.Expect(config).To(gomega.Equal(infrav1.TowerClientConfig{
 			Server:        "10.255.0.4",
 			Username:      "system-service",
 			Password:      "K5yt3hcjtUE4Teqe",
@@ -136,48 +165,26 @@ func TestGetTowerClientConfig(t *testing.T) {
 			SkipTLSVerify: true,
 		}))
 
-		cacheKey := getTowerSecretCacheKey(apitypes.NamespacedName{Namespace: "sks-system", Name: "cloudtower-server"})
-		cached, ok := loadCacheItem(cacheKey)
-		g.Expect(ok).To(gomega.BeTrue())
-		g.Expect(cached.TowerConfig).To(gomega.Equal(config))
-
-		config, err = GetTowerClientConfig(ctx, fake.NewClientBuilder().Build(), tower)
-		g.Expect(err).ToNot(gomega.HaveOccurred())
-		g.Expect(config.Server).To(gomega.Equal("10.255.0.4"))
-	})
-
-	t.Run("does not cache secret config without server version annotation", func(t *testing.T) {
-		g := gomega.NewGomegaWithT(t)
-		resetTowerCache(t)
-		ctx := t.Context()
-		secret := newTowerSecret("cloudtower-server", "sks-system", "10.255.0.4", "system-service", "K5yt3hcjtUE4Teqe")
-		k8sClient := fake.NewClientBuilder().WithObjects(secret).Build()
-
-		tower := infrav1.Tower{SecretRef: &corev1.SecretReference{Name: "cloudtower-server", Namespace: "sks-system"}}
-		config, err := GetTowerClientConfig(ctx, k8sClient, tower)
-		g.Expect(err).ToNot(gomega.HaveOccurred())
-		g.Expect(config.Server).To(gomega.Equal("10.255.0.4"))
-
-		cacheKey := getTowerSecretCacheKey(apitypes.NamespacedName{Namespace: "sks-system", Name: "cloudtower-server"})
+		cacheKey := getTowerSecretCacheKey(secretKey)
 		_, ok := cacheMap.Load(cacheKey)
 		g.Expect(ok).To(gomega.BeFalse())
 
-		_, err = GetTowerClientConfig(ctx, fake.NewClientBuilder().Build(), tower)
+		_, err = GetTowerClientConfig(ctx, fake.NewClientBuilder().Build(), secretKey)
 		g.Expect(err).To(gomega.HaveOccurred())
 		g.Expect(err.Error()).To(gomega.ContainSubstring("failed to get tower secret sks-system/cloudtower-server"))
 	})
 
-	t.Run("uses namespace and name to isolate cached secret configs", func(t *testing.T) {
+	t.Run("uses namespace and name to read secret configs", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 		resetTowerCache(t)
 		ctx := t.Context()
-		secretA := newTowerSecretWithVersion("cloudtower-server", "namespace-a", "10.255.0.4", "user-a", "password-a")
-		secretB := newTowerSecretWithVersion("cloudtower-server", "namespace-b", "10.255.0.5", "user-b", "password-b")
+		secretA := newTowerSecret("cloudtower-server", "namespace-a", "10.255.0.4", "user-a", "password-a")
+		secretB := newTowerSecret("cloudtower-server", "namespace-b", "10.255.0.5", "user-b", "password-b")
 		k8sClient := fake.NewClientBuilder().WithObjects(secretA, secretB).Build()
 
-		configA, err := GetTowerClientConfig(ctx, k8sClient, infrav1.Tower{SecretRef: &corev1.SecretReference{Name: "cloudtower-server", Namespace: "namespace-a"}})
+		configA, err := GetTowerClientConfig(ctx, k8sClient, apitypes.NamespacedName{Namespace: "namespace-a", Name: "cloudtower-server"})
 		g.Expect(err).ToNot(gomega.HaveOccurred())
-		configB, err := GetTowerClientConfig(ctx, k8sClient, infrav1.Tower{SecretRef: &corev1.SecretReference{Name: "cloudtower-server", Namespace: "namespace-b"}})
+		configB, err := GetTowerClientConfig(ctx, k8sClient, apitypes.NamespacedName{Namespace: "namespace-b", Name: "cloudtower-server"})
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 
 		g.Expect(configA.Server).To(gomega.Equal("10.255.0.4"))
@@ -190,9 +197,7 @@ func TestGetTowerClientConfig(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 		resetTowerCache(t)
 
-		_, err := GetTowerClientConfig(t.Context(), fake.NewClientBuilder().Build(), infrav1.Tower{
-			SecretRef: &corev1.SecretReference{Name: "missing", Namespace: "sks-system"},
-		})
+		_, err := GetTowerClientConfig(t.Context(), fake.NewClientBuilder().Build(), apitypes.NamespacedName{Namespace: "sks-system", Name: "missing"})
 		g.Expect(err).To(gomega.HaveOccurred())
 		g.Expect(err.Error()).To(gomega.ContainSubstring("failed to get tower secret sks-system/missing"))
 	})
@@ -209,7 +214,7 @@ func TestParseTowerClientConfigFromSecret(t *testing.T) {
 			},
 		})
 		g.Expect(err).ToNot(gomega.HaveOccurred())
-		g.Expect(yamlConfig).To(gomega.Equal(&infrav1.TowerClientConfig{Server: "10.255.0.4", Username: "yaml-user", Password: "yaml-password", AuthMode: "LOCAL", SkipTLSVerify: true}))
+		g.Expect(yamlConfig).To(gomega.Equal(infrav1.TowerClientConfig{Server: "10.255.0.4", Username: "yaml-user", Password: "yaml-password", AuthMode: "LOCAL", SkipTLSVerify: true}))
 
 		jsonConfig, err := ParseTowerClientConfigFromSecret(&corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: "json-secret", Namespace: "sks-system"},
@@ -218,7 +223,7 @@ func TestParseTowerClientConfigFromSecret(t *testing.T) {
 			},
 		})
 		g.Expect(err).ToNot(gomega.HaveOccurred())
-		g.Expect(jsonConfig).To(gomega.Equal(&infrav1.TowerClientConfig{Server: "10.255.0.5", Username: "json-user", Password: "json-password", AuthMode: "LDAP"}))
+		g.Expect(jsonConfig).To(gomega.Equal(infrav1.TowerClientConfig{Server: "10.255.0.5", Username: "json-user", Password: "json-password", AuthMode: "LDAP"}))
 	})
 
 	t.Run("rejects missing cloudtower yaml key", func(t *testing.T) {
@@ -334,12 +339,4 @@ func newTowerSecret(name, namespace, server, username, password string) *corev1.
 			"cloudtower.yaml": []byte("authMode: LOCAL\npassword: " + password + "\nserver: " + server + "\nskipTLSVerify: true\nusername: " + username + "\n"),
 		},
 	}
-}
-
-func newTowerSecretWithVersion(name, namespace, server, username, password string) *corev1.Secret {
-	secret := newTowerSecret(name, namespace, server, username, password)
-	secret.Annotations = map[string]string{
-		CloudTowerServerVersionAnnotation: CloudTowerServerVersion1_0_0,
-	}
-	return secret
 }
