@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	agentv1 "github.com/smartxworks/host-config-agent-api/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -324,6 +325,14 @@ func (r *ElfMachineReconciler) reconcieVMNetworkDevices(ctx goctx.Context, machi
 	vmNics, err := machineCtx.VMService.GetVMNics(*vm.ID)
 	if err != nil {
 		return false, err
+	}
+
+	if len(vmNics) == 0 {
+		err := errors.Errorf("no network devices found for VM %s", service.GetTowerString(vm.Name))
+		r.Recorder.Eventf(machineCtx.ElfMachine, corev1.EventTypeWarning, "VMNetworkDevicesNotFound", "%s", err.Error())
+		log.Error(err, "failed to get VM network devices.")
+
+		return false, nil
 	}
 
 	if ok, err := r.reconcileVMNics(ctx, machineCtx, vm, vmNics); err != nil || !ok {
