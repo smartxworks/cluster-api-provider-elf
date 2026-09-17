@@ -28,6 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -546,19 +547,68 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 		})
 
-		It("should reconcie vm network devices", func() {
+		It("should return error when failed to get VM nics", func() {
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
-			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, unexpectedError)
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			ok, err := reconciler.reconcieVMNetworkDevices(ctx, machineContext, vm)
 			Expect(ok).To(BeFalse())
-			Expect(err).NotTo(HaveOccurred())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.AddingVMNetworkDeviceReason}})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(unexpectedError.Error()))
+		})
 
+		It("should return false and record event when VM has no network devices", func() {
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			machineContext.ElfMachine.Status.Network = []infrav1.NetworkStatus{{IPAddrs: []string{"127.0.0.1"}}}
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+
+			// nil vmNics.
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(nil, nil)
+			eventRecorder := record.NewFakeRecorder(2)
+			reconciler := &ElfMachineReconciler{
+				ControllerManagerContext: ctrlMgrCtx,
+				NewVMService:             mockNewVMService,
+				Recorder:                 eventRecorder,
+			}
+			ok, err := reconciler.reconcieVMNetworkDevices(ctx, machineContext, vm)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("failed to get VM network devices."))
+			Expect(logBuffer.String()).To(ContainSubstring("no network devices found for VM " + *vm.Name))
+			Expect(<-eventRecorder.Events).To(Equal("Warning VMNetworkDevicesNotFound no network devices found for VM " + *vm.Name))
+			// The network status is kept as is, so that the nics can be reconciled after the VM network devices are ready.
+			Expect(machineContext.ElfMachine.Status.Network).To(Equal([]infrav1.NetworkStatus{{IPAddrs: []string{"127.0.0.1"}}}))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, ""}})
+
+			// empty (non-nil) vmNics.
 			logBuffer.Reset()
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{}, nil)
+			eventRecorder = record.NewFakeRecorder(2)
+			reconciler = &ElfMachineReconciler{
+				ControllerManagerContext: ctrlMgrCtx,
+				NewVMService:             mockNewVMService,
+				Recorder:                 eventRecorder,
+			}
+			ok, err = reconciler.reconcieVMNetworkDevices(ctx, machineContext, vm)
+			Expect(ok).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuffer.String()).To(ContainSubstring("failed to get VM network devices."))
+			Expect(<-eventRecorder.Events).To(Equal("Warning VMNetworkDevicesNotFound no network devices found for VM " + *vm.Name))
+			// No new nics are added, and the network status is kept as is.
+			Expect(machineContext.ElfMachine.Status.Network).To(Equal([]infrav1.NetworkStatus{{IPAddrs: []string{"127.0.0.1"}}}))
+		})
+
+		It("should reconcie vm network devices when vm nic is missing IP address", func() {
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityInfo, "")
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			vmNic := fake.NewVMNic()
 			vmNic.IPAddress = ptr.To("")
 			vmNics := []*models.VMNic{vmNic}
@@ -569,19 +619,24 @@ var _ = Describe("ElfMachineReconciler", func() {
 			agentJobPatchSource := agentJob.DeepCopy()
 			agentJob.Status.Phase = agentv1.PhaseSucceeded
 			Expect(testEnv.PatchAndWait(ctx, agentJob, agentJobPatchSource)).To(Succeed())
-			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
-			ok, err = reconciler.reconcieVMNetworkDevices(ctx, machineContext, vm)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcieVMNetworkDevices(ctx, machineContext, vm)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("waiting for the vm network device"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+		})
 
-			logBuffer.Reset()
-			vmNic = fake.NewVMNic()
-			vmNics = []*models.VMNic{vmNic}
+		It("should reconcie vm network devices when vm nic is ready", func() {
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+			vmNic := fake.NewVMNic()
+			vmNics := []*models.VMNic{vmNic}
 			mockVMService.EXPECT().GetVMNics(*vm.ID).Return(vmNics, nil)
-			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
-			ok, err = reconciler.reconcieVMNetworkDevices(ctx, machineContext, vm)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			ok, err := reconciler.reconcieVMNetworkDevices(ctx, machineContext, vm)
 			Expect(ok).To(BeTrue())
 			Expect(err).NotTo(HaveOccurred())
 		})
