@@ -31,6 +31,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
@@ -81,6 +82,7 @@ type ElfMachineReconciler struct {
 	*context.ControllerManagerContext
 	NewVMService service.NewVMServiceFunc
 	ClusterCache clustercache.ClusterCache
+	Recorder     record.EventRecorder
 }
 
 // AddMachineControllerToManager adds the machine controller to the provided
@@ -96,6 +98,7 @@ func AddMachineControllerToManager(ctx goctx.Context, ctrlMgrCtx *context.Contro
 		ControllerManagerContext: ctrlMgrCtx,
 		NewVMService:             service.NewVMService,
 		ClusterCache:             clusterCache,
+		Recorder:                 mgr.GetEventRecorderFor("elfmachine-controller"),
 	}
 	predicateLog := ctrl.LoggerFrom(ctx).WithValues("controller", "elfmachine")
 
