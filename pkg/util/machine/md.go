@@ -20,7 +20,7 @@ import (
 	goctx "context"
 
 	apitypes "k8s.io/apimachinery/pkg/types"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	labelutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"

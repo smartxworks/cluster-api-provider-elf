@@ -20,9 +20,10 @@ import (
 	goctx "context"
 	"fmt"
 
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	capiutil "sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/patch"
+	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
@@ -92,6 +93,28 @@ func (c *MachineContext) GetElfClusterID() string {
 	}
 
 	return ""
+}
+
+// GetStorageConfig returns the cluster-level storage configuration for the machine.
+func (c *MachineContext) GetStorageConfig() *models.StorageConfig {
+	if c == nil || c.ElfCluster == nil {
+		return nil
+	}
+
+	sc := c.ElfCluster.Spec.StorageCluster
+	if sc.DatastoreID == "" && sc.StorageClusterID == "" {
+		return nil
+	}
+
+	storageConfig := &models.StorageConfig{}
+	if sc.DatastoreID != "" {
+		storageConfig.DatastoreID = service.TowerString(sc.DatastoreID)
+	}
+	if sc.StorageClusterID != "" {
+		storageConfig.StorageClusterID = service.TowerString(sc.StorageClusterID)
+	}
+
+	return storageConfig
 }
 
 // GenerateHostname generates a hostname for the machine.

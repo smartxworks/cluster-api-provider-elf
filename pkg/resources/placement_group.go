@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"

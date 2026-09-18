@@ -17,7 +17,6 @@ limitations under the License.
 package webhooks
 
 import (
-	goctx "context"
 	"fmt"
 	"testing"
 
@@ -26,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -215,7 +214,7 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 			validator := &ElfMachineValidator{
 				Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(tc.Objs...).Build(),
 			}
-			warnings, err := validator.ValidateUpdate(goctx.Background(), tc.OldEM, tc.EM)
+			warnings, err := validator.ValidateUpdate(t.Context(), tc.OldEM, tc.EM)
 			g.Expect(warnings).To(BeEmpty())
 			expectElfMachineTestCase(g, tc, err)
 		})

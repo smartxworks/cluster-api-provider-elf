@@ -19,10 +19,13 @@ package helpers
 import (
 	goctx "context"
 	"fmt"
+	"io"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +37,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -42,21 +46,28 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog/v2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
+	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
+	controlplanev2 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	kcpwebhooks "sigs.k8s.io/cluster-api/controlplane/kubeadm/webhooks"
 	capiutil "sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/kubeconfig"
-	"sigs.k8s.io/cluster-api/util/patch"
+	capicontract "sigs.k8s.io/cluster-api/util/contract"
+	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
+	capiwebhooks "sigs.k8s.io/cluster-api/webhooks"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
+	"sigs.k8s.io/yaml"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/manager"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/util/capi/kubeconfig"
 	"github.com/smartxworks/cluster-api-provider-elf/webhooks"
 )
 
@@ -83,7 +94,9 @@ func init() {
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(admissionv1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
+	utilruntime.Must(clusterv2.AddToScheme(scheme))
 	utilruntime.Must(controlplanev1.AddToScheme(scheme))
+	utilruntime.Must(controlplanev2.AddToScheme(scheme))
 	utilruntime.Must(infrav1.AddToScheme(scheme))
 
 	// Get the root of the current file to use in CRD paths.
@@ -119,6 +132,7 @@ func NewTestEnvironment(ctx goctx.Context) *TestEnvironment {
 	env := &envtest.Environment{
 		ErrorIfCRDPathMissing: true,
 		CRDDirectoryPaths:     crdPaths,
+		Scheme:                scheme,
 	}
 
 	if _, err := env.Start(); err != nil {
@@ -154,6 +168,39 @@ func NewTestEnvironment(ctx goctx.Context) *TestEnvironment {
 		KubeConfig: env.Config,
 	}
 	managerOpts.AddToManager = func(ctx goctx.Context, ctrlMgrCtx *context.ControllerManagerContext, mgr ctrlmgr.Manager) error {
+		mgr.GetWebhookServer().Register("/convert", conversion.NewWebhookHandler(mgr.GetScheme()))
+
+		apiVersionGetter := func(gk schema.GroupKind) (string, error) {
+			return getAPIVersionForGroupKind(ctx, mgr.GetClient(), gk)
+		}
+		clusterv1.SetAPIVersionGetter(apiVersionGetter)
+		controlplanev1.SetAPIVersionGetter(apiVersionGetter)
+
+		if err := (&capiwebhooks.Cluster{Client: mgr.GetClient()}).SetupWebhookWithManager(mgr); err != nil {
+			return err
+		}
+		if err := (&capiwebhooks.MachineDeployment{}).SetupWebhookWithManager(mgr); err != nil {
+			return err
+		}
+		if err := (&capiwebhooks.MachineSet{}).SetupWebhookWithManager(mgr); err != nil {
+			return err
+		}
+		if err := (&capiwebhooks.MachineHealthCheck{}).SetupWebhookWithManager(mgr); err != nil {
+			return err
+		}
+		if err := (&capiwebhooks.Machine{}).SetupWebhookWithManager(mgr); err != nil {
+			return err
+		}
+		if err := (&kcpwebhooks.KubeadmControlPlane{}).SetupWebhookWithManager(mgr); err != nil {
+			return err
+		}
+		if err := (&kcpwebhooks.ScaleValidator{Client: mgr.GetClient()}).SetupWebhookWithManager(mgr); err != nil {
+			return err
+		}
+		if err := (&kcpwebhooks.KubeadmControlPlaneTemplate{}).SetupWebhookWithManager(mgr); err != nil {
+			return err
+		}
+
 		if err := (&webhooks.ElfMachineTemplateValidator{}).SetupWebhookWithManager(mgr); err != nil {
 			return err
 		}
@@ -205,6 +252,30 @@ func (t *TestEnvironment) StartManager(ctx goctx.Context) error {
 	t.cancel = cancel
 
 	return t.Manager.Start(ctx)
+}
+
+// WaitForWebhooks waits for the webhook server to be available.
+func (t *TestEnvironment) WaitForWebhooks(ctx goctx.Context) {
+	port := t.Env.WebhookInstallOptions.LocalServingPort
+
+	klog.V(2).Infof("Waiting for webhook port %d to be open prior to running tests", port)
+	timeout := 1 * time.Second
+	for {
+		time.Sleep(1 * time.Second)
+		dialer := &net.Dialer{
+			Timeout: timeout,
+		}
+		conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		if err != nil {
+			klog.V(2).Infof("Webhook port is not ready, will retry in %v: %s", timeout, err)
+			continue
+		}
+		if err := conn.Close(); err != nil {
+			klog.V(2).Infof("Closing connection when testing if webhook port is ready failed: %v", err)
+		}
+		klog.V(2).Info("Webhook port is now open. Continuing with tests...")
+		return
+	}
 }
 
 func (t *TestEnvironment) Stop() error {
@@ -347,8 +418,128 @@ func getFilePathToCAPICRDs() []string {
 
 	pkg := pkgs[0]
 
-	return []string{
+	paths := []string{
 		filepath.Join(pkg.Module.Dir, "config", "crd", "bases"),
 		filepath.Join(pkg.Module.Dir, "controlplane", "kubeadm", "config", "crd", "bases"),
 	}
+
+	// CAPI CRDs still serve v1alpha3/v1alpha4 for conversion. Those versions are not available in the
+	// Go API packages we compile against, which makes the conversion webhook fail decoding requests
+	// in envtest. For tests, we only need the supported versions, so we strip v1alpha3/v1alpha4.
+	filtered := make([]string, 0, len(paths))
+	for _, p := range paths {
+		fp, err := filterCRDDirectoryVersions(p, map[string]bool{"v1alpha3": true, "v1alpha4": true})
+		if err != nil {
+			klog.Errorf("Failed to filter CRD dir %s: %v", p, err)
+			filtered = append(filtered, p)
+			continue
+		}
+		filtered = append(filtered, fp)
+	}
+
+	return filtered
+}
+
+func filterCRDDirectoryVersions(dir string, dropVersions map[string]bool) (string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+	tmpDir, err := os.MkdirTemp("", "cape-envtest-crds-")
+	if err != nil {
+		return "", err
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		srcPath := filepath.Join(dir, name)
+		dstPath := filepath.Join(tmpDir, name)
+
+		in, err := os.ReadFile(srcPath) //nolint:gosec
+		if err != nil {
+			return "", err
+		}
+
+		out, err := filterSingleCRDYAML(in, dropVersions)
+		if err != nil {
+			out = in
+		}
+
+		if err := os.WriteFile(dstPath, out, 0o600); err != nil {
+			return "", err
+		}
+	}
+	return tmpDir, nil
+}
+
+func filterSingleCRDYAML(in []byte, dropVersions map[string]bool) ([]byte, error) {
+	var crd apiextensionsv1.CustomResourceDefinition
+	if err := yaml.Unmarshal(in, &crd); err != nil {
+		return nil, err
+	}
+	if crd.APIVersion == "" || crd.Kind != "CustomResourceDefinition" || len(crd.Spec.Versions) == 0 {
+		return nil, io.EOF
+	}
+	origLen := len(crd.Spec.Versions)
+	filtered := crd.Spec.Versions[:0]
+	for _, v := range crd.Spec.Versions {
+		if dropVersions[v.Name] {
+			continue
+		}
+		filtered = append(filtered, v)
+	}
+	if len(filtered) == 0 || len(filtered) == origLen {
+		return nil, io.EOF
+	}
+	crd.Spec.Versions = filtered
+	return yaml.Marshal(&crd)
+}
+
+func getAPIVersionForGroupKind(ctx goctx.Context, c client.Reader, gk schema.GroupKind) (string, error) {
+	if gk.Group == "" {
+		crdList := &apiextensionsv1.CustomResourceDefinitionList{}
+		if err := c.List(ctx, crdList); err != nil {
+			return "", err
+		}
+
+		var matched *apiextensionsv1.CustomResourceDefinition
+		for i := range crdList.Items {
+			crd := &crdList.Items[i]
+			if crd.Spec.Names.Kind != gk.Kind {
+				continue
+			}
+			if matched != nil && matched.Spec.Group != crd.Spec.Group {
+				return "", fmt.Errorf("multiple CRDs found for kind %s without group: %s, %s", gk.Kind, matched.Spec.Group, crd.Spec.Group)
+			}
+			matched = crd
+		}
+		if matched == nil {
+			return "", fmt.Errorf("crd for kind %s not found", gk.Kind)
+		}
+		gk.Group = matched.Spec.Group
+	}
+
+	crd := &apiextensionsv1.CustomResourceDefinition{}
+	crdName := capicontract.CalculateCRDName(gk.Group, gk.Kind)
+	if err := c.Get(ctx, client.ObjectKey{Name: crdName}, crd); err != nil {
+		return "", err
+	}
+
+	for _, version := range crd.Spec.Versions {
+		if version.Storage {
+			return schema.GroupVersion{Group: gk.Group, Version: version.Name}.String(), nil
+		}
+	}
+	for _, version := range crd.Spec.Versions {
+		if version.Served {
+			return schema.GroupVersion{Group: gk.Group, Version: version.Name}.String(), nil
+		}
+	}
+	if len(crd.Spec.Versions) == 0 {
+		return "", fmt.Errorf("crd %s has no versions", crdName)
+	}
+
+	return schema.GroupVersion{Group: gk.Group, Version: crd.Spec.Versions[0].Name}.String(), nil
 }

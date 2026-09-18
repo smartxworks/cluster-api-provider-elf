@@ -25,9 +25,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	capiremote "sigs.k8s.io/cluster-api/controllers/remote"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -139,7 +139,7 @@ func (r *ElfMachineReconciler) resizeVMVolume(ctx goctx.Context, machineCtx *con
 
 	withTaskVMVolume, err := machineCtx.VMService.ResizeVMVolume(*vmVolume.ID, diskSize)
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, conditionType, infrav1.ExpandingVMDiskFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		conditions.MarkFalse(machineCtx.ElfMachine, conditionType, infrav1.ExpandingVMDiskFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 
 		return errors.Wrapf(err, "failed to trigger expand size from %d to %d for vm volume %s/%s", *vmVolume.Size, diskSize, *vmVolume.ID, *vmVolume.Name)
 	}
@@ -211,7 +211,7 @@ func (r *ElfMachineReconciler) reconcileVMCPUAndMemory(ctx goctx.Context, machin
 
 	withTaskVM, err := machineCtx.VMService.UpdateVM(vm, machineCtx.ElfMachine)
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 
 		return false, errors.Wrapf(err, "failed to trigger update CPU and memory for VM %s", *vm.Name)
 	}
@@ -264,25 +264,25 @@ func (r *ElfMachineReconciler) reconcileHostJob(ctx goctx.Context, machineCtx *c
 
 	kubeClient, err := capiremote.NewClusterClient(ctx, "", r.Client, client.ObjectKey{Namespace: machineCtx.Cluster.Namespace, Name: machineCtx.Cluster.Name})
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "failed to create kubeClient: "+err.Error())
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "failed to create kubeClient: %s", err.Error())
 		return false, err
 	}
 
 	agentJob, err := hostagent.GetHostJob(ctx, kubeClient, machineCtx.ElfMachine.Namespace, hostagent.GetJobName(machineCtx.ElfMachine, jobType, macTypes))
 	if err != nil && !apierrors.IsNotFound(err) {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "failed to get HostOperationJob: "+err.Error())
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "failed to get HostOperationJob: %s", err.Error())
 		return false, err
 	}
 
 	if agentJob == nil {
 		agentJob, err = hostagent.GenerateJob(ctx, r.Client, machineCtx.ElfMachine, jobType, macTypes, nodeName)
 		if err != nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "failed to generate host agent job: "+err.Error())
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "failed to generate host agent job: %s", err.Error())
 			return false, err
 		}
 
 		if err = kubeClient.Create(ctx, agentJob); err != nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, err.Error())
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 			return false, err
 		}
 
@@ -295,7 +295,7 @@ func (r *ElfMachineReconciler) reconcileHostJob(ctx goctx.Context, machineCtx *c
 	case agentv1.PhaseSucceeded:
 		log.Info("HostJob succeeded", "hostAgentJob", agentJob.Name)
 	case agentv1.PhaseFailed:
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, agentJob.Status.FailureMessage)
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "%s", agentJob.Status.FailureMessage)
 		log.Info("HostJob failed, will try again after three minutes", "hostAgentJob", agentJob.Name, "failureMessage", agentJob.Status.FailureMessage)
 
 		lastExecutionTime := agentJob.Status.LastExecutionTime
@@ -363,7 +363,7 @@ func (r *ElfMachineReconciler) reconcieVMNetworkDevices(ctx goctx.Context, machi
 
 		if service.GetTowerString(vmNics[i].IPAddress) == "" {
 			message := fmt.Sprintf("waiting for the vm network device %d ready", i)
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityInfo, message)
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityInfo, "%s", message)
 			log.V(1).Info(message)
 
 			return false, nil
@@ -432,7 +432,7 @@ func (r *ElfMachineReconciler) reconcileVMNics(ctx goctx.Context, machineCtx *co
 
 	withTaskVM, err := machineCtx.VMService.AddVMNics(*vm.ID, newNics)
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 
 		return false, errors.Wrapf(err, "failed to trigger add new nics to vm")
 	}
@@ -478,7 +478,7 @@ func (r *ElfMachineReconciler) setVMNetworkDeviceConfig(ctx goctx.Context, machi
 		return true, nil
 	} else if deviceCount != vmNicCount {
 		message := "The expected number of network devices is not equal to the number of vm nics"
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.SettingVMNetworkDeviceConfigFailedReason, clusterv1.ConditionSeverityWarning, message)
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.SettingVMNetworkDeviceConfigFailedReason, clusterv1.ConditionSeverityWarning, "%s", message)
 		log.V(1).Info(message, "expectedDevices", machineCtx.ElfMachine.Spec.Network.Devices, "currentNics", formatNics(vmNics))
 
 		return false, nil
@@ -490,7 +490,7 @@ func (r *ElfMachineReconciler) setVMNetworkDeviceConfig(ctx goctx.Context, machi
 	for i := len(nics) - toConfigNicCount; i >= 0 && i < len(nics); i++ {
 		if service.GetTowerString(nics[i].MacAddress) == "" {
 			message := fmt.Sprintf("Waiting for the vm network device %d mac address", i+1)
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNetworkMacAddressReason, clusterv1.ConditionSeverityInfo, message)
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNetworkMacAddressReason, clusterv1.ConditionSeverityInfo, "%s", message)
 			log.V(1).Info(message)
 
 			return false, nil

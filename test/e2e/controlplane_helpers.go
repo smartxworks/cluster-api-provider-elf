@@ -26,12 +26,11 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
-	controlplanev1 "sigs.k8s.io/cluster-api/controlplane/kubeadm/api/v1beta1"
+	controlplanev2 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
+	clusterv2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/test/framework"
 	capiutil "sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/patch"
+	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
@@ -39,8 +38,8 @@ import (
 
 type ScaleAndWaitControlPlaneInput struct {
 	ClusterProxy        framework.ClusterProxy
-	Cluster             *clusterv1.Cluster
-	ControlPlane        *controlplanev1.KubeadmControlPlane
+	Cluster             *clusterv2.Cluster
+	ControlPlane        *controlplanev2.KubeadmControlPlane
 	Replicas            int32
 	WaitForControlPlane []interface{}
 }
@@ -68,7 +67,7 @@ func ScaleAndWaitControlPlane(ctx context.Context, input ScaleAndWaitControlPlan
 
 		nodeRefCount := 0
 		for _, machine := range machines {
-			if machine.Status.NodeRef != nil {
+			if machine.Status.NodeRef.IsDefined() {
 				nodeRefCount++
 			}
 		}
@@ -84,8 +83,8 @@ func ScaleAndWaitControlPlane(ctx context.Context, input ScaleAndWaitControlPlan
 // UpgradeControlPlaneAndWaitForUpgradeInput is the input type for UpgradeControlPlaneAndWaitForUpgrade.
 type UpgradeControlPlaneAndWaitForUpgradeInput struct {
 	ClusterProxy                framework.ClusterProxy
-	Cluster                     *clusterv1.Cluster
-	ControlPlane                *controlplanev1.KubeadmControlPlane
+	Cluster                     *clusterv2.Cluster
+	ControlPlane                *controlplanev2.KubeadmControlPlane
 	KubernetesUpgradeVersion    string
 	EtcdImageTag                string
 	DNSImageTag                 string
@@ -112,7 +111,7 @@ func UpgradeControlPlaneAndWaitForUpgrade(ctx context.Context, input UpgradeCont
 	Logf("Patching the new kubernetes version and infrastructure ref to KCP")
 
 	// Retrieve infra object
-	infraRef := input.ControlPlane.Spec.MachineTemplate.InfrastructureRef
+	infraRef := input.ControlPlane.Spec.MachineTemplate.Spec.InfrastructureRef
 	var elfMachineTemplate infrav1.ElfMachineTemplate
 	elfMachineTemplateKey := client.ObjectKey{
 		Namespace: input.Cluster.Namespace,
@@ -126,7 +125,7 @@ func UpgradeControlPlaneAndWaitForUpgrade(ctx context.Context, input UpgradeCont
 	elfMachineTemplateData, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&elfMachineTemplate)
 	Expect(err).NotTo(HaveOccurred())
 	infraObj := &unstructured.Unstructured{Object: elfMachineTemplateData}
-	infraObj.SetGroupVersionKind(infraRef.GroupVersionKind())
+	infraObj.SetGroupVersionKind(infrav1.GroupVersion.WithKind("ElfMachineTemplate"))
 
 	// Creates a new infra object
 	newInfraObj := infraObj
@@ -144,19 +143,12 @@ func UpgradeControlPlaneAndWaitForUpgrade(ctx context.Context, input UpgradeCont
 
 	oldVersion := input.ControlPlane.Spec.Version
 	input.ControlPlane.Spec.Version = input.KubernetesUpgradeVersion
-	input.ControlPlane.Spec.MachineTemplate.InfrastructureRef.Name = newInfraObjName
+	input.ControlPlane.Spec.MachineTemplate.Spec.InfrastructureRef.Name = newInfraObjName
 
 	// If the ClusterConfiguration is not specified, create an empty one.
-	if input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration == nil {
-		input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration = new(bootstrapv1.ClusterConfiguration)
-	}
-
-	if input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration.Etcd.Local == nil {
-		input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration.Etcd.Local = new(bootstrapv1.LocalEtcd)
-	}
-
-	input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration.Etcd.Local.ImageMeta.ImageTag = input.EtcdImageTag
-	input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration.DNS.ImageMeta.ImageTag = input.DNSImageTag
+	// Note: In v1beta2, ClusterConfiguration is a value type, not a pointer.
+	input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration.Etcd.Local.ImageTag = input.EtcdImageTag
+	input.ControlPlane.Spec.KubeadmConfigSpec.ClusterConfiguration.DNS.ImageTag = input.DNSImageTag
 
 	Expect(patchHelper.Patch(ctx, input.ControlPlane)).To(Succeed())
 

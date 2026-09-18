@@ -17,7 +17,6 @@ limitations under the License.
 package machine
 
 import (
-	goctx "context"
 	"testing"
 
 	"github.com/onsi/gomega"
@@ -28,13 +27,12 @@ import (
 
 func TestGetElfMachinesInCluster(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	ctx := goctx.TODO()
 	elfCluster, cluster := fake.NewClusterObjects()
 	elfMachine, _ := fake.NewMachineObjects(elfCluster, cluster)
 	ctrlMgrCtx := fake.NewControllerManagerContext(elfMachine)
 
 	t.Run("should return ElfMachines", func(t *testing.T) {
-		elfMachines, err := GetElfMachinesInCluster(ctx, ctrlMgrCtx.Client, cluster.Namespace, cluster.Name)
+		elfMachines, err := GetElfMachinesInCluster(t.Context(), ctrlMgrCtx.Client, cluster.Namespace, cluster.Name)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(elfMachines).To(gomega.HaveLen(1))
 	})
@@ -42,7 +40,6 @@ func TestGetElfMachinesInCluster(t *testing.T) {
 
 func TestGetControlPlaneElfMachinesInCluster(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	ctx := goctx.TODO()
 	elfCluster, cluster := fake.NewClusterObjects()
 	elfMachine1, _ := fake.NewMachineObjects(elfCluster, cluster)
 	elfMachine2, _ := fake.NewMachineObjects(elfCluster, cluster)
@@ -50,7 +47,7 @@ func TestGetControlPlaneElfMachinesInCluster(t *testing.T) {
 	ctrlMgrCtx := fake.NewControllerManagerContext(elfMachine1, elfMachine2)
 
 	t.Run("should return Control Plane ElfMachines", func(t *testing.T) {
-		elfMachines, err := GetControlPlaneElfMachinesInCluster(ctx, ctrlMgrCtx.Client, cluster.Namespace, cluster.Name)
+		elfMachines, err := GetControlPlaneElfMachinesInCluster(t.Context(), ctrlMgrCtx.Client, cluster.Namespace, cluster.Name)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(elfMachines).To(gomega.HaveLen(1))
 		g.Expect(elfMachines[0].Name).To(gomega.Equal(elfMachine1.Name))
@@ -238,7 +235,7 @@ func TestGetElfMachinesForMD(t *testing.T) {
 	fake.ToWorkerMachine(elfMachine, md)
 	elfMachine2, _ := fake.NewMachineObjects(elfCluster, cluster)
 	ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, elfMachine2)
-	elfMachines, err := GetElfMachinesForMD(goctx.TODO(), ctrlMgrCtx.Client, cluster, md)
+	elfMachines, err := GetElfMachinesForMD(t.Context(), ctrlMgrCtx.Client, cluster, md)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Expect(elfMachines).To(gomega.HaveLen(1))
 	g.Expect(elfMachines[0].Name).To(gomega.Equal(elfMachine.Name))
@@ -252,7 +249,7 @@ func TestGetControlPlaneMachinesForCluster(t *testing.T) {
 	fake.ToCPMachine(machine, kcp)
 	_, machine2 := fake.NewMachineObjects(elfCluster, cluster)
 	ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, machine, machine2)
-	machines, err := GetControlPlaneMachinesForCluster(goctx.TODO(), ctrlMgrCtx.Client, cluster)
+	machines, err := GetControlPlaneMachinesForCluster(t.Context(), ctrlMgrCtx.Client, cluster)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Expect(machines).To(gomega.HaveLen(1))
 	g.Expect(machines[0].Name).To(gomega.Equal(machine.Name))

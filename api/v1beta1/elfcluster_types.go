@@ -18,7 +18,7 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 const (
@@ -36,6 +36,11 @@ const (
 type ElfClusterSpec struct {
 	// Cluster is a unique identifier for a ELF cluster.
 	Cluster string `json:"cluster,omitempty"`
+
+	// StorageCluster defines the storage configuration used for VM disks.
+	// If unset, the compute cluster's storage is used.
+	// +optional
+	StorageCluster StorageConfig `json:"storageCluster,omitempty"`
 
 	// ClusterType is the type of the ELF cluster.
 	// If ClusterType is empty, it will be automatically set.

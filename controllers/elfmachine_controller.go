@@ -34,13 +34,12 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/api/v1beta1/index"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	"sigs.k8s.io/cluster-api/api/core/v1beta2/index"
 	"sigs.k8s.io/cluster-api/controllers/clustercache"
 	capiutil "sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/annotations"
-	"sigs.k8s.io/cluster-api/util/conditions"
-	"sigs.k8s.io/cluster-api/util/patch"
+	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -57,6 +56,7 @@ import (
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util"
+	capieutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/capi"
 	labelsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 	patchutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/patch"
@@ -132,7 +132,7 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (r
 	}
 
 	// Fetch the CAPI Machine.
-	machine, err := capiutil.GetOwnerMachine(ctx, r.Client, elfMachine.ObjectMeta)
+	machine, err := capieutil.GetOwnerMachine(ctx, r.Client, elfMachine.ObjectMeta)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -145,7 +145,7 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (r
 	ctx = ctrl.LoggerInto(ctx, log)
 
 	// Fetch the CAPI Cluster.
-	cluster, err := capiutil.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
+	cluster, err := capieutil.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 	if err != nil {
 		log.Info("Machine is missing cluster label or cluster does not exist")
 
@@ -159,7 +159,7 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (r
 	log = log.WithValues("Cluster", klog.KObj(cluster))
 	ctx = ctrl.LoggerInto(ctx, log)
 
-	if annotations.IsPaused(cluster, &elfMachine) {
+	if capieutil.IsPaused(cluster, &elfMachine) {
 		log.V(4).Info("ElfMachine linked to a cluster that is paused")
 
 		return reconcile.Result{}, nil
@@ -201,9 +201,9 @@ func (r *ElfMachineReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (r
 	// If ElfMachine is being deleting and ElfCLuster ForceDeleteCluster flag is set, skip creating the VMService object,
 	// because Tower server may be out of service. So we can force delete ElfCluster.
 	if elfMachine.ObjectMeta.DeletionTimestamp.IsZero() || !elfCluster.HasForceDeleteCluster() {
-		vmService, err := r.NewVMService(ctx, elfCluster.GetTower(), log)
+		vmService, err := r.NewVMService(ctx, r.Client, elfCluster.GetTower(), log)
 		if err != nil {
-			conditions.MarkFalse(&elfMachine, infrav1.TowerAvailableCondition, infrav1.TowerUnreachableReason, clusterv1.ConditionSeverityError, err.Error())
+			conditions.MarkFalse(&elfMachine, infrav1.TowerAvailableCondition, infrav1.TowerUnreachableReason, clusterv1.ConditionSeverityError, "%s", err.Error())
 
 			return reconcile.Result{}, err
 		}
@@ -390,7 +390,7 @@ func (r *ElfMachineReconciler) reconcileDelete(ctx goctx.Context, machineCtx *co
 			return reconcile.Result{}, nil
 		}
 
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.DeletionFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.DeletionFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 
 		return reconcile.Result{}, err
 	}
@@ -441,11 +441,11 @@ func (r *ElfMachineReconciler) reconcileNormal(ctx goctx.Context, machineCtx *co
 	// Make sure bootstrap data is available and populated.
 	if machineCtx.Machine.Spec.Bootstrap.DataSecretName == nil {
 		if !machineutil.IsControlPlaneMachine(machineCtx.ElfMachine) && !conditions.IsTrue(machineCtx.Cluster, clusterv1.ControlPlaneInitializedCondition) {
-			log.Info("Waiting for the control plane to be initialized")
+			log.V(1).Info("Waiting for the control plane to be initialized")
 
 			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, clusterv1.WaitingForControlPlaneAvailableReason, clusterv1.ConditionSeverityInfo, "")
 
-			return ctrl.Result{}, nil
+			return ctrl.Result{RequeueAfter: config.Cape.DefaultRequeueTimeout}, nil
 		}
 
 		log.Info("Waiting for bootstrap data to be available")
@@ -538,7 +538,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 
 		bootstrapData, err := r.getBootstrapData(ctx, machineCtx, hostName)
 		if err != nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.CloningFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.CloningFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 
 			return nil, false, err
 		}
@@ -583,11 +583,12 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 
 		log.Info("Create VM for ElfMachine", "hostName", hostName)
 		vmInfo := &service.CloneVMInfo{
-			Cluster:    machineCtx.GetElfClusterID(),
-			Host:       service.GetTowerString(hostID),
-			CloudInit:  bootstrapData,
-			GPUDevices: gpuDeviceInfos,
-			HostName:   hostName,
+			Cluster:       machineCtx.GetElfClusterID(),
+			StorageConfig: machineCtx.GetStorageConfig(),
+			Host:          service.GetTowerString(hostID),
+			CloudInit:     bootstrapData,
+			GPUDevices:    gpuDeviceInfos,
+			HostName:      hostName,
 		}
 		withTaskVM, err := machineCtx.VMService.Clone(machineCtx.ElfCluster, machineCtx.ElfMachine, vmInfo)
 		if err != nil {
@@ -609,7 +610,7 @@ func (r *ElfMachineReconciler) reconcileVM(ctx goctx.Context, machineCtx *contex
 				log.Error(err, "failed to create VM",
 					"vmRef", machineCtx.ElfMachine.Status.VMRef, "taskRef", machineCtx.ElfMachine.Status.TaskRef)
 
-				conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.CloningFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+				conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.CloningFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 
 				return nil, false, err
 			}
@@ -810,7 +811,7 @@ func (r *ElfMachineReconciler) shutDownVM(ctx goctx.Context, machineCtx *context
 
 	task, err := machineCtx.VMService.ShutDown(machineCtx.ElfMachine.Status.VMRef)
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.ShuttingDownFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.ShuttingDownFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 
 		return errors.Wrapf(err, "failed to trigger shut down for VM %s", ctx)
 	}
@@ -835,7 +836,7 @@ func (r *ElfMachineReconciler) powerOffVM(ctx goctx.Context, machineCtx *context
 
 	task, err := machineCtx.VMService.PowerOff(machineCtx.ElfMachine.Status.VMRef)
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOffFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOffFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 
 		return errors.Wrapf(err, "failed to trigger powering off for VM %s", machineCtx.ElfMachine.Status.VMRef)
 	}
@@ -881,7 +882,7 @@ func (r *ElfMachineReconciler) powerOnVM(ctx goctx.Context, machineCtx *context.
 
 	task, err := machineCtx.VMService.PowerOn(machineCtx.ElfMachine.Status.VMRef, hostID)
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOnFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.PoweringOnFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 
 		return errors.Wrapf(err, "failed to trigger power on for VM %s", machineCtx.ElfMachine.Status.VMRef)
 	}
@@ -906,7 +907,7 @@ func (r *ElfMachineReconciler) updateVM(ctx goctx.Context, machineCtx *context.M
 
 	withTaskVM, err := machineCtx.VMService.UpdateVM(vm, machineCtx.ElfMachine)
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.UpdatingFailedReason, clusterv1.ConditionSeverityWarning, err.Error())
+		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.UpdatingFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
 
 		return errors.Wrapf(err, "failed to trigger update for VM %s", ctx)
 	}
@@ -1016,7 +1017,7 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx goctx.Context, machineC
 	if service.IsGPUAssignFailed(errorMessage) {
 		errorMessage = service.ParseGPUAssignFailed(errorMessage)
 	}
-	conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, errorMessage)
+	conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, "%s", errorMessage)
 
 	if service.IsCloudInitConfigError(errorMessage) {
 		machineCtx.ElfMachine.Status.FailureReason = ptr.To(capeerrors.CloudInitConfigError)
@@ -1039,12 +1040,12 @@ func (r *ElfMachineReconciler) reconcileVMFailedTask(ctx goctx.Context, machineC
 	case service.IsUpdateVMDiskTask(task, machineCtx.ElfMachine.Name):
 		reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
 		if reason == infrav1.ExpandingVMDiskReason || reason == infrav1.ExpandingVMDiskFailedReason {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskFailedReason, clusterv1.ConditionSeverityWarning, errorMessage)
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskFailedReason, clusterv1.ConditionSeverityWarning, "%s", errorMessage)
 		}
 	case service.IsUpdateVMTask(task) && conditions.IsFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition):
 		reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
 		if reason == infrav1.ExpandingVMComputeResourcesReason || reason == infrav1.ExpandingVMComputeResourcesFailedReason {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesFailedReason, clusterv1.ConditionSeverityWarning, errorMessage)
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesFailedReason, clusterv1.ConditionSeverityWarning, "%s", errorMessage)
 		}
 	case service.IsPowerOnVMTask(task) || service.IsUpdateVMTask(task) || service.IsVMColdMigrationTask(task):
 		if machineCtx.ElfMachine.RequiresGPUDevices() {
@@ -1100,6 +1101,60 @@ func (r *ElfMachineReconciler) reconcileHostAndZone(ctx goctx.Context, machineCt
 		if !clusterStatus.Equal(&machineCtx.ElfMachine.Status.ComputeCluster) {
 			log.V(1).Info(fmt.Sprintf("Updated VM compute cluster from %s to %s", &machineCtx.ElfMachine.Status.ComputeCluster, clusterStatus))
 			machineCtx.ElfMachine.Status.ComputeCluster = clusterStatus
+		}
+	}
+
+	// Resolve the storage backing the VM's system disk. Tower exposes this
+	// information on the VM volume rather than on the VM itself.
+	if machineCtx.GetStorageConfig() != nil && len(vm.VMDisks) > 0 {
+		vmDiskIDs := make([]string, 0, len(vm.VMDisks))
+		for _, vmDisk := range vm.VMDisks {
+			if vmDisk != nil && vmDisk.ID != nil {
+				vmDiskIDs = append(vmDiskIDs, *vmDisk.ID)
+			}
+		}
+
+		if len(vmDiskIDs) > 0 {
+			vmDisks, err := machineCtx.VMService.GetVMDisks(vmDiskIDs)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get disks for vm %s", service.GetTowerString(vm.ID))
+			}
+
+			systemDisk := service.GetVMSystemDisk(vmDisks)
+			if systemDisk != nil && systemDisk.VMVolume != nil && systemDisk.VMVolume.ID != nil {
+				vmVolume, err := machineCtx.VMService.GetVMVolume(*systemDisk.VMVolume.ID)
+				if err != nil {
+					return errors.Wrapf(err, "failed to get storage volume for vm %s", service.GetTowerString(vm.ID))
+				}
+				if vmVolume == nil {
+					return errors.Errorf("storage volume %s for vm %s is empty", *systemDisk.VMVolume.ID, service.GetTowerString(vm.ID))
+				}
+
+				if vmVolume.StorageClusterConfig != nil {
+					if storageCluster := vmVolume.StorageClusterConfig.StorageCluster; storageCluster != nil {
+						storageClusterStatus := infrav1.StorageClusterStatus{
+							ClusterID: service.GetTowerString(storageCluster.ID),
+							Name:      service.GetTowerString(storageCluster.Name),
+						}
+						if !storageClusterStatus.Equal(&machineCtx.ElfMachine.Status.StorageCluster) {
+							log.V(1).Info(fmt.Sprintf("Updated VM storage cluster from %s to %s", &machineCtx.ElfMachine.Status.StorageCluster, storageClusterStatus))
+							machineCtx.ElfMachine.Status.StorageCluster = storageClusterStatus
+						}
+					}
+
+					if datastore := vmVolume.StorageClusterConfig.Datastore; datastore != nil {
+						dataStoreStatus := infrav1.DataStoreStatus{
+							DataStoreID: service.GetTowerString(datastore.ID),
+							Name:        service.GetTowerString(datastore.Name),
+						}
+
+						if !dataStoreStatus.Equal(&machineCtx.ElfMachine.Status.DataStore) {
+							log.V(1).Info(fmt.Sprintf("Updated VM datastore from %s to %s", &machineCtx.ElfMachine.Status.DataStore, dataStoreStatus))
+							machineCtx.ElfMachine.Status.DataStore = dataStoreStatus
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -1184,6 +1239,10 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 	keys := []string{
 		infrav1.ComputeClusterIDLabel,
 		infrav1.ComputeClusterNameLabel,
+		infrav1.StorageClusterIDLabel,
+		infrav1.StorageClusterNameLabel,
+		infrav1.DataStoreIDLabel,
+		infrav1.DataStoreNameLabel,
 		infrav1.HostServerIDLabel,
 		infrav1.HostServerNameLabel,
 		infrav1.TowerVMIDLabel,
@@ -1212,10 +1271,22 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 	expectedLabels := map[string]interface{}{
 		infrav1.ComputeClusterIDLabel:   machineCtx.ElfMachine.Status.ComputeCluster.ClusterID,
 		infrav1.ComputeClusterNameLabel: labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Status.ComputeCluster.Name),
+		infrav1.StorageClusterIDLabel:   nil,
+		infrav1.StorageClusterNameLabel: nil,
+		infrav1.DataStoreIDLabel:        nil,
+		infrav1.DataStoreNameLabel:      nil,
 		infrav1.HostServerIDLabel:       machineCtx.ElfMachine.Status.HostServerRef,
 		infrav1.HostServerNameLabel:     labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Status.HostServerName),
 		infrav1.TowerVMIDLabel:          service.GetTowerString(vm.ID),
 		infrav1.NodeGroupLabel:          machineutil.GetNodeGroupName(machineCtx.Machine),
+	}
+	if machineCtx.ElfMachine.Status.DataStore.DataStoreID != "" {
+		expectedLabels[infrav1.DataStoreIDLabel] = machineCtx.ElfMachine.Status.DataStore.DataStoreID
+		expectedLabels[infrav1.DataStoreNameLabel] = labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Status.DataStore.Name)
+	}
+	if machineCtx.ElfMachine.Status.StorageCluster.ClusterID != "" {
+		expectedLabels[infrav1.StorageClusterIDLabel] = machineCtx.ElfMachine.Status.StorageCluster.ClusterID
+		expectedLabels[infrav1.StorageClusterNameLabel] = labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Status.StorageCluster.Name)
 	}
 
 	if machineCtx.ElfMachine.Status.Zone.Type != "" {
@@ -1285,7 +1356,7 @@ func (r *ElfMachineReconciler) reconcileNetwork(ctx goctx.Context, machineCtx *c
 
 	defer func() {
 		if reterr != nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityWarning, reterr.Error())
+			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityWarning, "%s", reterr.Error())
 		} else if !ret {
 			log.V(1).Info("VM network is not ready yet", "nicStatus", machineCtx.ElfMachine.Status.Network)
 			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityInfo, "")

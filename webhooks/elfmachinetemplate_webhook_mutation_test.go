@@ -17,7 +17,6 @@ limitations under the License.
 package webhooks
 
 import (
-	"context"
 	"encoding/json"
 	"strconv"
 	"testing"
@@ -96,7 +95,7 @@ func TestElfMachineMutationTemplate(t *testing.T) {
 			mutation := ElfMachineTemplateMutation{}
 			mutation.InjectDecoder(admission.NewDecoder(scheme))
 
-			resp := mutation.Handle(context.Background(), tc.admissionRequest)
+			resp := mutation.Handle(t.Context(), tc.admissionRequest)
 			g.Expect(resp.Allowed).Should(Equal(tc.expectRespAllowed))
 			g.Expect(resp.Patches).Should(HaveLen(len(tc.expectPatchs)))
 			g.Expect(resp.Patches).Should(ContainElements(tc.expectPatchs))

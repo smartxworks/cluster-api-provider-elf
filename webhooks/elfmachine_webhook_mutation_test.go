@@ -17,7 +17,6 @@ limitations under the License.
 package webhooks
 
 import (
-	"context"
 	"encoding/json"
 	"strconv"
 	"testing"
@@ -27,7 +26,7 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -98,7 +97,7 @@ func TestElfMachineMutation(t *testing.T) {
 			mutation := ElfMachineMutation{Client: tc.client}
 			mutation.InjectDecoder(admission.NewDecoder(scheme))
 
-			resp := mutation.Handle(context.Background(), tc.admissionRequest)
+			resp := mutation.Handle(t.Context(), tc.admissionRequest)
 			g.Expect(resp.Allowed).Should(Equal(tc.expectRespAllowed))
 			g.Expect(resp.Patches).Should(ContainElements(tc.expectPatchs))
 		})

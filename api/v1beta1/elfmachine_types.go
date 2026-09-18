@@ -22,9 +22,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 )
 
 const (
@@ -224,6 +224,14 @@ type ElfMachineStatus struct {
 	// ComputeCluster is the status of the compute cluster.
 	// +optional
 	ComputeCluster ComputeClusterStatus `json:"computeCluster,omitempty"`
+
+	// StorageCluster is the status of the storage cluster used by the VM.
+	// +optional
+	StorageCluster StorageClusterStatus `json:"storageCluster,omitempty"`
+
+	// DataStore is the status of the datastore used by the VM.
+	// +optional
+	DataStore DataStoreStatus `json:"dataStore,omitempty"`
 }
 
 //+kubebuilder:object:root=true

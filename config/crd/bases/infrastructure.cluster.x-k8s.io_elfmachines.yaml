@@ -527,6 +527,17 @@ spec:
                   - type
                   type: object
                 type: array
+              dataStore:
+                description: DataStore is the status of the datastore used by the
+                  VM.
+                properties:
+                  dataStoreId:
+                    description: DataStoreID is the ID of the datastore.
+                    type: string
+                  name:
+                    description: Name is the name of the datastore.
+                    type: string
+                type: object
               failureMessage:
                 description: |-
                   FailureMessage will be set in the event that there is a terminal problem
@@ -654,6 +665,17 @@ spec:
                       for the virtual machine.
                     pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                     x-kubernetes-int-or-string: true
+                type: object
+              storageCluster:
+                description: StorageCluster is the status of the storage cluster used
+                  by the VM.
+                properties:
+                  clusterId:
+                    description: ClusterID is the ID of the storage cluster.
+                    type: string
+                  name:
+                    description: Name is the name of the storage cluster.
+                    type: string
                 type: object
               taskRef:
                 description: |-

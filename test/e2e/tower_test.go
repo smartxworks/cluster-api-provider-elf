@@ -47,12 +47,15 @@ func init() {
 
 func initTowerSession() {
 	var err error
-	vmService, err = service.NewVMService(goctx.Background(), infrav1.Tower{
-		Server:        towerServer,
-		Username:      towerUsername,
-		Password:      towerPassword,
-		AuthMode:      towerAuthMode,
-		SkipTLSVerify: towerSkipTLSVerify}, ctrllog.Log)
+	vmService, err = service.NewVMService(goctx.Background(), nil, infrav1.Tower{
+		TowerClientConfig: infrav1.TowerClientConfig{
+			Server:        towerServer,
+			Username:      towerUsername,
+			Password:      towerPassword,
+			AuthMode:      towerAuthMode,
+			SkipTLSVerify: towerSkipTLSVerify,
+		},
+	}, ctrllog.Log)
 	Expect(err).ShouldNot(HaveOccurred())
 
 	template, err := vmService.GetVMTemplate(vmTemplate)

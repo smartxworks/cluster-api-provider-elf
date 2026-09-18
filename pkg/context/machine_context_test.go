@@ -20,10 +20,12 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
 func TestMachineContextString(t *testing.T) {
@@ -233,6 +235,44 @@ func TestGetElfClusterID(t *testing.T) {
 				ElfCluster: tc.elfCluster,
 			}
 			g.Expect(ctx.GetElfClusterID()).To(Equal(tc.expected))
+		})
+	}
+}
+
+func TestGetStorageConfig(t *testing.T) {
+	tests := []struct {
+		name       string
+		elfCluster *infrav1.ElfCluster
+		expected   *models.StorageConfig
+	}{
+		{
+			name:       "When ElfCluster is nil should return nil",
+			elfCluster: nil,
+			expected:   nil,
+		},
+		{
+			name:       "When storage config is not set should return nil",
+			elfCluster: &infrav1.ElfCluster{},
+			expected:   nil,
+		},
+		{
+			name: "When one storage config is set should return it",
+			elfCluster: &infrav1.ElfCluster{
+				Spec: infrav1.ElfClusterSpec{
+					StorageCluster: infrav1.StorageConfig{StorageClusterID: "storage-cluster"},
+				},
+			},
+			expected: &models.StorageConfig{StorageClusterID: service.TowerString("storage-cluster")},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			ctx := &MachineContext{
+				ElfCluster: tc.elfCluster,
+			}
+			g.Expect(ctx.GetStorageConfig()).To(Equal(tc.expected))
 		})
 	}
 }
