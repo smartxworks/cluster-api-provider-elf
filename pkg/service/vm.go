@@ -224,7 +224,6 @@ func (svr *TowerVMService) Clone(
 	return createVMFromTemplateResp.Payload[0], nil
 }
 
-//nolint:maintidx
 func (svr *TowerVMService) createVMFromTemplateParams(
 	elfCluster *infrav1.ElfCluster, elfMachine *infrav1.ElfMachine,
 	cluster *models.Cluster, template *models.ContentLibraryVMTemplate, vmInfo *CloneVMInfo) (*models.VMCreateVMFromContentLibraryTemplateParams, error) {
@@ -366,12 +365,12 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 		}
 	}
 
-	var diskOperate *models.ContentLibraryVMTemplateDiskOperate
+	var diskOperate *models.VMDiskOperate
 	if elfCluster.IsStretched() {
 		// https://gist.github.com/Sczlog/f89763d27711fb2bbe28182f05b99334
-		diskOperate = &models.ContentLibraryVMTemplateDiskOperate{
-			RemoveDisks: &models.ContentLibraryVMTemplateDiskOperateRemoveDisks{},
-			NewDisks:    &models.ContentLibraryVMTemplateDiskParams{},
+		diskOperate = &models.VMDiskOperate{
+			RemoveDisks: &models.VMDiskOperateRemoveDisks{},
+			NewDisks:    &models.VMDiskParams{},
 		}
 		for _, disk := range template.VMDisks {
 			if *disk.Type != models.VMDiskTypeDISK {
@@ -380,16 +379,14 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 
 			diskOperate.RemoveDisks.DiskIndex = append(diskOperate.RemoveDisks.DiskIndex, *disk.Index)
 
-			diskOperate.NewDisks.MountNewCreateDisks = append(diskOperate.NewDisks.MountNewCreateDisks, &models.ContentLibraryVMTemplateMountNewCreateDisksParams{
-				MountNewCreateDisksParams: models.MountNewCreateDisksParams{
-					Boot:  disk.Boot,
-					Bus:   disk.Bus,
-					Index: disk.Index,
-					VMVolume: &models.MountNewCreateDisksParamsVMVolume{
-						Name:             TowerString(fmt.Sprintf("%s-%d", elfMachine.Name, *disk.Index+1)),
-						Size:             disk.Size,
-						ElfStoragePolicy: models.NewVMVolumeElfStoragePolicyType(models.VMVolumeElfStoragePolicyTypeREPLICA3THINPROVISION),
-					},
+			diskOperate.NewDisks.MountNewCreateDisks = append(diskOperate.NewDisks.MountNewCreateDisks, &models.MountNewCreateDisksParams{
+				Boot:  disk.Boot,
+				Bus:   disk.Bus,
+				Index: disk.Index,
+				VMVolume: &models.MountNewCreateDisksParamsVMVolume{
+					Name:             TowerString(fmt.Sprintf("%s-%d", elfMachine.Name, *disk.Index+1)),
+					Size:             disk.Size,
+					ElfStoragePolicy: models.NewVMVolumeElfStoragePolicyType(models.VMVolumeElfStoragePolicyTypeREPLICA3THINPROVISION),
 				},
 				StorageConfig: vmInfo.StorageConfig,
 			})

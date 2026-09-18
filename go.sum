@@ -395,8 +395,8 @@ github.com/shopspring/decimal v1.4.0/go.mod h1:gawqmDU56v4yIKSwfBSFip1HdCCXN8/+D
 github.com/sirupsen/logrus v1.4.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.1/go.mod h1:ni0Sbl8bgC9z8RoU9G6nDWqqs/fq4eDPysMBDgk/93Q=
 github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6MwdIuYE2rE=
-github.com/smartxworks/cloudtower-go-sdk/v2 v2.24.0-rc.8 h1:So8v68JR/IynMptuPvzbwu+AoZXVkK4Bt8X5M4D1lS8=
-github.com/smartxworks/cloudtower-go-sdk/v2 v2.24.0-rc.8/go.mod h1:X6R9+L438SMnLJXykSCV3fJ+AZul0hlyjITsZgrSRtM=
+github.com/smartxworks/cloudtower-go-sdk/v2 v2.24.0-rc.9 h1:/47oOkCXjMDSDv3kJq7pJIuGkaOBaplecPkzXvTMfKI=
+github.com/smartxworks/cloudtower-go-sdk/v2 v2.24.0-rc.9/go.mod h1:X6R9+L438SMnLJXykSCV3fJ+AZul0hlyjITsZgrSRtM=
 github.com/smartxworks/host-config-agent-api v0.0.0-20240410021405-be1517a07889 h1:kXlP3d9BEE6q31cR3qAehK0BKNVuCZ6jT2t+Jf5Gwrs=
 github.com/smartxworks/host-config-agent-api v0.0.0-20240410021405-be1517a07889/go.mod h1:oexROTOhF0Ium/iTwRbwXwZy+eGkzYE5a5qe3HvvKug=
 github.com/sourcegraph/conc v0.3.0 h1:OQTbbt6P72L20UqAkXXuLOj79LfEanQ+YQFNpLA9ySo=
