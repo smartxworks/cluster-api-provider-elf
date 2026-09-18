@@ -335,6 +335,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm := fake.NewTowerVM()
 			vm.Name = &elfMachine.Name
 			elfCluster.Spec.Cluster = clusterInsufficientStorageKey
+			storageConfig := &models.StorageConfig{StorageClusterID: service.TowerString(storageClusterKey)}
+			elfCluster.Spec.StorageCluster = infrav1.StorageConfig{StorageClusterID: storageClusterKey}
 			task := fake.NewTowerTask("")
 			withTaskVM := fake.NewWithTaskVM(vm, task)
 			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
@@ -367,7 +369,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
-			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any()).Return(withTaskVM, nil)
+			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ *infrav1.ElfCluster, _ *infrav1.ElfMachine, vmInfo *service.CloneVMInfo) (*models.WithTaskVM, error) {
+					Expect(vmInfo.StorageConfig).To(Equal(storageConfig))
+
+					return withTaskVM, nil
+				})
 			mockVMService.EXPECT().Get(*vm.ID).Return(vm, nil)
 			mockVMService.EXPECT().GetTask(*task.ID).Return(task, nil)
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
@@ -1021,6 +1028,88 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(elfMachine.Status.HostServerRef).To(Equal(*host.ID))
 			Expect(elfMachine.Status.HostServerName).To(Equal(*host.Name))
+		})
+
+		It("should update storage cluster status from the VM volume", func() {
+			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
+			elfCluster.Spec.StorageCluster = infrav1.StorageConfig{StorageClusterID: fake.ID()}
+			storageClusterID := fake.ID()
+			storageClusterName := "storage-cluster-a"
+			vmVolume := fake.NewVMVolume(elfMachine)
+			vmVolume.StorageClusterConfig = &models.NestedStorageClusterConfig{
+				StorageCluster: &models.NestedCluster{
+					ID:   ptr.To(storageClusterID),
+					Name: ptr.To(storageClusterName),
+				},
+			}
+			vmDisk := fake.NewVMDisk(vmVolume)
+			vm.VMDisks = []*models.NestedVMDisk{{ID: vmDisk.ID}}
+			mockVMService.EXPECT().GetVMDisks([]string{*vmDisk.ID}).Return([]*models.VMDisk{vmDisk}, nil)
+			mockVMService.EXPECT().GetVMVolume(*vmVolume.ID).Return(vmVolume, nil)
+
+			machineCtx := &context.MachineContext{
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+				VMService:  mockVMService,
+			}
+			reconciler := &ElfMachineReconciler{}
+			err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(elfMachine.Status.StorageCluster).To(Equal(infrav1.StorageClusterStatus{
+				ClusterID: storageClusterID,
+				Name:      storageClusterName,
+			}))
+			Expect(elfMachine.Status.DataStore).To(Equal(infrav1.DataStoreStatus{}))
+		})
+
+		It("should update datastore status from the VM volume", func() {
+			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
+			elfCluster.Spec.StorageCluster = infrav1.StorageConfig{DatastoreID: fake.ID()}
+			dataStoreID := fake.ID()
+			dataStoreName := "datastore-a"
+			vmVolume := fake.NewVMVolume(elfMachine)
+			vmVolume.StorageClusterConfig = &models.NestedStorageClusterConfig{
+				Datastore: &models.NestedDatastore{
+					ID:   ptr.To(dataStoreID),
+					Name: ptr.To(dataStoreName),
+				},
+			}
+			vmDisk := fake.NewVMDisk(vmVolume)
+			vm.VMDisks = []*models.NestedVMDisk{{ID: vmDisk.ID}}
+			mockVMService.EXPECT().GetVMDisks([]string{*vmDisk.ID}).Return([]*models.VMDisk{vmDisk}, nil)
+			mockVMService.EXPECT().GetVMVolume(*vmVolume.ID).Return(vmVolume, nil)
+
+			machineCtx := &context.MachineContext{
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+				VMService:  mockVMService,
+			}
+			reconciler := &ElfMachineReconciler{}
+			err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(elfMachine.Status.StorageCluster).To(Equal(infrav1.StorageClusterStatus{}))
+			Expect(elfMachine.Status.DataStore).To(Equal(infrav1.DataStoreStatus{
+				DataStoreID: dataStoreID,
+				Name:        dataStoreName,
+			}))
+		})
+
+		It("should return an error when storage disks cannot be read", func() {
+			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
+			elfCluster.Spec.StorageCluster = infrav1.StorageConfig{StorageClusterID: fake.ID()}
+			vmDiskID := fake.ID()
+			vm.VMDisks = []*models.NestedVMDisk{{ID: ptr.To(vmDiskID)}}
+			mockVMService.EXPECT().GetVMDisks([]string{vmDiskID}).Return(nil, errors.New("failed to get disks"))
+
+			machineCtx := &context.MachineContext{
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+				VMService:  mockVMService,
+			}
+			reconciler := &ElfMachineReconciler{}
+			err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get disks for vm"))
 		})
 
 		It("should update zone status for stretched cluster", func() {
@@ -3686,9 +3775,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should set providerID and labels for node", func() {
 			elfMachine.Spec.GPUDevices = []infrav1.GPUPassthroughDeviceSpec{{Model: "H100"}}
+			elfCluster.Spec.StorageCluster = infrav1.StorageConfig{StorageClusterID: "storage-cluster-id"}
 			elfMachine.Status.ComputeCluster = infrav1.ComputeClusterStatus{
 				ClusterID: fake.UUID(),
 				Name:      fake.UUID(),
+			}
+			elfMachine.Status.StorageCluster = infrav1.StorageClusterStatus{
+				ClusterID: "observed-storage-cluster-id",
+				Name:      "observed-storage-cluster-name",
 			}
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
@@ -3739,6 +3833,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				return node.Spec.ProviderID == providerID &&
 					node.Labels[infrav1.ComputeClusterIDLabel] == elfMachine.Status.ComputeCluster.ClusterID &&
 					node.Labels[infrav1.ComputeClusterNameLabel] == elfMachine.Status.ComputeCluster.Name &&
+					node.Labels[infrav1.StorageClusterIDLabel] == elfMachine.Status.StorageCluster.ClusterID &&
+					node.Labels[infrav1.StorageClusterNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.StorageCluster.Name) &&
 					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
 					node.Labels[infrav1.HostServerNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.HostServerName) &&
 					node.Labels[infrav1.ZoneIDLabel] == elfMachine.Status.Zone.ZoneID &&
@@ -3751,6 +3847,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should update labels but not update providerID", func() {
 			elfMachine.Spec.VGPUDevices = []infrav1.VGPUDeviceSpec{{Type: "H300"}}
+			elfCluster.Spec.StorageCluster = infrav1.StorageConfig{DatastoreID: "datastore-id"}
 			elfMachine.Status.ComputeCluster = infrav1.ComputeClusterStatus{
 				ClusterID: fake.UUID(),
 				Name:      fake.UUID(),
@@ -3760,6 +3857,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.Zone = infrav1.ZoneStatus{
 				ZoneID: fake.UUID(),
 				Type:   infrav1.ElfClusterZoneTypePreferred,
+			}
+			elfMachine.Status.DataStore = infrav1.DataStoreStatus{
+				DataStoreID: "observed-datastore-id",
+				Name:        "observed-datastore-name",
 			}
 			vm := fake.NewTowerVM()
 			providerID := machineutil.ConvertUUIDToProviderID(*vm.LocalID)
@@ -3782,6 +3883,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 					Labels: map[string]string{
 						infrav1.ComputeClusterIDLabel:            "old-cluster-id",
 						infrav1.ComputeClusterNameLabel:          "old-cluster-name",
+						infrav1.StorageClusterIDLabel:            "old-storage-cluster-id",
+						infrav1.StorageClusterNameLabel:          "old-storage-cluster-name",
+						infrav1.DataStoreIDLabel:                 "old-datastore-id",
+						infrav1.DataStoreNameLabel:               "old-datastore-name",
 						infrav1.HostServerIDLabel:                "old-host-id",
 						infrav1.HostServerNameLabel:              "old-host-name",
 						infrav1.ZoneIDLabel:                      "old-zone-id",
@@ -3815,6 +3920,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				return node.Spec.ProviderID == providerID &&
 					node.Labels[infrav1.ComputeClusterIDLabel] == elfMachine.Status.ComputeCluster.ClusterID &&
 					node.Labels[infrav1.ComputeClusterNameLabel] == elfMachine.Status.ComputeCluster.Name &&
+					node.Labels[infrav1.DataStoreIDLabel] == elfMachine.Status.DataStore.DataStoreID &&
+					node.Labels[infrav1.DataStoreNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.DataStore.Name) &&
 					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
 					node.Labels[infrav1.HostServerNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.HostServerName) &&
 					node.Labels[infrav1.ZoneIDLabel] == elfMachine.Status.Zone.ZoneID &&
@@ -3850,6 +3957,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 					Labels: map[string]string{
 						infrav1.ComputeClusterIDLabel:            "old-cluster-id",
 						infrav1.ComputeClusterNameLabel:          "old-cluster-name",
+						infrav1.StorageClusterIDLabel:            "old-storage-cluster-id",
+						infrav1.StorageClusterNameLabel:          "old-storage-cluster-name",
+						infrav1.DataStoreIDLabel:                 "old-datastore-id",
+						infrav1.DataStoreNameLabel:               "old-datastore-name",
 						infrav1.HostServerIDLabel:                elfMachine.Status.HostServerRef,
 						infrav1.HostServerNameLabel:              elfMachine.Status.HostServerName,
 						infrav1.TowerVMIDLabel:                   *vm.ID,
@@ -3887,6 +3998,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID &&
 					node.Labels[infrav1.ComputeClusterIDLabel] == "" &&
 					node.Labels[infrav1.ComputeClusterNameLabel] == "" &&
+					!labelsutil.HasLabel(node, infrav1.StorageClusterIDLabel) &&
+					!labelsutil.HasLabel(node, infrav1.StorageClusterNameLabel) &&
+					!labelsutil.HasLabel(node, infrav1.DataStoreIDLabel) &&
+					!labelsutil.HasLabel(node, infrav1.DataStoreNameLabel) &&
 					!labelsutil.HasLabel(node, infrav1.ZoneIDLabel) &&
 					!labelsutil.HasLabel(node, infrav1.ZoneTypeLabel) &&
 					!labelsutil.HasLabel(node, labelsutil.ClusterAutoscalerCAPIGPULabel)

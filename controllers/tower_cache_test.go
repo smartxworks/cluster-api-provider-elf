@@ -39,6 +39,7 @@ const (
 	clusterKey                    = "clusterID"
 	clusterInsufficientMemoryKey  = "clusterInsufficientMemory"
 	clusterInsufficientStorageKey = "clusterInsufficientStorage"
+	storageClusterKey             = "storageClusterID"
 	placementGroupKey             = "getPlacementGroupName"
 )
 

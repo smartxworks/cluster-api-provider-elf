@@ -37,6 +37,11 @@ type ElfClusterSpec struct {
 	// Cluster is a unique identifier for a ELF cluster.
 	Cluster string `json:"cluster,omitempty"`
 
+	// StorageCluster defines the storage configuration used for VM disks.
+	// If unset, the compute cluster's storage is used.
+	// +optional
+	StorageCluster StorageConfig `json:"storageCluster,omitempty"`
+
 	// ClusterType is the type of the ELF cluster.
 	// If ClusterType is empty, it will be automatically set.
 	// +kubebuilder:validation:Enum=Standard;Stretched
