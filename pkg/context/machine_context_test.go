@@ -259,7 +259,7 @@ func TestGetStorageConfig(t *testing.T) {
 			name: "When one storage config is set should return it",
 			elfCluster: &infrav1.ElfCluster{
 				Spec: infrav1.ElfClusterSpec{
-					StorageCluster: infrav1.StorageConfig{StorageClusterID: "storage-cluster"},
+					StorageCluster: infrav1.StorageCluster{StorageClusterID: "storage-cluster"},
 				},
 			},
 			expected: &models.StorageConfig{StorageClusterID: service.TowerString("storage-cluster")},

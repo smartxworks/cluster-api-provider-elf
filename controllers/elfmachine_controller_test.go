@@ -336,7 +336,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.Name = &elfMachine.Name
 			elfCluster.Spec.Cluster = clusterInsufficientStorageKey
 			storageConfig := &models.StorageConfig{StorageClusterID: service.TowerString(storageClusterKey)}
-			elfCluster.Spec.StorageCluster = infrav1.StorageConfig{StorageClusterID: storageClusterKey}
+			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{StorageClusterID: storageClusterKey}
 			task := fake.NewTowerTask("")
 			withTaskVM := fake.NewWithTaskVM(vm, task)
 			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
@@ -1032,7 +1032,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should update storage cluster status from the VM volume", func() {
 			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
-			elfCluster.Spec.StorageCluster = infrav1.StorageConfig{StorageClusterID: fake.ID()}
+			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{StorageClusterID: fake.ID()}
 			storageClusterID := fake.ID()
 			storageClusterName := "storage-cluster-a"
 			vmVolume := fake.NewVMVolume(elfMachine)
@@ -1064,7 +1064,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should update datastore status from the VM volume", func() {
 			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
-			elfCluster.Spec.StorageCluster = infrav1.StorageConfig{DatastoreID: fake.ID()}
+			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{DatastoreID: fake.ID()}
 			dataStoreID := fake.ID()
 			dataStoreName := "datastore-a"
 			vmVolume := fake.NewVMVolume(elfMachine)
@@ -1096,7 +1096,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should return an error when storage disks cannot be read", func() {
 			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
-			elfCluster.Spec.StorageCluster = infrav1.StorageConfig{StorageClusterID: fake.ID()}
+			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{StorageClusterID: fake.ID()}
 			vmDiskID := fake.ID()
 			vm.VMDisks = []*models.NestedVMDisk{{ID: ptr.To(vmDiskID)}}
 			mockVMService.EXPECT().GetVMDisks([]string{vmDiskID}).Return(nil, errors.New("failed to get disks"))
@@ -3775,7 +3775,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should set providerID and labels for node", func() {
 			elfMachine.Spec.GPUDevices = []infrav1.GPUPassthroughDeviceSpec{{Model: "H100"}}
-			elfCluster.Spec.StorageCluster = infrav1.StorageConfig{StorageClusterID: "storage-cluster-id"}
+			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{StorageClusterID: "storage-cluster-id"}
 			elfMachine.Status.ComputeCluster = infrav1.ComputeClusterStatus{
 				ClusterID: fake.UUID(),
 				Name:      fake.UUID(),
@@ -3847,7 +3847,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should update labels but not update providerID", func() {
 			elfMachine.Spec.VGPUDevices = []infrav1.VGPUDeviceSpec{{Type: "H300"}}
-			elfCluster.Spec.StorageCluster = infrav1.StorageConfig{DatastoreID: "datastore-id"}
+			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{DatastoreID: "datastore-id"}
 			elfMachine.Status.ComputeCluster = infrav1.ComputeClusterStatus{
 				ClusterID: fake.UUID(),
 				Name:      fake.UUID(),
