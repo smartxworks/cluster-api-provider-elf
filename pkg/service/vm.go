@@ -54,11 +54,12 @@ var (
 )
 
 type CloneVMInfo struct {
-	Cluster    string           `json:"cluster,omitempty"`
-	Host       string           `json:"host,omitempty"`
-	CloudInit  string           `json:"cloudInit,omitempty"`
-	GPUDevices []*GPUDeviceInfo `json:"gpuDevices,omitempty"`
-	HostName   string           `json:"hostName,omitempty"`
+	Cluster       string                `json:"cluster,omitempty"`
+	StorageConfig *models.StorageConfig `json:"storageConfig,omitempty"`
+	Host          string                `json:"host,omitempty"`
+	CloudInit     string                `json:"cloudInit,omitempty"`
+	GPUDevices    []*GPUDeviceInfo      `json:"gpuDevices,omitempty"`
+	HostName      string                `json:"hostName,omitempty"`
 }
 
 type VMService interface {
@@ -385,30 +386,32 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 					Size:             disk.Size,
 					ElfStoragePolicy: models.NewVMVolumeElfStoragePolicyType(models.VMVolumeElfStoragePolicyTypeREPLICA3THINPROVISION),
 				},
+				StorageConfig: vmInfo.StorageConfig,
 			})
 		}
 	}
 
 	return &models.VMCreateVMFromContentLibraryTemplateParams{
-		ClusterID:   cluster.ID,
-		HostID:      TowerString(hostID),
-		Name:        TowerString(elfMachine.Name),
-		Description: TowerString(fmt.Sprintf(config.VMDescription, elfCluster.Spec.Tower.Server)),
-		Owner:       owner,
-		Vcpu:        vCPU,
-		CPUCores:    cpuSocketCores,
-		CPUSockets:  cpuSockets,
-		Memory:      TowerMemory(elfMachine.Spec.MemoryMiB),
-		GpuDevices:  gpuDevices,
-		Status:      models.NewVMStatus(models.VMStatusSTOPPED),
-		Ha:          ha,
-		HaPriority:  haPriority,
-		IsFullCopy:  TowerBool(isFullCopy),
-		TemplateID:  template.ID,
-		GuestOsType: models.NewVMGuestsOperationSystem(models.VMGuestsOperationSystem(elfMachine.Spec.OSType)),
-		VMNics:      nics,
-		DiskOperate: diskOperate,
-		CloudInit:   cloudInit,
+		ClusterID:     cluster.ID,
+		HostID:        TowerString(hostID),
+		Name:          TowerString(elfMachine.Name),
+		Description:   TowerString(fmt.Sprintf(config.VMDescription, elfCluster.Spec.Tower.Server)),
+		Owner:         owner,
+		Vcpu:          vCPU,
+		CPUCores:      cpuSocketCores,
+		CPUSockets:    cpuSockets,
+		Memory:        TowerMemory(elfMachine.Spec.MemoryMiB),
+		GpuDevices:    gpuDevices,
+		Status:        models.NewVMStatus(models.VMStatusSTOPPED),
+		Ha:            ha,
+		HaPriority:    haPriority,
+		IsFullCopy:    TowerBool(isFullCopy),
+		TemplateID:    template.ID,
+		GuestOsType:   models.NewVMGuestsOperationSystem(models.VMGuestsOperationSystem(elfMachine.Spec.OSType)),
+		VMNics:        nics,
+		DiskOperate:   diskOperate,
+		StorageConfig: vmInfo.StorageConfig,
+		CloudInit:     cloudInit,
 	}, nil
 }
 

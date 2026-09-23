@@ -11,7 +11,7 @@ require (
 	github.com/onsi/gomega v1.36.3
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
-	github.com/smartxworks/cloudtower-go-sdk/v2 v2.21.0-rc.2
+	github.com/smartxworks/cloudtower-go-sdk/v2 v2.24.0-rc.9
 	github.com/smartxworks/host-config-agent-api v0.0.0-20240410021405-be1517a07889
 	golang.org/x/mod v0.24.0
 	golang.org/x/tools v0.31.0

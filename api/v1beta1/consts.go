@@ -60,6 +60,22 @@ const (
 	// It is the name of compute cluster where the virtual machine runs on.
 	ComputeClusterNameLabel = "cape.infrastructure.cluster.x-k8s.io/compute-cluster-name"
 
+	// StorageClusterIDLabel is the label set on nodes.
+	// It is the ID of the storage cluster where the virtual machine's storage resides.
+	StorageClusterIDLabel = "cape.infrastructure.cluster.x-k8s.io/storage-cluster-id"
+
+	// StorageClusterNameLabel is the label set on nodes.
+	// It is the name of the storage cluster where the virtual machine's storage resides.
+	StorageClusterNameLabel = "cape.infrastructure.cluster.x-k8s.io/storage-cluster-name"
+
+	// DataStoreIDLabel is the label set on nodes.
+	// It is the ID of the datastore where the virtual machine's storage resides.
+	DataStoreIDLabel = "cape.infrastructure.cluster.x-k8s.io/datastore-id"
+
+	// DataStoreNameLabel is the label set on nodes.
+	// It is the name of the datastore where the virtual machine's storage resides.
+	DataStoreNameLabel = "cape.infrastructure.cluster.x-k8s.io/datastore-name"
+
 	// ZoneIDLabel is the label set on nodes.
 	// It is the Tower ID of zone where the virtual machine runs on.
 	ZoneIDLabel = "cape.infrastructure.cluster.x-k8s.io/zone-id"
