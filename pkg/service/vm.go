@@ -56,11 +56,12 @@ var (
 )
 
 type CloneVMInfo struct {
-	Cluster    string           `json:"cluster,omitempty"`
-	Host       string           `json:"host,omitempty"`
-	CloudInit  string           `json:"cloudInit,omitempty"`
-	GPUDevices []*GPUDeviceInfo `json:"gpuDevices,omitempty"`
-	HostName   string           `json:"hostName,omitempty"`
+	Cluster       string                `json:"cluster,omitempty"`
+	StorageConfig *models.StorageConfig `json:"storageConfig,omitempty"`
+	Host          string                `json:"host,omitempty"`
+	CloudInit     string                `json:"cloudInit,omitempty"`
+	GPUDevices    []*GPUDeviceInfo      `json:"gpuDevices,omitempty"`
+	HostName      string                `json:"hostName,omitempty"`
 }
 
 type VMService interface {
@@ -395,6 +396,7 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 					Size:             disk.Size,
 					ElfStoragePolicy: models.NewVMVolumeElfStoragePolicyType(models.VMVolumeElfStoragePolicyTypeREPLICA3THINPROVISION),
 				},
+				StorageConfig: vmInfo.StorageConfig,
 			})
 		}
 	}
@@ -418,6 +420,7 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 		GuestOsType: models.NewVMGuestsOperationSystem(models.VMGuestsOperationSystem(elfMachine.Spec.OSType)),
 		VMNics:      nics,
 		DiskOperate: diskOperate,
+		StorageConfig: vmInfo.StorageConfig,
 		CloudInit:   cloudInit,
 	}, nil
 }

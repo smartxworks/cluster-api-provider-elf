@@ -224,6 +224,14 @@ type ElfMachineStatus struct {
 	// ComputeCluster is the status of the compute cluster.
 	// +optional
 	ComputeCluster ComputeClusterStatus `json:"computeCluster,omitempty"`
+
+	// StorageCluster is the status of the storage cluster used by the VM.
+	// +optional
+	StorageCluster StorageClusterStatus `json:"storageCluster,omitempty"`
+
+	// DataStore is the status of the datastore used by the VM.
+	// +optional
+	DataStore DataStoreStatus `json:"dataStore,omitempty"`
 }
 
 //+kubebuilder:object:root=true
