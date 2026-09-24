@@ -1094,6 +1094,27 @@ var _ = Describe("ElfMachineReconciler", func() {
 			}))
 		})
 
+		It("should tolerate an empty storage volume response", func() {
+			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
+			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{StorageClusterID: fake.ID()}
+			vmVolume := fake.NewVMVolume(elfMachine)
+			vmDisk := fake.NewVMDisk(vmVolume)
+			vm.VMDisks = []*models.NestedVMDisk{{ID: vmDisk.ID}}
+			mockVMService.EXPECT().GetVMDisks([]string{*vmDisk.ID}).Return([]*models.VMDisk{vmDisk}, nil)
+			mockVMService.EXPECT().GetVMVolume(*vmVolume.ID).Return(nil, nil)
+
+			machineCtx := &context.MachineContext{
+				ElfCluster: elfCluster,
+				ElfMachine: elfMachine,
+				VMService:  mockVMService,
+			}
+			reconciler := &ElfMachineReconciler{}
+			err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(elfMachine.Status.StorageCluster).To(Equal(infrav1.StorageClusterStatus{}))
+			Expect(elfMachine.Status.DataStore).To(Equal(infrav1.DataStoreStatus{}))
+		})
+
 		It("should return an error when storage disks cannot be read", func() {
 			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
 			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{StorageClusterID: fake.ID()}

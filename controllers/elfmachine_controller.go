@@ -1126,16 +1126,14 @@ func (r *ElfMachineReconciler) reconcileHostAndZone(ctx goctx.Context, machineCt
 				if err != nil {
 					return errors.Wrapf(err, "failed to get storage volume for vm %s", service.GetTowerString(vm.ID))
 				}
-				if vmVolume == nil {
-					return errors.Errorf("storage volume %s for vm %s is empty", *systemDisk.VMVolume.ID, service.GetTowerString(vm.ID))
-				}
 
-				if vmVolume.StorageClusterConfig != nil {
+				if vmVolume != nil && vmVolume.StorageClusterConfig != nil {
 					if storageCluster := vmVolume.StorageClusterConfig.StorageCluster; storageCluster != nil {
 						storageClusterStatus := infrav1.StorageClusterStatus{
 							ClusterID: service.GetTowerString(storageCluster.ID),
 							Name:      service.GetTowerString(storageCluster.Name),
 						}
+
 						if !storageClusterStatus.Equal(&machineCtx.ElfMachine.Status.StorageCluster) {
 							log.V(1).Info(fmt.Sprintf("Updated VM storage cluster from %s to %s", &machineCtx.ElfMachine.Status.StorageCluster, storageClusterStatus))
 							machineCtx.ElfMachine.Status.StorageCluster = storageClusterStatus
@@ -1271,22 +1269,26 @@ func (r *ElfMachineReconciler) reconcileNode(ctx goctx.Context, machineCtx *cont
 	expectedLabels := map[string]interface{}{
 		infrav1.ComputeClusterIDLabel:   machineCtx.ElfMachine.Status.ComputeCluster.ClusterID,
 		infrav1.ComputeClusterNameLabel: labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Status.ComputeCluster.Name),
-		infrav1.StorageClusterIDLabel:   nil,
-		infrav1.StorageClusterNameLabel: nil,
-		infrav1.DataStoreIDLabel:        nil,
-		infrav1.DataStoreNameLabel:      nil,
 		infrav1.HostServerIDLabel:       machineCtx.ElfMachine.Status.HostServerRef,
 		infrav1.HostServerNameLabel:     labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Status.HostServerName),
 		infrav1.TowerVMIDLabel:          service.GetTowerString(vm.ID),
 		infrav1.NodeGroupLabel:          machineutil.GetNodeGroupName(machineCtx.Machine),
 	}
+
 	if machineCtx.ElfMachine.Status.DataStore.DataStoreID != "" {
 		expectedLabels[infrav1.DataStoreIDLabel] = machineCtx.ElfMachine.Status.DataStore.DataStoreID
 		expectedLabels[infrav1.DataStoreNameLabel] = labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Status.DataStore.Name)
+	} else {
+		expectedLabels[infrav1.DataStoreIDLabel] = nil
+		expectedLabels[infrav1.DataStoreNameLabel] = nil
 	}
+
 	if machineCtx.ElfMachine.Status.StorageCluster.ClusterID != "" {
 		expectedLabels[infrav1.StorageClusterIDLabel] = machineCtx.ElfMachine.Status.StorageCluster.ClusterID
 		expectedLabels[infrav1.StorageClusterNameLabel] = labelsutil.ConvertToLabelValue(machineCtx.ElfMachine.Status.StorageCluster.Name)
+	} else {
+		expectedLabels[infrav1.StorageClusterIDLabel] = nil
+		expectedLabels[infrav1.StorageClusterNameLabel] = nil
 	}
 
 	if machineCtx.ElfMachine.Status.Zone.Type != "" {
