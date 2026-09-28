@@ -20,8 +20,8 @@ import (
 	goctx "context"
 	"fmt"
 
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 
