@@ -221,14 +221,9 @@ func main() {
 	managerOpts.KubeConfig.UserAgent = remote.DefaultClusterAPIUserAgent(controllerName)
 	managerOpts.KubeConfig.WarningHandler = apiwarnings.DefaultHandler(klog.Background().WithName("API Server Warning"))
 
-	managerOpts.Cache.ByObject = map[client.Object]cache.ByObject{
-		// cache tower secrets.
-		// Warning: secretCachingClient use managerOpts.Cache and get secret from cache.
-		&corev1.Secret{}: {
-			Namespaces: map[string]cache.Config{
-				"default": {},
-			},
-		},
+	if err := manager.ConfigureSecretCaching(&managerOpts); err != nil {
+		setupLog.Error(err, "failed to configure Secret caching")
+		os.Exit(1)
 	}
 
 	if watchNamespace != "" {
