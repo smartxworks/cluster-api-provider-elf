@@ -168,7 +168,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx goctx.Context, machine
 		return nil, err
 	}
 
-	hosts, err := machineCtx.VMService.GetHostsByCluster(machineCtx.GetElfClusterID())
+	hosts, err := machineCtx.VMService.GetHostsByCluster(machineCtx.GetElfClusterID(), machineCtx.ElfCluster.Spec.StorageCluster.DatastoreID)
 	if err != nil {
 		return nil, err
 	}
@@ -433,7 +433,7 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx goctx.Context, machineCtx 
 	}
 
 	if machineutil.IsControlPlaneMachine(machineCtx.Machine) {
-		hosts, err := machineCtx.VMService.GetHostsByCluster(machineCtx.GetElfClusterID())
+		hosts, err := machineCtx.VMService.GetHostsByCluster(machineCtx.GetElfClusterID(), machineCtx.ElfCluster.Spec.StorageCluster.DatastoreID)
 		if err != nil {
 			return false, err
 		}
