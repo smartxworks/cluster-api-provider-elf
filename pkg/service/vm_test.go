@@ -21,11 +21,53 @@ import (
 	"testing"
 
 	"github.com/onsi/gomega"
+	towerclient "github.com/smartxworks/cloudtower-go-sdk/v2/client"
+	clienthost "github.com/smartxworks/cloudtower-go-sdk/v2/client/host"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
+
+type hostQueryClient struct {
+	clienthost.ClientService
+	getHosts func(*clienthost.GetHostsParams) (*clienthost.GetHostsOK, error)
+}
+
+func (c *hostQueryClient) GetHosts(params *clienthost.GetHostsParams, _ ...clienthost.ClientOption) (*clienthost.GetHostsOK, error) {
+	return c.getHosts(params)
+}
+
+func TestGetHostsByCluster(t *testing.T) {
+	for _, datastoreID := range []string{"", "datastore"} {
+		t.Run("datastore="+datastoreID, func(t *testing.T) {
+			g := gomega.NewGomegaWithT(t)
+			host := &models.Host{ID: TowerString("host")}
+			service := &TowerVMService{Client: &towerclient.Cloudtower{
+				Host: &hostQueryClient{getHosts: func(params *clienthost.GetHostsParams) (*clienthost.GetHostsOK, error) {
+					where := params.RequestBody.Where
+					g.Expect(where.Cluster.OR).To(gomega.Equal([]*models.ClusterWhereInput{
+						{LocalID: TowerString("cluster")}, {ID: TowerString("cluster")},
+					}))
+					if datastoreID == "" {
+						g.Expect(where.DatastoreMountsSome).To(gomega.BeNil())
+					} else {
+						g.Expect(where.DatastoreMountsSome).To(gomega.Equal(&models.DatastoreMountWhereInput{
+							Datastore:   &models.DatastoreWhereInput{ID: TowerString(datastoreID)},
+							State:       models.DatastoreMountStateMOUNTED.Pointer(),
+							DeviceState: models.DatastoreMountDeviceStateACTIVE.Pointer(),
+						}))
+					}
+					return &clienthost.GetHostsOK{Payload: []*models.Host{host}}, nil
+				}},
+			}}
+
+			hosts, err := service.GetHostsByCluster("cluster", datastoreID)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			g.Expect(hosts).To(gomega.Equal(NewHosts(host)))
+		})
+	}
+}
 
 func TestCreateVMFromTemplateParams(t *testing.T) {
 	t.Run("when storage cluster is set should use top-level storage config", func(t *testing.T) {

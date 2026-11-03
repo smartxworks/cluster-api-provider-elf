@@ -89,7 +89,7 @@ type VMService interface {
 	GetCluster(id string) (*models.Cluster, error)
 	GetClusterZones(clusterID string) ([]*models.Zone, error)
 	GetHost(id string) (*models.Host, error)
-	GetHostsByCluster(clusterID string) (Hosts, error)
+	GetHostsByCluster(clusterID, datastoreID string) (Hosts, error)
 	GetVlan(id string) (*models.Vlan, error)
 	UpsertLabel(key, value string) (*models.Label, error)
 	DeleteLabel(key, value string, strict bool) (string, error)
@@ -771,7 +771,8 @@ func (svr *TowerVMService) GetHost(id string) (*models.Host, error) {
 	return getHostsResp.Payload[0], nil
 }
 
-func (svr *TowerVMService) GetHostsByCluster(clusterID string) (Hosts, error) {
+// GetHostsByCluster returns cluster hosts, optionally restricted to hosts with an active datastore mount.
+func (svr *TowerVMService) GetHostsByCluster(clusterID, datastoreID string) (Hosts, error) {
 	getHostsParams := clienthost.NewGetHostsParams()
 	getHostsParams.RequestBody = &models.GetHostsRequestBody{
 		Where: &models.HostWhereInput{
@@ -779,6 +780,14 @@ func (svr *TowerVMService) GetHostsByCluster(clusterID string) (Hosts, error) {
 				OR: []*models.ClusterWhereInput{{LocalID: TowerString(clusterID)}, {ID: TowerString(clusterID)}},
 			},
 		},
+	}
+
+	if datastoreID != "" {
+		getHostsParams.RequestBody.Where.DatastoreMountsSome = &models.DatastoreMountWhereInput{
+			Datastore:   &models.DatastoreWhereInput{ID: TowerString(datastoreID)},
+			State:       models.DatastoreMountStateMOUNTED.Pointer(),
+			DeviceState: models.DatastoreMountDeviceStateACTIVE.Pointer(),
+		}
 	}
 
 	getHostsResp, err := svr.Client.Host.GetHosts(getHostsParams)

@@ -85,7 +85,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 		unlockGPUDevicesLockedByVM(machineCtx.GetElfClusterID(), machineCtx.ElfMachine.Name)
 	}
 
-	hosts, err := machineCtx.VMService.GetHostsByCluster(machineCtx.GetElfClusterID())
+	hosts, err := machineCtx.VMService.GetHostsByCluster(machineCtx.GetElfClusterID(), machineCtx.ElfCluster.Spec.StorageCluster.DatastoreID)
 	if err != nil {
 		return nil, nil, err
 	}
