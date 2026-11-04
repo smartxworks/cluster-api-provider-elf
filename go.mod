@@ -1,6 +1,6 @@
 module github.com/smartxworks/cluster-api-provider-elf
 
-go 1.25.9
+go 1.26.10
 
 require (
 	github.com/blang/semver/v4 v4.0.0
