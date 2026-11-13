@@ -25,7 +25,7 @@ VERSION ?= $(shell cat clusterctl-settings.json | jq .config.nextVersion -r)
 #
 # Go.
 #
-GO_VERSION ?= 1.26.10
+GO_VERSION ?= 1.25.9
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -342,10 +342,9 @@ docker-push-%:
 
 .PHONY: docker-push-manifest
 docker-push-manifest: ## Push the fat manifest docker image.
-	## Minimum docker version 18.06.0 is required for creating and pushing manifest images.
-	docker manifest create --amend $(CONTROLLER_IMG):$(IMAGE_TAG) $(shell echo $(ALL_ARCH) | sed -e "s~[^ ]*~$(CONTROLLER_IMG)\-&:$(IMAGE_TAG)~g")
-	@for arch in $(ALL_ARCH); do docker manifest annotate --arch $${arch} ${CONTROLLER_IMG}:${IMAGE_TAG} ${CONTROLLER_IMG}-$${arch}:${IMAGE_TAG}; done
-	docker manifest push --purge ${CONTROLLER_IMG}:${IMAGE_TAG}
+	docker buildx imagetools create \
+		--tag $(CONTROLLER_IMG):$(IMAGE_TAG) \
+		$(foreach arch,$(ALL_ARCH),$(CONTROLLER_IMG)-$(arch):$(IMAGE_TAG))
 
 
 ## --------------------------------------
