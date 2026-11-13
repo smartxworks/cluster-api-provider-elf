@@ -110,23 +110,26 @@ type NewVMServiceFunc func(ctx goctx.Context, k8sClient client.Client, tower inf
 func NewVMService(ctx goctx.Context, k8sClient client.Client, tower infrav1.Tower, logger logr.Logger) (VMService, error) {
 	var (
 		towerClient *towerclient.Cloudtower
+		towerConfig infrav1.TowerClientConfig
 		err         error
 	)
 	if tower.SecretRef != nil {
-		towerClient, err = cloudtower.NewTowerClient(ctx, k8sClient, tower.SecretKey())
+		towerClient, towerConfig, err = cloudtower.NewTowerClientAndConfig(ctx, k8sClient, tower.SecretKey())
 	} else {
-		towerClient, err = cloudtower.NewTowerClientWithConfig(ctx, tower.TowerClientConfig)
+		towerConfig = tower.TowerClientConfig
+		towerClient, err = cloudtower.NewTowerClientWithConfig(ctx, towerConfig)
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	return &TowerVMService{towerClient, logger}, nil
+	return &TowerVMService{Client: towerClient, TowerServer: towerConfig.Server, Logger: logger}, nil
 }
 
 type TowerVMService struct {
-	Client *towerclient.Cloudtower `json:"towerClient"`
-	Logger logr.Logger             `json:"logger"`
+	Client      *towerclient.Cloudtower `json:"towerClient"`
+	TowerServer string                  `json:"towerServer"`
+	Logger      logr.Logger             `json:"logger"`
 }
 
 func (svr *TowerVMService) UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachine) (*models.WithTaskVM, error) {
@@ -405,7 +408,7 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 		ClusterID:     cluster.ID,
 		HostID:        TowerString(hostID),
 		Name:          TowerString(elfMachine.Name),
-		Description:   TowerString(config.VMDescription),
+		Description:   TowerString(fmt.Sprintf(config.VMDescription, svr.TowerServer)),
 		Owner:         owner,
 		Vcpu:          vCPU,
 		CPUCores:      cpuSocketCores,

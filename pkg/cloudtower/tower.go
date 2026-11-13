@@ -76,6 +76,22 @@ func NewTowerClient(ctx goctx.Context, k8sClient client.Client, secretKey apityp
 	return getOrCreateTowerClient(ctx, getTowerSecretCacheKey(secretKey), clientConfig, true)
 }
 
+// NewTowerClientAndConfig creates a Tower client from the cloudtower.yaml in
+// the Secret referenced by secretKey and returns the resolved client config.
+func NewTowerClientAndConfig(ctx goctx.Context, k8sClient client.Client, secretKey apitypes.NamespacedName) (*towerclient.Cloudtower, infrav1.TowerClientConfig, error) {
+	clientConfig, err := GetTowerClientConfig(ctx, k8sClient, secretKey)
+	if err != nil {
+		return nil, infrav1.TowerClientConfig{}, err
+	}
+
+	towerClient, err := getOrCreateTowerClient(ctx, getTowerSecretCacheKey(secretKey), clientConfig, true)
+	if err != nil {
+		return nil, infrav1.TowerClientConfig{}, err
+	}
+
+	return towerClient, clientConfig, nil
+}
+
 // NewTowerClientWithConfig gets a cached client or creates a new one if one
 // does not already exist. The client is created from the given inline
 // TowerClientConfig, and clients are cached by the config content.

@@ -18,7 +18,7 @@ package config
 
 const (
 	// VMDescription is the default description in a VM.
-	VMDescription = "Automatically created Kubernetes node."
+	VMDescription = "Automatically created Kubernetes node by server %s."
 )
 
 // MaxConcurrentVMCreations is the maximum number of concurrent virtual machine creations.
