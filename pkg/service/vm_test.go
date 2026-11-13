@@ -70,6 +70,14 @@ func TestGetHostsByCluster(t *testing.T) {
 }
 
 func TestCreateVMFromTemplateParams(t *testing.T) {
+	t.Run("includes the Tower server in the VM description", func(t *testing.T) {
+		g := gomega.NewGomegaWithT(t)
+
+		params := newTestCreateVMFromTemplateParams(t, infrav1.ElfClusterTypeStandard, nil)
+
+		g.Expect(*params.Description).To(gomega.Equal("Automatically created Kubernetes node by server tower.example.com."))
+	})
+
 	t.Run("when storage cluster is set should use top-level storage config", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 
@@ -144,9 +152,12 @@ func TestCreateVMFromTemplateParams(t *testing.T) {
 func newTestCreateVMFromTemplateParams(t *testing.T, clusterType infrav1.ElfClusterType, config *models.StorageConfig) *models.VMCreateVMFromContentLibraryTemplateParams {
 	t.Helper()
 
-	service := &TowerVMService{}
+	service := &TowerVMService{TowerServer: "tower.example.com"}
 	elfCluster := &infrav1.ElfCluster{
-		Spec: infrav1.ElfClusterSpec{ClusterType: clusterType},
+		Spec: infrav1.ElfClusterSpec{
+			ClusterType: clusterType,
+			Tower:       infrav1.Tower{TowerClientConfig: infrav1.TowerClientConfig{Server: "tower.example.com"}},
+		},
 	}
 	elfMachine := &infrav1.ElfMachine{
 		ObjectMeta: metav1.ObjectMeta{Name: "machine"},

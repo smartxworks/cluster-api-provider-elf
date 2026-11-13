@@ -146,6 +146,25 @@ func TestNewTowerClientWithConfig(t *testing.T) {
 	})
 }
 
+func TestNewTowerClientAndConfig(t *testing.T) {
+	t.Run("returns the secret config alongside the cached client", func(t *testing.T) {
+		g := gomega.NewGomegaWithT(t)
+		resetTowerCache(t)
+
+		secretKey := apitypes.NamespacedName{Namespace: "sks-system", Name: "cloudtower-server"}
+		config := infrav1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "tower", AuthMode: "LOCAL", SkipTLSVerify: true}
+		secret := newTowerSecret(secretKey.Name, secretKey.Namespace, config.Server, config.Username, config.Password)
+		k8sClient := fake.NewClientBuilder().WithObjects(secret).Build()
+		cachedClient := &towerclient.Cloudtower{}
+		cacheMap.Store(getTowerSecretCacheKey(secretKey), &cacheItem{TowerClient: cachedClient, TowerConfig: &config})
+
+		client, resolvedConfig, err := NewTowerClientAndConfig(t.Context(), k8sClient, secretKey)
+		g.Expect(err).ToNot(gomega.HaveOccurred())
+		g.Expect(client).To(gomega.Equal(cachedClient))
+		g.Expect(resolvedConfig).To(gomega.Equal(config))
+	})
+}
+
 func TestGetTowerClientConfig(t *testing.T) {
 	t.Run("reads secret config without caching it", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
