@@ -24,18 +24,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 	g := NewWithT(t)
 
-	var tests []testCaseEMT
+	tests := make([]testCaseEMT, 0, 6)
 	tests = append(tests, testCaseEMT{
 		Name: "disk capacity cannot be less than 0",
-		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		EMT: &capev1.ElfMachineTemplate{Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					NumCPUs:           1,
 					NumCoresPerSocket: 1,
 					MemoryMiB:         1,
@@ -48,9 +48,9 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 		},
 	}, testCaseEMT{
 		Name: "disk capacity can be 0",
-		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		EMT: &capev1.ElfMachineTemplate{Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					NumCPUs:           1,
 					NumCoresPerSocket: 1,
 					MemoryMiB:         1,
@@ -61,9 +61,9 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 		Errs: nil,
 	}, testCaseEMT{
 		Name: "disk capacity can > 0",
-		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		EMT: &capev1.ElfMachineTemplate{Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					NumCPUs:           1,
 					NumCoresPerSocket: 1,
 					MemoryMiB:         1,
@@ -74,9 +74,9 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 		Errs: nil,
 	}, testCaseEMT{
 		Name: "memory cannot be less than 0",
-		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		EMT: &capev1.ElfMachineTemplate{Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					NumCPUs:           1,
 					NumCoresPerSocket: 1,
 					DiskGiB:           100,
@@ -89,9 +89,9 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 		},
 	}, testCaseEMT{
 		Name: "numCPUs cannot be less than 0",
-		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		EMT: &capev1.ElfMachineTemplate{Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					NumCoresPerSocket: 1,
 					DiskGiB:           100,
 					MemoryMiB:         1,
@@ -104,9 +104,9 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 		},
 	}, testCaseEMT{
 		Name: "numCoresPerSocket cannot be less than 0",
-		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		EMT: &capev1.ElfMachineTemplate{Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					NumCPUs:           1,
 					DiskGiB:           100,
 					MemoryMiB:         1,
@@ -133,33 +133,33 @@ func TestElfMachineTemplateValidatorValidateCreate(t *testing.T) {
 func TestElfMachineTemplateValidatorValidateUpdate(t *testing.T) {
 	g := NewWithT(t)
 
-	var tests []testCaseEMT
+	tests := make([]testCaseEMT, 0, 3)
 	tests = append(tests, testCaseEMT{
 		Name: "Can add new network device",
-		OldEMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		OldEMT: &capev1.ElfMachineTemplate{Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					NumCPUs:           1,
 					NumCoresPerSocket: 1,
 					MemoryMiB:         1,
 					DiskGiB:           1,
-					Network: infrav1.NetworkSpec{
-						Devices: []infrav1.NetworkDeviceSpec{{
+					Network: capev1.NetworkSpec{
+						Devices: []capev1.NetworkDeviceSpec{{
 							Vlan: "vlan1",
 						}},
 					},
 				},
 			},
 		}},
-		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		EMT: &capev1.ElfMachineTemplate{Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					NumCPUs:           1,
 					NumCoresPerSocket: 1,
 					MemoryMiB:         1,
 					DiskGiB:           1,
-					Network: infrav1.NetworkSpec{
-						Devices: []infrav1.NetworkDeviceSpec{{
+					Network: capev1.NetworkSpec{
+						Devices: []capev1.NetworkDeviceSpec{{
 							Vlan: "vlan1",
 						}, {
 							Vlan: "vlan2",
@@ -172,30 +172,30 @@ func TestElfMachineTemplateValidatorValidateUpdate(t *testing.T) {
 	})
 	tests = append(tests, testCaseEMT{
 		Name: "Cannot modify network device",
-		OldEMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		OldEMT: &capev1.ElfMachineTemplate{Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					NumCPUs:           1,
 					NumCoresPerSocket: 1,
 					MemoryMiB:         1,
 					DiskGiB:           1,
-					Network: infrav1.NetworkSpec{
-						Devices: []infrav1.NetworkDeviceSpec{{
+					Network: capev1.NetworkSpec{
+						Devices: []capev1.NetworkDeviceSpec{{
 							Vlan: "vlan1",
 						}},
 					},
 				},
 			},
 		}},
-		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		EMT: &capev1.ElfMachineTemplate{Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					NumCPUs:           1,
 					NumCoresPerSocket: 1,
 					MemoryMiB:         1,
 					DiskGiB:           1,
-					Network: infrav1.NetworkSpec{
-						Devices: []infrav1.NetworkDeviceSpec{{
+					Network: capev1.NetworkSpec{
+						Devices: []capev1.NetworkDeviceSpec{{
 							Vlan: "vlan2",
 						}},
 					},
@@ -203,20 +203,20 @@ func TestElfMachineTemplateValidatorValidateUpdate(t *testing.T) {
 			},
 		}},
 		Errs: field.ErrorList{
-			field.Invalid(field.NewPath("spec", "template", "spec", "network", "devices[0]"), infrav1.NetworkDeviceSpec{Vlan: "vlan2"}, networkDeviceCannotModifyMsg),
+			field.Invalid(field.NewPath("spec", "template", "spec", "network", "devices[0]"), capev1.NetworkDeviceSpec{Vlan: "vlan2"}, networkDeviceCannotModifyMsg),
 		},
 	})
 	tests = append(tests, testCaseEMT{
 		Name: "Cannot reduce network device",
-		OldEMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		OldEMT: &capev1.ElfMachineTemplate{Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					NumCPUs:           1,
 					NumCoresPerSocket: 1,
 					MemoryMiB:         1,
 					DiskGiB:           1,
-					Network: infrav1.NetworkSpec{
-						Devices: []infrav1.NetworkDeviceSpec{{
+					Network: capev1.NetworkSpec{
+						Devices: []capev1.NetworkDeviceSpec{{
 							Vlan: "vlan1",
 						}, {
 							Vlan: "vlan2",
@@ -225,15 +225,15 @@ func TestElfMachineTemplateValidatorValidateUpdate(t *testing.T) {
 				},
 			},
 		}},
-		EMT: &infrav1.ElfMachineTemplate{Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		EMT: &capev1.ElfMachineTemplate{Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					NumCPUs:           1,
 					NumCoresPerSocket: 1,
 					MemoryMiB:         1,
 					DiskGiB:           1,
-					Network: infrav1.NetworkSpec{
-						Devices: []infrav1.NetworkDeviceSpec{{
+					Network: capev1.NetworkSpec{
+						Devices: []capev1.NetworkDeviceSpec{{
 							Vlan: "vlan1",
 						}},
 					},
@@ -241,7 +241,7 @@ func TestElfMachineTemplateValidatorValidateUpdate(t *testing.T) {
 			},
 		}},
 		Errs: field.ErrorList{
-			field.Invalid(field.NewPath("spec", "template", "spec", "network", "devices"), []infrav1.NetworkDeviceSpec{{Vlan: "vlan1"}}, networkDeviceCannotReduceMsg),
+			field.Invalid(field.NewPath("spec", "template", "spec", "network", "devices"), []capev1.NetworkDeviceSpec{{Vlan: "vlan1"}}, networkDeviceCannotReduceMsg),
 		},
 	})
 
@@ -280,7 +280,7 @@ func expectTestCase(g Gomega, tc testCaseEMT, err error) {
 
 type testCaseEMT struct {
 	Name   string
-	EMT    *infrav1.ElfMachineTemplate
-	OldEMT *infrav1.ElfMachineTemplate
+	EMT    *capev1.ElfMachineTemplate
+	OldEMT *capev1.ElfMachineTemplate
 	Errs   field.ErrorList
 }

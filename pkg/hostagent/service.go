@@ -25,7 +25,7 @@ import (
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/constants"
 )
 
@@ -49,7 +49,7 @@ func GetHostJob(ctx goctx.Context, c client.Client, namespace, name string) (*ag
 	var restartKubeletJob agentv1.HostOperationJob
 	if err := c.Get(ctx, apitypes.NamespacedName{
 		Name:      name,
-		Namespace: "default",
+		Namespace: corev1.NamespaceDefault,
 	}, &restartKubeletJob); err != nil {
 		return nil, err
 	}
@@ -59,15 +59,15 @@ func GetHostJob(ctx goctx.Context, c client.Client, namespace, name string) (*ag
 
 // GetExpandRootPartitionJobName return the expand root partition job name.
 // The same disk expansion uses the same job name to reduce duplicate jobs.
-func GetExpandRootPartitionJobName(elfMachine *infrav1.ElfMachine) string {
+func GetExpandRootPartitionJobName(elfMachine *capev1.ElfMachine) string {
 	return fmt.Sprintf("cape-expand-root-partition-%s-%d", elfMachine.Name, elfMachine.Spec.DiskGiB)
 }
 
-func GetRestartKubeletJobName(elfMachine *infrav1.ElfMachine) string {
+func GetRestartKubeletJobName(elfMachine *capev1.ElfMachine) string {
 	return fmt.Sprintf("cape-restart-kubelet-%s-%d-%d-%d", elfMachine.Name, elfMachine.Spec.NumCPUs, elfMachine.Spec.NumCoresPerSocket, elfMachine.Spec.MemoryMiB)
 }
 
-func GetSetNetworkDeviceConfigJobName(elfMachine *infrav1.ElfMachine, macTypes []MacType) string {
+func GetSetNetworkDeviceConfigJobName(elfMachine *capev1.ElfMachine, macTypes []MacType) string {
 	if len(macTypes) == 0 {
 		return "cape-set-network-config-" + elfMachine.Name
 	}
@@ -75,7 +75,7 @@ func GetSetNetworkDeviceConfigJobName(elfMachine *infrav1.ElfMachine, macTypes [
 	return fmt.Sprintf("cape-set-network-config-%s-%s", elfMachine.Name, mac)
 }
 
-func GetJobName(elfMachine *infrav1.ElfMachine, jobType HostAgentJobType, macTypes []MacType) string {
+func GetJobName(elfMachine *capev1.ElfMachine, jobType HostAgentJobType, macTypes []MacType) string {
 	switch jobType {
 	case HostAgentJobTypeExpandRootPartition:
 		return GetExpandRootPartitionJobName(elfMachine)
@@ -88,11 +88,11 @@ func GetJobName(elfMachine *infrav1.ElfMachine, jobType HostAgentJobType, macTyp
 	}
 }
 
-func GenerateExpandRootPartitionJob(elfMachine *infrav1.ElfMachine, playbook string, nodeName string) *agentv1.HostOperationJob {
+func GenerateExpandRootPartitionJob(elfMachine *capev1.ElfMachine, playbook string, nodeName string) *agentv1.HostOperationJob {
 	return &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetExpandRootPartitionJobName(elfMachine),
-			Namespace: "default",
+			Namespace: corev1.NamespaceDefault,
 		},
 		Spec: agentv1.HostOperationJobSpec{
 			NodeName: nodeName,
@@ -108,11 +108,11 @@ func GenerateExpandRootPartitionJob(elfMachine *infrav1.ElfMachine, playbook str
 	}
 }
 
-func GenerateRestartKubeletJob(elfMachine *infrav1.ElfMachine, playbook string, nodeName string) *agentv1.HostOperationJob {
+func GenerateRestartKubeletJob(elfMachine *capev1.ElfMachine, playbook string, nodeName string) *agentv1.HostOperationJob {
 	return &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetRestartKubeletJobName(elfMachine),
-			Namespace: "default",
+			Namespace: corev1.NamespaceDefault,
 		},
 		Spec: agentv1.HostOperationJobSpec{
 			NodeName: nodeName,
@@ -128,11 +128,11 @@ func GenerateRestartKubeletJob(elfMachine *infrav1.ElfMachine, playbook string, 
 	}
 }
 
-func GenerateSetNetworkDeviceConfigJob(elfMachine *infrav1.ElfMachine, playbook string, macTypes []MacType, nodeName string) *agentv1.HostOperationJob {
+func GenerateSetNetworkDeviceConfigJob(elfMachine *capev1.ElfMachine, playbook string, macTypes []MacType, nodeName string) *agentv1.HostOperationJob {
 	return &agentv1.HostOperationJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetSetNetworkDeviceConfigJobName(elfMachine, macTypes),
-			Namespace: "default",
+			Namespace: corev1.NamespaceDefault,
 		},
 		Spec: agentv1.HostOperationJobSpec{
 			NodeName: nodeName,
@@ -153,7 +153,7 @@ type MacType struct {
 	Type string
 }
 
-func GenerateJob(ctx goctx.Context, cli client.Client, elfMachine *infrav1.ElfMachine, jobType HostAgentJobType, macTypes []MacType, nodeName string) (*agentv1.HostOperationJob, error) {
+func GenerateJob(ctx goctx.Context, cli client.Client, elfMachine *capev1.ElfMachine, jobType HostAgentJobType, macTypes []MacType, nodeName string) (*agentv1.HostOperationJob, error) {
 	var configmap corev1.ConfigMap
 	if err := cli.Get(ctx, client.ObjectKey{Namespace: constants.NamespaceCape, Name: HostAgentJobsConfigName}, &configmap); err != nil {
 		return nil, err
@@ -174,7 +174,7 @@ func GenerateJob(ctx goctx.Context, cli client.Client, elfMachine *infrav1.ElfMa
 			var sb strings.Builder
 			sb.WriteString("mac_types:\n")
 			for i := range macTypes {
-				sb.WriteString(fmt.Sprintf("      \"%s\": \"%s\"\n", macTypes[i].Mac, macTypes[i].Type))
+				fmt.Fprintf(&sb, "      \"%s\": \"%s\"\n", macTypes[i].Mac, macTypes[i].Type)
 			}
 			playbook = strings.Replace(playbook, "mac_types: {}", sb.String(), 1)
 		}

@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 const (
@@ -44,7 +44,7 @@ func (m *ElfMachineTemplateMutation) SetupWebhookWithManager(mgr ctrl.Manager) e
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register("/mutate-infrastructure-cluster-x-k8s-io-v1beta1-elfmachinetemplate", &webhook.Admission{Handler: m})
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&infrav1.ElfMachine{}).
+		For(&capev1.ElfMachine{}).
 		Complete()
 }
 
@@ -58,7 +58,7 @@ type ElfMachineTemplateMutation struct {
 }
 
 func (m *ElfMachineTemplateMutation) Handle(ctx goctx.Context, request admission.Request) admission.Response {
-	var elfMachineTemplate infrav1.ElfMachineTemplate
+	var elfMachineTemplate capev1.ElfMachineTemplate
 	if err := m.decoder.Decode(request, &elfMachineTemplate); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}

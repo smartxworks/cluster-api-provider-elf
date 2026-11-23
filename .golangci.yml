@@ -1,204 +1,218 @@
+version: "2"
+run:
+  timeout: 10m
+  go: "1.27"
+  allow-parallel-runners: true
 linters:
-  enable-all: true
+  default: all
   disable:
+    # Keep linters introduced after v1.64.8 disabled to preserve the previous lint set.
+    - arangolint
     - bidichk
+    - clickhouselint
     - contextcheck
     - cyclop
     - depguard
     - dupl
     - durationcheck
+    - err113
     - errname
     - errorlint
     - exhaustive
-    - exhaustivestruct
     - exhaustruct
-    - forcetypeassert
+    - exhaustruct_v5
+    - embeddedstructfieldcheck
     - forbidigo
+    - forcetypeassert
+    - funcorder
     - funlen
     - gochecknoglobals
     - gochecknoinits
     - gocognit
+    - godoclint
     - godox
-    - goerr113
-    - gofumpt
-    - golint
-    - gomnd
+    - gomodguard_v2
     - gomoddirectives
     - gomodguard
     - interfacebloat
-    - interfacer
+    - iotamixing
     - ireturn
     - lll
     - makezero
-    - maligned
     - mnd
+    - modernize
     - nestif
     - nilnil
     - nlreturn
+    - noinlineerr
     - nonamedreturns
-    - nosnakecase
     - paralleltest
     - promlinter
-    - scopelint
     - sqlclosecheck
     - tagliatelle
-    - tenv
     - testpackage
     - tparallel
     - varnamelen
     - wastedassign
     - wrapcheck
     - wsl
-
-linters-settings:
-  # Restrict revive to exported.
-  revive:
-    # see https://github.com/mgechev/revive#available-rules for details.
-    ignore-generated-header: true
-    severity: warning
+    - unqueryvet
+    - wsl_v5
+  settings:
+    importas:
+      alias:
+        - pkg: k8s.io/api/core/v1
+          alias: corev1
+        - pkg: k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1
+          alias: apiextensionsv1
+        - pkg: k8s.io/apimachinery/pkg/apis/meta/v1
+          alias: metav1
+        - pkg: k8s.io/apimachinery/pkg/api/errors
+          alias: apierrors
+        - pkg: k8s.io/apimachinery/pkg/util/errors
+          alias: kerrors
+        - pkg: k8s.io/apimachinery/pkg/types
+          alias: apitypes
+        - pkg: k8s.io/client-go/kubernetes/scheme
+          alias: cgscheme
+        - pkg: sigs.k8s.io/controller-runtime
+          alias: ctrl
+        - pkg: sigs.k8s.io/controller-runtime/pkg/log
+          alias: ctrllog
+        - pkg: sigs.k8s.io/controller-runtime/pkg/manager
+          alias: ctrlmgr
+        - pkg: sigs.k8s.io/controller-runtime/pkg/controller/controllerutil
+          alias: ctrlutil
+        - pkg: sigs.k8s.io/cluster-api/api/core/v1beta1
+          alias: capiv1beta1
+        - pkg: sigs.k8s.io/cluster-api/api/core/v1beta2
+          alias: capiv1
+        - pkg: sigs.k8s.io/cluster-api/errors
+          alias: capierrors
+        - pkg: sigs.k8s.io/cluster-api/util
+          alias: capiutil
+        - pkg: sigs.k8s.io/cluster-api/api/bootstrap/kubeadm/v1beta1
+          alias: bootstrapv1beta1
+        - pkg: sigs.k8s.io/cluster-api/api/bootstrap/kubeadm/v1beta2
+          alias: bootstrapv1
+        - pkg: sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1
+          alias: controlplanev1beta1
+        - pkg: sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2
+          alias: controlplanev1
+        - pkg: sigs.k8s.io/cluster-api/util/conditions
+          alias: conditions
+        - pkg: sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions
+          alias: conditionsv1beta1
+        - pkg: sigs.k8s.io/cluster-api/test/e2e
+          alias: capie2e
+        - pkg: github.com/smartxworks/cluster-api-provider-elf/api/v1beta1
+          alias: capev1
+      no-unaliased: true
+    revive:
+      severity: warning
+      rules:
+        - name: exported
+          severity: warning
+  exclusions:
+    generated: lax
     rules:
-      - name: exported
-        severity: warning
-  gci:
-    local-prefixes: github.com/smartxworks/cluster-api-provider-elf
-  importas:
-    no-unaliased: true
-    alias:
-      # Kubernetes
-      - pkg: k8s.io/api/core/v1
-        alias: corev1
-      - pkg: k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1
-        alias: apiextensionsv1
-      - pkg: k8s.io/apimachinery/pkg/apis/meta/v1
-        alias: metav1
-      - pkg: k8s.io/apimachinery/pkg/api/errors
-        alias: apierrors
-      - pkg: k8s.io/apimachinery/pkg/util/errors
-        alias: kerrors
-      - pkg: k8s.io/apimachinery/pkg/types
-        alias: apitypes
-      - pkg: k8s.io/client-go/kubernetes/scheme
-        alias: cgscheme
-      # Controller Runtime
-      - pkg: sigs.k8s.io/controller-runtime
-        alias: ctrl
-      - pkg: sigs.k8s.io/controller-runtime/pkg/log
-        alias: ctrllog
-      - pkg: sigs.k8s.io/controller-runtime/pkg/manager
-        alias: ctrlmgr
-      - pkg: sigs.k8s.io/controller-runtime/pkg/controller/controllerutil
-        alias: ctrlutil
-      # CAPI
-      - pkg: sigs.k8s.io/cluster-api/api/core/v1beta1
-        alias: clusterv1
-      - pkg: sigs.k8s.io/cluster-api/api/core/v1beta2
-        alias: clusterv2
-      - pkg: sigs.k8s.io/cluster-api/errors
-        alias: capierrors
-      - pkg: sigs.k8s.io/cluster-api/util
-        alias: capiutil
-      - pkg: sigs.k8s.io/cluster-api/api/bootstrap/kubeadm/v1beta1
-        alias: bootstrapv1
-      - pkg: sigs.k8s.io/cluster-api/api/bootstrap/kubeadm/v1beta2
-        alias: bootstrapv2
-      - pkg: sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1
-        alias: controlplanev1
-      - pkg: sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2
-        alias: controlplanev2
-      - pkg: sigs.k8s.io/cluster-api/test/e2e
-        alias: capie2e
-      # CAPE
-      - pkg: github.com/smartxworks/cluster-api-provider-elf/api/v1beta1
-        alias: infrav1
-  staticcheck:
-    go: "1.23"
-  stylecheck:
-    go: "1.23"
+      - linters:
+          - revive
+        path: .*test/(e2e).*.go
+        text: exported (method|function|type|const) (.+) should have comment or be unexported
+      - linters:
+          - errcheck
+        path: _test\.go
+        text: Error return value is not checked
+      - linters:
+          - errcheck
+        path: _test\.go
+        text: Error return value of (.+) is not checked
+      - linters:
+          - gosec
+        text: 'G108: Profiling endpoint is automatically exposed on /debug/pprof'
+      - linters:
+          - godot
+        path: (.*)/(v1beta1)/(.*)types.go
+        text: Comment should end in a period
+      - linters:
+          - errcheck
+        text: Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
+      - linters:
+          - unparam
+        text: always receives
+      - linters:
+          - unparam
+        text: (.+) - (`t`|`g`) is unused
+      - path: _test\.go
+        text: cyclomatic complexity
+      - linters:
+          - gocritic
+        text: 'appendAssign: append result not assigned to the same slice'
+      - path: _test\.go
+        text: should not use dot imports
+      - path: (e2e|fake)/.*.go
+        text: should not use dot imports
+      - path: _test\.go
+        text: cyclomatic complexity
+      - linters:
+          - staticcheck
+        text: 'SA1019: "sigs.k8s.io/cluster-api/errors" is deprecated:'
+      - linters:
+          - staticcheck
+        text: 'SA1019: "sigs.k8s.io/cluster-api/api/bootstrap/kubeadm/v1beta1" is deprecated:'
+      - linters:
+          - staticcheck
+        text: 'SA1019: "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1" is deprecated:'
+      - linters:
+          - staticcheck
+        text: 'SA1019: "sigs.k8s.io/cluster-api/api/core/v1beta1" is deprecated:'
+      # CAPI v1beta1 compatibility code and deprecated status fields are still supported.
+      - linters:
+          - staticcheck
+        text: 'SA1019: .*cluster-api.*deprecated:'
+      - linters:
+          - goconst
+        path: _test\.go
+      - linters:
+          - staticcheck
+        text: 'SA1019: "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions" is deprecated:'
+      - linters:
+          - staticcheck
+        text: 'SA1019: .*\.Status\.(FailureMessage|FailureReason|UnavailableReplicas) is deprecated:'
+      - path: (.+)\.go$
+        text: (Expect directory permissions to be 0750 or less|Expect file permissions to be 0600 or less)
+      - path: (.+)\.go$
+        text: 'exported: exported (const|function|method|type|var) (.+) should have comment or be unexported'
+      - path: (.+)\.go$
+        text: 'exported: (func|type) name will be used as (.+) by other packages, and that stutters; consider calling this (.+)'
+      - path: (.+)\.go$
+        text: (G104|G107|G404|G505|ST1000)
+      - path: (.+)\.go$
+        text: 'G108: Profiling endpoint is automatically exposed on /debug/pprof'
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  max-same-issues: 0
   max-issues-per-linter: 0
-  # We are disabling default golangci exclusions because we want to help reviewers to focus on reviewing the most relevant
-  # changes in PRs and avoid nitpicking.
-  exclude-use-default: false
-  # List of regexps of issue texts to exclude, empty list by default.
-  exclude:
-    - (Expect directory permissions to be 0750 or less|Expect file permissions to be 0600 or less)
-    - "exported: exported (const|function|method|type|var) (.+) should have comment or be unexported"
-    - "exported: (func|type) name will be used as (.+) by other packages, and that stutters; consider calling this (.+)"
-    - (G104|G107|G404|G505|ST1000)
-    - "G108: Profiling endpoint is automatically exposed on /debug/pprof"
-  exclude-rules:
-    # Exclude revive's exported for certain packages and code, e.g. tests.
-    - linters:
-      - revive
-      text: exported (method|function|type|const) (.+) should have comment or be unexported
-      path: .*test/(e2e).*.go
-    - linters:
-      - errcheck
-      text: Error return value is not checked
-      path: _test\.go
-    - linters:
-      - errcheck
-      text: Error return value of (.+) is not checked
-      path: _test\.go
-    - linters:
-      - gosec
-      text: "G108: Profiling endpoint is automatically exposed on /debug/pprof"
-    - linters:
-      - godot
-      text: "Comment should end in a period"
-      path: "(.*)/(v1beta1)/(.*)types.go"
-    - linters:
-      - errcheck
-      text: Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
-    # Disable unparam "always receives" which might not be really
-    # useful when building libraries.
-    - linters:
-      - unparam
-      text: always receives
-    - linters:
-      - unparam
-      text: (.+) - (`t`|`g`) is unused  
-    - path: _test\.go
-      text: cyclomatic complexity
-    # Append should be able to assign to a different var/slice.
-    - linters:
-      - gocritic
-      text: "appendAssign: append result not assigned to the same slice"
-    # Dot imports for gomega or ginkgo are allowed
-    # within test files.
-    - path: _test\.go
-      text: should not use dot imports
-    - path: (e2e|fake)/.*.go
-      text: should not use dot imports
-    - path: _test\.go
-      text: cyclomatic complexity
-    # CAPI v1beta1 deprecations are currently tolerated globally while the project is still on v1beta1 APIs.
-    - linters:
-      - staticcheck
-      text: 'SA1019: "sigs.k8s.io/cluster-api/errors" is deprecated:'
-    - linters:
-      - staticcheck
-      text: 'SA1019: "sigs.k8s.io/cluster-api/api/bootstrap/kubeadm/v1beta1" is deprecated:'
-    - linters:
-      - staticcheck
-      text: 'SA1019: "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1" is deprecated:'
-    - linters:
-      - staticcheck
-      text: 'SA1019: "sigs.k8s.io/cluster-api/api/core/v1beta1" is deprecated:'
-    - linters:
-      - staticcheck
-      text: 'SA1019: "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions" is deprecated:'
-    - linters:
-      - staticcheck
-      text: 'SA1019: "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch" is deprecated:'
-    - linters:
-      - staticcheck
-      text: 'SA1019: .*\.Status\.(FailureMessage|FailureReason|UnavailableReplicas) is deprecated:'
-
-run:
-  timeout: 10m
-  go: "1.25"
-  skip-files:
-  - "zz_generated.*\\.go$"
-  allow-parallel-runners: true
+  max-same-issues: 0
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/smartxworks/cluster-api-provider-elf)
+        - blank
+      custom-order: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

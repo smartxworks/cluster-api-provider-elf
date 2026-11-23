@@ -20,7 +20,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 )
 
@@ -31,13 +31,13 @@ func GetCAPEVersion(o metav1.Object) string {
 		return ""
 	}
 
-	return annotations[infrav1.CAPEVersionAnnotation]
+	return annotations[capev1.CAPEVersionAnnotation]
 }
 
 // SetCAPEVersion sets the CAPE version for the object.
 func SetCAPEVersion(o metav1.Object, version string) {
-	if !annotationsutil.HasAnnotation(o, infrav1.CAPEVersionAnnotation) {
-		annotationsutil.AddAnnotations(o, map[string]string{infrav1.CAPEVersionAnnotation: version})
+	if !annotationsutil.HasAnnotation(o, capev1.CAPEVersionAnnotation) {
+		annotationsutil.AddAnnotations(o, map[string]string{capev1.CAPEVersionAnnotation: version})
 	}
 }
 

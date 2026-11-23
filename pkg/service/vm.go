@@ -41,7 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/cloudtower"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
@@ -65,8 +65,8 @@ type CloneVMInfo struct {
 }
 
 type VMService interface {
-	Clone(elfCluster *infrav1.ElfCluster, elfMachine *infrav1.ElfMachine, vmInfo *CloneVMInfo) (*models.WithTaskVM, error)
-	UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachine) (*models.WithTaskVM, error)
+	Clone(elfCluster *capev1.ElfCluster, elfMachine *capev1.ElfMachine, vmInfo *CloneVMInfo) (*models.WithTaskVM, error)
+	UpdateVM(vm *models.VM, elfMachine *capev1.ElfMachine) (*models.WithTaskVM, error)
 	Migrate(vmID, hostID string) (*models.WithTaskVM, error)
 	Delete(uuid string) (*models.Task, error)
 	PowerOff(uuid string) (*models.Task, error)
@@ -105,12 +105,12 @@ type VMService interface {
 	GetVMGPUAllocationInfo(id string) (*models.VMGpuInfo, error)
 }
 
-type NewVMServiceFunc func(ctx goctx.Context, k8sClient client.Client, tower infrav1.Tower, logger logr.Logger) (VMService, error)
+type NewVMServiceFunc func(ctx goctx.Context, k8sClient client.Client, tower capev1.Tower, logger logr.Logger) (VMService, error)
 
-func NewVMService(ctx goctx.Context, k8sClient client.Client, tower infrav1.Tower, logger logr.Logger) (VMService, error) {
+func NewVMService(ctx goctx.Context, k8sClient client.Client, tower capev1.Tower, logger logr.Logger) (VMService, error) {
 	var (
 		towerClient *towerclient.Cloudtower
-		towerConfig infrav1.TowerClientConfig
+		towerConfig capev1.TowerClientConfig
 		err         error
 	)
 	if tower.SecretRef != nil {
@@ -132,7 +132,7 @@ type TowerVMService struct {
 	Logger      logr.Logger             `json:"logger"`
 }
 
-func (svr *TowerVMService) UpdateVM(vm *models.VM, elfMachine *infrav1.ElfMachine) (*models.WithTaskVM, error) {
+func (svr *TowerVMService) UpdateVM(vm *models.VM, elfMachine *capev1.ElfMachine) (*models.WithTaskVM, error) {
 	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
 	cpuSocketCores := TowerCPUSocketCores(elfMachine.Spec.NumCoresPerSocket, *vCPU)
 	cpuSockets := TowerCPUSockets(*vCPU, *cpuSocketCores)
@@ -209,7 +209,7 @@ func (svr *TowerVMService) ResizeVMVolume(vmVolumeID string, size int64) (*model
 
 // Clone kicks off a clone operation on Elf to create a new virtual machine using VM template.
 func (svr *TowerVMService) Clone(
-	elfCluster *infrav1.ElfCluster, elfMachine *infrav1.ElfMachine, vmInfo *CloneVMInfo) (*models.WithTaskVM, error) {
+	elfCluster *capev1.ElfCluster, elfMachine *capev1.ElfMachine, vmInfo *CloneVMInfo) (*models.WithTaskVM, error) {
 	cluster, err := svr.GetCluster(vmInfo.Cluster)
 	if err != nil {
 		return nil, err
@@ -236,7 +236,7 @@ func (svr *TowerVMService) Clone(
 }
 
 func (svr *TowerVMService) createVMFromTemplateParams(
-	elfCluster *infrav1.ElfCluster, elfMachine *infrav1.ElfMachine,
+	elfCluster *capev1.ElfCluster, elfMachine *capev1.ElfMachine,
 	cluster *models.Cluster, template *models.ContentLibraryVMTemplate, vmInfo *CloneVMInfo) (*models.VMCreateVMFromContentLibraryTemplateParams, error) {
 	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
 	cpuSocketCores := TowerCPUSocketCores(elfMachine.Spec.NumCoresPerSocket, *vCPU)
@@ -350,10 +350,7 @@ func (svr *TowerVMService) createVMFromTemplateParams(
 		cloudInit.Nameservers = nameservers
 	}
 
-	isFullCopy := false
-	if elfMachine.Spec.CloneMode == infrav1.FullClone {
-		isFullCopy = true
-	}
+	isFullCopy := elfMachine.Spec.CloneMode == capev1.FullClone
 
 	hostID := "AUTO_SCHEDULE"
 	if vmInfo.Host != "" {

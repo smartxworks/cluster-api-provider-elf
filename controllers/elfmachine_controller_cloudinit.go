@@ -16,6 +16,7 @@ const (
 	kubeadmAPIVersionV1Beta3 = "kubeadm.k8s.io/v1beta3"
 	kubeadmAPIVersionV1Beta4 = "kubeadm.k8s.io/v1beta4"
 	kubeadmProviderIDValue   = "elf://{{ ds.meta_data.instance_id }}"
+	yamlMapTag               = "!!map"
 	yamlTagString            = "!!str"
 )
 
@@ -184,7 +185,7 @@ func ensureKubeletProviderID(root, nodeRegistration *yaml.Node) bool {
 	if kubeletExtraArgs == nil {
 		switch getYAMLMapString(root, "apiVersion") {
 		case kubeadmAPIVersionV1Beta3:
-			kubeletExtraArgs = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+			kubeletExtraArgs = &yaml.Node{Kind: yaml.MappingNode, Tag: yamlMapTag}
 			appendYAMLMapValue(nodeRegistration, "kubeletExtraArgs", kubeletExtraArgs)
 		case kubeadmAPIVersionV1Beta4:
 			kubeletExtraArgs = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
@@ -321,7 +322,7 @@ func ensureYAMLMappingValue(parent *yaml.Node, key string) (*yaml.Node, bool) {
 		return existing, false
 	}
 
-	child := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	child := &yaml.Node{Kind: yaml.MappingNode, Tag: yamlMapTag}
 	appendYAMLMapValue(parent, key, child)
 
 	return child, true
@@ -402,7 +403,7 @@ func newScalarNodes(values []string) []*yaml.Node {
 }
 
 func newNamedValueMappingNode(name, value string) *yaml.Node {
-	node := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	node := &yaml.Node{Kind: yaml.MappingNode, Tag: yamlMapTag}
 	appendYAMLMapValue(node, "name", newStringYAMLNode(name))
 	appendYAMLMapValue(node, "value", newStringYAMLNode(value))
 

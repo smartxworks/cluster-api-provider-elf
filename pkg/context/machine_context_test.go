@@ -22,16 +22,16 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
 func TestMachineContextString(t *testing.T) {
 	g := NewWithT(t)
 
-	elfMachine := &infrav1.ElfMachine{
+	elfMachine := &capev1.ElfMachine{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "test-machine",
@@ -48,7 +48,7 @@ func TestMachineContextString(t *testing.T) {
 func TestGetFailureDomain(t *testing.T) {
 	tests := []struct {
 		name     string
-		machine  *clusterv1.Machine
+		machine  *capiv1.Machine
 		expected string
 	}{
 		{
@@ -58,18 +58,18 @@ func TestGetFailureDomain(t *testing.T) {
 		},
 		{
 			name: "Machine with nil FailureDomain returns empty string",
-			machine: &clusterv1.Machine{
-				Spec: clusterv1.MachineSpec{
-					FailureDomain: nil,
+			machine: &capiv1.Machine{
+				Spec: capiv1.MachineSpec{
+					FailureDomain: "",
 				},
 			},
 			expected: "",
 		},
 		{
 			name: "Machine with FailureDomain returns its value",
-			machine: &clusterv1.Machine{
-				Spec: clusterv1.MachineSpec{
-					FailureDomain: strPtr("zone-a"),
+			machine: &capiv1.Machine{
+				Spec: capiv1.MachineSpec{
+					FailureDomain: "zone-a",
 				},
 			},
 			expected: "zone-a",
@@ -80,7 +80,7 @@ func TestGetFailureDomain(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
 			ctx := &MachineContext{
-				ElfMachine: &infrav1.ElfMachine{},
+				ElfMachine: &capev1.ElfMachine{},
 				Machine:    tc.machine,
 			}
 			g.Expect(ctx.GetFailureDomain()).To(Equal(tc.expected))
@@ -91,31 +91,31 @@ func TestGetFailureDomain(t *testing.T) {
 func TestGetCloudFailureDomain(t *testing.T) {
 	tests := []struct {
 		name       string
-		machine    *clusterv1.Machine
-		elfMachine *infrav1.ElfMachine
-		expected   *infrav1.CloudFailureDomain
+		machine    *capiv1.Machine
+		elfMachine *capev1.ElfMachine
+		expected   *capev1.CloudFailureDomain
 	}{
 		{
 			name:       "no FailureDomain on Machine returns nil",
 			machine:    nil,
-			elfMachine: &infrav1.ElfMachine{},
+			elfMachine: &capev1.ElfMachine{},
 			expected:   nil,
 		},
 		{
 			name: "empty FailureDomain returns nil",
-			machine: &clusterv1.Machine{
-				Spec: clusterv1.MachineSpec{
-					FailureDomain: strPtr(""),
+			machine: &capiv1.Machine{
+				Spec: capiv1.MachineSpec{
+					FailureDomain: "",
 				},
 			},
-			elfMachine: &infrav1.ElfMachine{},
+			elfMachine: &capev1.ElfMachine{},
 			expected:   nil,
 		},
 		{
 			name: "nil ElfMachine returns nil",
-			machine: &clusterv1.Machine{
-				Spec: clusterv1.MachineSpec{
-					FailureDomain: strPtr("zone-a"),
+			machine: &capiv1.Machine{
+				Spec: capiv1.MachineSpec{
+					FailureDomain: "zone-a",
 				},
 			},
 			elfMachine: nil,
@@ -123,14 +123,14 @@ func TestGetCloudFailureDomain(t *testing.T) {
 		},
 		{
 			name: "FailureDomain not found in ElfMachine FailureDomains returns nil",
-			machine: &clusterv1.Machine{
-				Spec: clusterv1.MachineSpec{
-					FailureDomain: strPtr("zone-a"),
+			machine: &capiv1.Machine{
+				Spec: capiv1.MachineSpec{
+					FailureDomain: "zone-a",
 				},
 			},
-			elfMachine: &infrav1.ElfMachine{
-				Spec: infrav1.ElfMachineSpec{
-					FailureDomains: []infrav1.CloudFailureDomain{
+			elfMachine: &capev1.ElfMachine{
+				Spec: capev1.ElfMachineSpec{
+					FailureDomains: []capev1.CloudFailureDomain{
 						{ComputeCluster: "zone-b"},
 					},
 				},
@@ -139,20 +139,20 @@ func TestGetCloudFailureDomain(t *testing.T) {
 		},
 		{
 			name: "matching FailureDomain returns the CloudFailureDomain",
-			machine: &clusterv1.Machine{
-				Spec: clusterv1.MachineSpec{
-					FailureDomain: strPtr("zone-a"),
+			machine: &capiv1.Machine{
+				Spec: capiv1.MachineSpec{
+					FailureDomain: "zone-a",
 				},
 			},
-			elfMachine: &infrav1.ElfMachine{
-				Spec: infrav1.ElfMachineSpec{
-					FailureDomains: []infrav1.CloudFailureDomain{
+			elfMachine: &capev1.ElfMachine{
+				Spec: capev1.ElfMachineSpec{
+					FailureDomains: []capev1.CloudFailureDomain{
 						{ComputeCluster: "zone-b"},
 						{ComputeCluster: "zone-a"},
 					},
 				},
 			},
-			expected: &infrav1.CloudFailureDomain{ComputeCluster: "zone-a"},
+			expected: &capev1.CloudFailureDomain{ComputeCluster: "zone-a"},
 		},
 	}
 
@@ -171,8 +171,8 @@ func TestGetCloudFailureDomain(t *testing.T) {
 func TestGetElfClusterID(t *testing.T) {
 	tests := []struct {
 		name       string
-		machine    *clusterv1.Machine
-		elfCluster *infrav1.ElfCluster
+		machine    *capiv1.Machine
+		elfCluster *capev1.ElfCluster
 		expected   string
 	}{
 		{
@@ -183,18 +183,18 @@ func TestGetElfClusterID(t *testing.T) {
 		},
 		{
 			name:     "no FailureDomain and nil ElfCluster returns empty string",
-			machine:  &clusterv1.Machine{},
+			machine:  &capiv1.Machine{},
 			expected: "",
 		},
 		{
 			name: "FailureDomain set returns FailureDomain value",
-			machine: &clusterv1.Machine{
-				Spec: clusterv1.MachineSpec{
-					FailureDomain: strPtr("zone-a"),
+			machine: &capiv1.Machine{
+				Spec: capiv1.MachineSpec{
+					FailureDomain: "zone-a",
 				},
 			},
-			elfCluster: &infrav1.ElfCluster{
-				Spec: infrav1.ElfClusterSpec{
+			elfCluster: &capev1.ElfCluster{
+				Spec: capev1.ElfClusterSpec{
 					Cluster: "default-cluster",
 				},
 			},
@@ -203,8 +203,8 @@ func TestGetElfClusterID(t *testing.T) {
 		{
 			name:    "no FailureDomain falls back to ElfCluster.Spec.Cluster",
 			machine: nil,
-			elfCluster: &infrav1.ElfCluster{
-				Spec: infrav1.ElfClusterSpec{
+			elfCluster: &capev1.ElfCluster{
+				Spec: capev1.ElfClusterSpec{
 					Cluster: "default-cluster",
 				},
 			},
@@ -212,13 +212,13 @@ func TestGetElfClusterID(t *testing.T) {
 		},
 		{
 			name: "empty FailureDomain falls back to ElfCluster.Spec.Cluster",
-			machine: &clusterv1.Machine{
-				Spec: clusterv1.MachineSpec{
-					FailureDomain: strPtr(""),
+			machine: &capiv1.Machine{
+				Spec: capiv1.MachineSpec{
+					FailureDomain: "",
 				},
 			},
-			elfCluster: &infrav1.ElfCluster{
-				Spec: infrav1.ElfClusterSpec{
+			elfCluster: &capev1.ElfCluster{
+				Spec: capev1.ElfClusterSpec{
 					Cluster: "default-cluster",
 				},
 			},
@@ -230,7 +230,7 @@ func TestGetElfClusterID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
 			ctx := &MachineContext{
-				ElfMachine: &infrav1.ElfMachine{},
+				ElfMachine: &capev1.ElfMachine{},
 				Machine:    tc.machine,
 				ElfCluster: tc.elfCluster,
 			}
@@ -242,7 +242,7 @@ func TestGetElfClusterID(t *testing.T) {
 func TestGetStorageConfig(t *testing.T) {
 	tests := []struct {
 		name       string
-		elfCluster *infrav1.ElfCluster
+		elfCluster *capev1.ElfCluster
 		expected   *models.StorageConfig
 	}{
 		{
@@ -252,14 +252,14 @@ func TestGetStorageConfig(t *testing.T) {
 		},
 		{
 			name:       "When storage config is not set should return nil",
-			elfCluster: &infrav1.ElfCluster{},
+			elfCluster: &capev1.ElfCluster{},
 			expected:   nil,
 		},
 		{
 			name: "When one storage config is set should return it",
-			elfCluster: &infrav1.ElfCluster{
-				Spec: infrav1.ElfClusterSpec{
-					StorageCluster: infrav1.StorageCluster{StorageClusterID: "storage-cluster"},
+			elfCluster: &capev1.ElfCluster{
+				Spec: capev1.ElfClusterSpec{
+					StorageCluster: capev1.StorageCluster{StorageClusterID: "storage-cluster"},
 				},
 			},
 			expected: &models.StorageConfig{StorageClusterID: service.TowerString("storage-cluster")},
@@ -275,9 +275,4 @@ func TestGetStorageConfig(t *testing.T) {
 			g.Expect(ctx.GetStorageConfig()).To(Equal(tc.expected))
 		})
 	}
-}
-
-// strPtr is a helper to get a pointer to a string literal.
-func strPtr(s string) *string {
-	return &s
 }

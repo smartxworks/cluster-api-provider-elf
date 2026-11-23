@@ -34,6 +34,26 @@ rules:
   - patch
   - watch
 - apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resourceNames:
+  - elfclusters.infrastructure.cluster.x-k8s.io
+  - elfmachines.infrastructure.cluster.x-k8s.io
+  - elfmachinetemplates.infrastructure.cluster.x-k8s.io
+  resources:
+  - customresourcedefinitions
+  - customresourcedefinitions/status
+  verbs:
+  - patch
+  - update
+- apiGroups:
   - cluster.x-k8s.io
   resources:
   - clusters

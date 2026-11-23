@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 // Error messages.
@@ -44,7 +44,7 @@ const (
 
 func (v *ElfMachineTemplateValidator) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&infrav1.ElfMachineTemplate{}).
+		For(&capev1.ElfMachineTemplate{}).
 		WithValidator(v).
 		Complete()
 }
@@ -58,7 +58,7 @@ var _ webhook.CustomValidator = &ElfMachineTemplateValidator{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
 func (v *ElfMachineTemplateValidator) ValidateCreate(ctx goctx.Context, obj runtime.Object) (admission.Warnings, error) {
-	elfMachineTemplate, ok := obj.(*infrav1.ElfMachineTemplate)
+	elfMachineTemplate, ok := obj.(*capev1.ElfMachineTemplate)
 	if !ok {
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an ElfMachineTemplate but got a %T", obj))
 	}
@@ -85,11 +85,11 @@ func (v *ElfMachineTemplateValidator) ValidateCreate(ctx goctx.Context, obj runt
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
 func (v *ElfMachineTemplateValidator) ValidateUpdate(ctx goctx.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldElfMachineTemplate, ok := oldObj.(*infrav1.ElfMachineTemplate) //nolint:forcetypeassert
+	oldElfMachineTemplate, ok := oldObj.(*capev1.ElfMachineTemplate) //nolint:forcetypeassert
 	if !ok {
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an ElfMachineTemplate but got a %T", oldObj))
 	}
-	elfMachineTemplate, ok := newObj.(*infrav1.ElfMachineTemplate) //nolint:forcetypeassert
+	elfMachineTemplate, ok := newObj.(*capev1.ElfMachineTemplate) //nolint:forcetypeassert
 	if !ok {
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an ElfMachineTemplate but got a %T", newObj))
 	}
@@ -108,7 +108,7 @@ func (v *ElfMachineTemplateValidator) ValidateDelete(ctx goctx.Context, obj runt
 	return nil, nil
 }
 
-func (v *ElfMachineTemplateValidator) validateNetwork(network, oldNetwork *infrav1.NetworkSpec) *field.Error {
+func (v *ElfMachineTemplateValidator) validateNetwork(network, oldNetwork *capev1.NetworkSpec) *field.Error {
 	if reflect.DeepEqual(network.Devices, oldNetwork.Devices) {
 		return nil
 	}

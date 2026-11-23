@@ -25,9 +25,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capiutil "sigs.k8s.io/cluster-api/util"
-	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	conditionsv1beta1 "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,7 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
@@ -57,14 +58,16 @@ import (
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=elfclusters/finalizers,verbs=update
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
+//+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
+//+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions;customresourcedefinitions/status,verbs=update;patch,resourceNames=elfclusters.infrastructure.cluster.x-k8s.io;elfmachines.infrastructure.cluster.x-k8s.io;elfmachinetemplates.infrastructure.cluster.x-k8s.io
 
 // AddClusterControllerToManager adds the cluster controller to the provided
 // manager.
 func AddClusterControllerToManager(ctx goctx.Context, ctrlMgrCtx *context.ControllerManagerContext, mgr ctrlmgr.Manager, options controller.Options) error {
 	var (
-		clusterControlledType     = &infrav1.ElfCluster{}
+		clusterControlledType     = &capev1.ElfCluster{}
 		clusterControlledTypeName = reflect.TypeOf(clusterControlledType).Elem().Name()
-		clusterControlledTypeGVK  = infrav1.GroupVersion.WithKind(clusterControlledTypeName)
+		clusterControlledTypeGVK  = capev1.GroupVersion.WithKind(clusterControlledTypeName)
 	)
 
 	reconciler := &ElfClusterReconciler{
@@ -78,12 +81,12 @@ func AddClusterControllerToManager(ctx goctx.Context, ctrlMgrCtx *context.Contro
 		For(clusterControlledType).
 		// Watch the CAPI resource that owns this infrastructure resource.
 		Watches(
-			&clusterv1.Cluster{},
-			handler.EnqueueRequestsFromMapFunc(capiutil.ClusterToInfrastructureMapFunc(ctx, clusterControlledTypeGVK, mgr.GetClient(), &infrav1.ElfCluster{})),
+			&capiv1.Cluster{},
+			handler.EnqueueRequestsFromMapFunc(capiutil.ClusterToInfrastructureMapFunc(ctx, clusterControlledTypeGVK, mgr.GetClient(), &capev1.ElfCluster{})),
 		).
 		// Watch ElfMachineTemplate and only trigger cluster reconcile when failureDomains changes.
 		Watches(
-			&infrav1.ElfMachineTemplate{},
+			&capev1.ElfMachineTemplate{},
 			handler.EnqueueRequestsFromMapFunc(reconciler.elfMachineTemplateToCluster()),
 			builder.WithPredicates(elfMachineTemplateFailureDomainsPredicate()),
 		).
@@ -103,7 +106,7 @@ func (r *ElfClusterReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 	log := ctrl.LoggerFrom(ctx)
 
 	// Get the ElfCluster resource for this request.
-	var elfCluster infrav1.ElfCluster
+	var elfCluster capev1.ElfCluster
 	if err := r.Client.Get(ctx, req.NamespacedName, &elfCluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("ElfCluster not found, won't reconcile", "key", req.NamespacedName)
@@ -148,14 +151,14 @@ func (r *ElfClusterReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 
 	// If ElfCluster is being deleting and ForceDeleteCluster flag is set, skip creating the VMService object,
 	// because Tower server may be out of service. So we can force delete ElfCluster.
-	if elfCluster.ObjectMeta.DeletionTimestamp.IsZero() || !elfCluster.HasForceDeleteCluster() {
+	if elfCluster.DeletionTimestamp.IsZero() || !elfCluster.HasForceDeleteCluster() {
 		vmService, err := r.NewVMService(ctx, r.Client, elfCluster.GetTower(), log)
 		if err != nil {
-			conditions.MarkFalse(&elfCluster, infrav1.TowerAvailableCondition, infrav1.TowerUnreachableReason, clusterv1.ConditionSeverityError, "%s", err.Error())
+			conditionsv1beta1.MarkFalse(&elfCluster, capev1.TowerAvailableCondition, capev1.TowerUnreachableReason, capiv1beta1.ConditionSeverityError, "%s", err.Error())
 
 			return reconcile.Result{}, err
 		}
-		conditions.MarkTrue(&elfCluster, infrav1.TowerAvailableCondition)
+		conditionsv1beta1.MarkTrue(&elfCluster, capev1.TowerAvailableCondition)
 
 		clusterCtx.VMService = vmService
 	}
@@ -164,10 +167,10 @@ func (r *ElfClusterReconciler) Reconcile(ctx goctx.Context, req ctrl.Request) (_
 	// resource are patched back to the API server.
 	defer func() {
 		// always update the readyCondition.
-		conditions.SetSummary(clusterCtx.ElfCluster,
-			conditions.WithConditions(
-				infrav1.ControlPlaneEndpointReadyCondition,
-				infrav1.TowerAvailableCondition,
+		conditionsv1beta1.SetSummary(clusterCtx.ElfCluster,
+			conditionsv1beta1.WithConditions(
+				capev1.ControlPlaneEndpointReadyCondition,
+				capev1.TowerAvailableCondition,
 			),
 		)
 
@@ -217,7 +220,7 @@ func (r *ElfClusterReconciler) reconcileDelete(ctx goctx.Context, clusterCtx *co
 	}
 
 	// Cluster is deleted so remove the finalizer.
-	ctrlutil.RemoveFinalizer(clusterCtx.ElfCluster, infrav1.ClusterFinalizer)
+	ctrlutil.RemoveFinalizer(clusterCtx.ElfCluster, capev1.ClusterFinalizer)
 
 	return reconcile.Result{}, nil
 }
@@ -309,7 +312,7 @@ func (r *ElfClusterReconciler) reconcileNormal(ctx goctx.Context, clusterCtx *co
 	log.Info("Reconciling ElfCluster")
 
 	// If the ElfCluster doesn't have our finalizer, add it.
-	ctrlutil.AddFinalizer(clusterCtx.ElfCluster, infrav1.ClusterFinalizer)
+	ctrlutil.AddFinalizer(clusterCtx.ElfCluster, capev1.ClusterFinalizer)
 
 	if ok := r.reconcileElfCluster(ctx, clusterCtx); !ok {
 		return reconcile.Result{}, nil
@@ -358,14 +361,14 @@ func (r *ElfClusterReconciler) reconcileElfCluster(ctx goctx.Context, clusterCtx
 
 func (r *ElfClusterReconciler) reconcileControlPlaneEndpoint(ctx goctx.Context, clusterCtx *context.ClusterContext) bool {
 	if !clusterCtx.ElfCluster.Spec.ControlPlaneEndpoint.IsZero() {
-		conditions.MarkTrue(clusterCtx.ElfCluster, infrav1.ControlPlaneEndpointReadyCondition)
+		conditionsv1beta1.MarkTrue(clusterCtx.ElfCluster, capev1.ControlPlaneEndpointReadyCondition)
 
 		return true
 	}
 
 	log := ctrl.LoggerFrom(ctx)
 	log.Info("The ControlPlaneEndpoint of ElfCluster is not set")
-	conditions.MarkFalse(clusterCtx.ElfCluster, infrav1.ControlPlaneEndpointReadyCondition, infrav1.WaitingForVIPReason, clusterv1.ConditionSeverityInfo, "")
+	conditionsv1beta1.MarkFalse(clusterCtx.ElfCluster, capev1.ControlPlaneEndpointReadyCondition, capev1.WaitingForVIPReason, capiv1beta1.ConditionSeverityInfo, "")
 
 	return false
 }
@@ -384,8 +387,8 @@ func (r *ElfClusterReconciler) reconcileFailureDomains(ctx goctx.Context, cluste
 		return false, err
 	}
 
-	elfMachineTemplateName := kcp.Spec.MachineTemplate.InfrastructureRef.Name
-	var elfMachineTemplate infrav1.ElfMachineTemplate
+	elfMachineTemplateName := kcp.Spec.MachineTemplate.Spec.InfrastructureRef.Name
+	var elfMachineTemplate capev1.ElfMachineTemplate
 	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: kcp.Namespace, Name: elfMachineTemplateName}, &elfMachineTemplate); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("Waiting for ElfMachineTemplate to be created", "name", elfMachineTemplateName)
@@ -395,21 +398,21 @@ func (r *ElfClusterReconciler) reconcileFailureDomains(ctx goctx.Context, cluste
 		return false, err
 	}
 
-	expectedFailureDomains := make(clusterv1.FailureDomains, len(elfMachineTemplate.Spec.Template.Spec.FailureDomains))
+	expectedFailureDomains := make(capiv1beta1.FailureDomains, len(elfMachineTemplate.Spec.Template.Spec.FailureDomains))
 	for i := range elfMachineTemplate.Spec.Template.Spec.FailureDomains {
 		failureDomain := elfMachineTemplate.Spec.Template.Spec.FailureDomains[i]
 		if failureDomain.ComputeCluster == "" {
 			continue
 		}
 
-		expectedFailureDomains[failureDomain.ComputeCluster] = clusterv1.FailureDomainSpec{
+		expectedFailureDomains[failureDomain.ComputeCluster] = capiv1beta1.FailureDomainSpec{
 			ControlPlane: true,
 		}
 	}
 
 	actualFailureDomains := clusterCtx.ElfCluster.Status.FailureDomains
 	if len(actualFailureDomains) == 0 {
-		actualFailureDomains = clusterv1.FailureDomains{}
+		actualFailureDomains = capiv1beta1.FailureDomains{}
 	}
 
 	if !reflect.DeepEqual(expectedFailureDomains, actualFailureDomains) {
@@ -432,7 +435,7 @@ func (r *ElfClusterReconciler) isAPIServerOnline(ctx goctx.Context, clusterCtx *
 			// control plane endpoint information to the values from the
 			// ElfCluster resource, as it must have the correct information
 			// if the API server is online.
-			cluster := &clusterv1.Cluster{}
+			cluster := &capiv1.Cluster{}
 			clusterKey := client.ObjectKey{Namespace: clusterCtx.Cluster.Namespace, Name: clusterCtx.Cluster.Name}
 			if err := r.Client.Get(ctx, clusterKey, cluster); err != nil {
 				cluster = clusterCtx.Cluster.DeepCopy()
@@ -458,7 +461,7 @@ func (r *ElfClusterReconciler) isAPIServerOnline(ctx goctx.Context, clusterCtx *
 // and ElfCluster shares the same name and namespace as the Cluster.
 func (r *ElfClusterReconciler) elfMachineTemplateToCluster() handler.MapFunc {
 	return func(ctx goctx.Context, obj client.Object) []reconcile.Request {
-		elfMachineTemplate, ok := obj.(*infrav1.ElfMachineTemplate)
+		elfMachineTemplate, ok := obj.(*capev1.ElfMachineTemplate)
 		if !ok {
 			return nil
 		}
@@ -491,11 +494,11 @@ func (r *ElfClusterReconciler) elfMachineTemplateToCluster() handler.MapFunc {
 func elfMachineTemplateFailureDomainsPredicate() predicate.Funcs {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			oldTemplate, ok := e.ObjectOld.(*infrav1.ElfMachineTemplate)
+			oldTemplate, ok := e.ObjectOld.(*capev1.ElfMachineTemplate)
 			if !ok {
 				return false
 			}
-			newTemplate, ok := e.ObjectNew.(*infrav1.ElfMachineTemplate)
+			newTemplate, ok := e.ObjectNew.(*capev1.ElfMachineTemplate)
 			if !ok {
 				return false
 			}

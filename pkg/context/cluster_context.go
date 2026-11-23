@@ -21,17 +21,18 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
 // ClusterContext is a Go context used with a ElfCluster.
 type ClusterContext struct {
-	Cluster     *clusterv1.Cluster
-	ElfCluster  *infrav1.ElfCluster
+	Cluster     *capiv1.Cluster
+	ElfCluster  *capev1.ElfCluster
 	PatchHelper *patch.Helper
 	Logger      logr.Logger
 	VMService   service.VMService
@@ -44,5 +45,11 @@ func (r *ClusterContext) String() string {
 
 // Patch updates the object and its status on the API server.
 func (r *ClusterContext) Patch(ctx goctx.Context) error {
-	return r.PatchHelper.Patch(ctx, r.ElfCluster)
+	return r.PatchHelper.Patch(ctx, r.ElfCluster,
+		patch.WithOwnedConditions{Conditions: []capiv1beta1.ConditionType{
+			capiv1beta1.ReadyCondition,
+			capev1.ControlPlaneEndpointReadyCondition,
+			capev1.TowerAvailableCondition,
+		}},
+	)
 }

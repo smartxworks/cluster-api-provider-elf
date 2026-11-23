@@ -43,9 +43,10 @@ func ShutDownVM(ctx context.Context, input ShutDownVMInput) {
 			return false, err
 		}
 
-		if *task.Status == models.TaskStatusSUCCESSED {
+		switch *task.Status {
+		case models.TaskStatusSUCCESSED:
 			return true, nil
-		} else if *task.Status == models.TaskStatusFAILED {
+		case models.TaskStatusFAILED:
 			task, err = input.VMService.ShutDown(input.UUID)
 
 			return false, err
@@ -73,9 +74,10 @@ func PowerOnVM(ctx context.Context, input PowerOnVMInput, intervals ...interface
 			return false, err
 		}
 
-		if *task.Status == models.TaskStatusSUCCESSED {
+		switch *task.Status {
+		case models.TaskStatusSUCCESSED:
 			return true, nil
-		} else if *task.Status == models.TaskStatusFAILED {
+		case models.TaskStatusFAILED:
 			task, err = input.VMService.PowerOn(input.UUID, "")
 
 			return false, err

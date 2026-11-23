@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	typesutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/types"
 )
@@ -38,7 +38,7 @@ const (
 
 // GetUpdatedVMRestrictedFields returns the updated restricted fields of the VM compared to ElfMachine.
 // restricted fields: vcpu/cpuCores/cpuSockets.
-func GetUpdatedVMRestrictedFields(vm *models.VM, elfMachine *infrav1.ElfMachine) map[string]string {
+func GetUpdatedVMRestrictedFields(vm *models.VM, elfMachine *capev1.ElfMachine) map[string]string {
 	fieldMap := make(map[string]string)
 	vCPU := TowerVCPU(elfMachine.Spec.NumCPUs)
 	cpuSocketCores := TowerCPUSocketCores(elfMachine.Spec.NumCoresPerSocket, *vCPU)
@@ -238,7 +238,7 @@ func IsTowerResourcePerformingAnOperation(entityAsyncStatus *models.EntityAsyncS
 
 // HasGPUsCanNotBeUsedForVM returns whether the specified GPUs contains GPU
 // that cannot be used by the specified VM.
-func HasGPUsCanNotBeUsedForVM(gpuVMInfos GPUVMInfos, elfMachine *infrav1.ElfMachine) bool {
+func HasGPUsCanNotBeUsedForVM(gpuVMInfos GPUVMInfos, elfMachine *capev1.ElfMachine) bool {
 	if elfMachine.RequiresPassThroughGPUDevices() {
 		for gpuID := range gpuVMInfos {
 			vms := getVMsOccupyingGPU(gpuVMInfos[gpuID].Vms)
@@ -351,10 +351,13 @@ func GetVMSystemDisk(disks []*models.VMDisk) *models.VMDisk {
 
 // GetHostZone returns the zone of the host.
 func GetHostZone(zones []*models.Zone, hostID string) *models.Zone {
-	for i := range zones {
-		for j := range zones[i].Hosts {
-			if *zones[i].Hosts[j].ID == hostID {
-				return zones[i]
+	for _, zone := range zones {
+		if zone == nil {
+			continue
+		}
+		for _, host := range zone.Hosts {
+			if host != nil && host.ID != nil && *host.ID == hostID {
+				return zone
 			}
 		}
 	}

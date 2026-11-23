@@ -32,7 +32,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	"k8s.io/utils/ptr"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,7 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
@@ -54,8 +56,8 @@ const (
 
 var _ = Describe("ElfClusterReconciler", func() {
 	var (
-		elfCluster       *infrav1.ElfCluster
-		cluster          *clusterv1.Cluster
+		elfCluster       *capev1.ElfCluster
+		cluster          *capiv1.Cluster
 		logBuffer        *bytes.Buffer
 		mockCtrl         *gomock.Controller
 		mockVMService    *mock_services.MockVMService
@@ -72,7 +74,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 		// mock
 		mockCtrl = gomock.NewController(GinkgoT())
 		mockVMService = mock_services.NewMockVMService(mockCtrl)
-		mockNewVMService = func(_ goctx.Context, _ client.Client, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+		mockNewVMService = func(_ goctx.Context, _ client.Client, _ capev1.Tower, _ logr.Logger) (service.VMService, error) {
 			return mockVMService, nil
 		}
 	})
@@ -101,7 +103,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 		})
 
 		It("should not error and not requeue the request when Cluster is paused", func() {
-			cluster.Spec.Paused = true
+			cluster.Spec.Paused = ptr.To(true)
 
 			ctrlMgrCtx := fake.NewControllerManagerContext(cluster, elfCluster)
 			fake.InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
@@ -118,8 +120,8 @@ var _ = Describe("ElfClusterReconciler", func() {
 			elfCluster.Spec.ControlPlaneEndpoint.Port = 6443
 			emt := fake.NewElfMachineTemplate()
 			kcp := fake.NewKCP()
-			kcp.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
-			kcp.Spec.MachineTemplate.InfrastructureRef.Name = emt.Name
+			kcp.Labels = map[string]string{capiv1.ClusterNameLabel: cluster.Name}
+			kcp.Spec.MachineTemplate.Spec.InfrastructureRef.Name = emt.Name
 			ctrlMgrCtx := fake.NewControllerManagerContext(cluster, elfCluster, kcp, emt)
 			fake.InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
 
@@ -131,11 +133,11 @@ var _ = Describe("ElfClusterReconciler", func() {
 			_, _ = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfClusterKey})
 			Expect(reconciler.Client.Get(ctx, elfClusterKey, elfCluster)).To(Succeed())
 			Expect(elfCluster.Status.Ready).To(BeTrue())
-			Expect(elfCluster.Finalizers).To(ContainElement(infrav1.ClusterFinalizer))
+			Expect(elfCluster.Finalizers).To(ContainElement(capev1.ClusterFinalizer))
 			expectConditions(elfCluster, []conditionAssertion{
-				{conditionType: clusterv1.ReadyCondition, status: corev1.ConditionTrue},
-				{conditionType: infrav1.ControlPlaneEndpointReadyCondition, status: corev1.ConditionTrue},
-				{conditionType: infrav1.TowerAvailableCondition, status: corev1.ConditionTrue},
+				{conditionType: capiv1beta1.ReadyCondition, status: corev1.ConditionTrue},
+				{conditionType: capev1.ControlPlaneEndpointReadyCondition, status: corev1.ConditionTrue},
+				{conditionType: capev1.TowerAvailableCondition, status: corev1.ConditionTrue},
 			})
 		})
 
@@ -150,16 +152,16 @@ var _ = Describe("ElfClusterReconciler", func() {
 			Expect(logBuffer.String()).To(ContainSubstring("The ControlPlaneEndpoint of ElfCluster is not set"))
 			Expect(reconciler.Client.Get(ctx, capiutil.ObjectKey(elfCluster), elfCluster)).To(Succeed())
 			expectConditions(elfCluster, []conditionAssertion{
-				{clusterv1.ReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForVIPReason},
-				{infrav1.ControlPlaneEndpointReadyCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForVIPReason},
-				{conditionType: infrav1.TowerAvailableCondition, status: corev1.ConditionTrue},
+				{capiv1beta1.ReadyCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForVIPReason},
+				{capev1.ControlPlaneEndpointReadyCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForVIPReason},
+				{conditionType: capev1.TowerAvailableCondition, status: corev1.ConditionTrue},
 			})
 		})
 	})
 
 	Context("Delete a ElfCluster", func() {
 		BeforeEach(func() {
-			ctrlutil.AddFinalizer(elfCluster, infrav1.ClusterFinalizer)
+			ctrlutil.AddFinalizer(elfCluster, capev1.ClusterFinalizer)
 			elfCluster.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
 		})
 
@@ -175,7 +177,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(reconciler.Client.Get(ctx, elfClusterKey, elfCluster)).To(Succeed())
-			Expect(elfCluster.Finalizers).To(ContainElement(infrav1.ClusterFinalizer))
+			Expect(elfCluster.Finalizers).To(ContainElement(capev1.ClusterFinalizer))
 		})
 
 		It("should delete labels and remove elfcluster finalizer", func() {
@@ -219,7 +221,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 		})
 
 		It("should delete failed when tower is out of service", func() {
-			mockNewVMService = func(_ goctx.Context, _ client.Client, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+			mockNewVMService = func(_ goctx.Context, _ client.Client, _ capev1.Tower, _ logr.Logger) (service.VMService, error) {
 				return mockVMService, errors.New("get vm service failed")
 			}
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster)
@@ -231,15 +233,15 @@ var _ = Describe("ElfClusterReconciler", func() {
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
 			Expect(reconciler.Client.Get(ctx, elfClusterKey, elfCluster)).To(Succeed())
-			Expect(elfCluster.Finalizers).To(ContainElement(infrav1.ClusterFinalizer))
+			Expect(elfCluster.Finalizers).To(ContainElement(capev1.ClusterFinalizer))
 		})
 
 		It("should force delete when tower is out of service and cluster need to force delete", func() {
-			mockNewVMService = func(_ goctx.Context, _ client.Client, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+			mockNewVMService = func(_ goctx.Context, _ client.Client, _ capev1.Tower, _ logr.Logger) (service.VMService, error) {
 				return mockVMService, errors.New("get vm service failed")
 			}
 			elfCluster.Annotations = map[string]string{
-				infrav1.ElfClusterForceDeleteAnnotation: "",
+				capev1.ElfClusterForceDeleteAnnotation: "",
 			}
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster)
 			fake.InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
@@ -309,7 +311,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			p := elfMachineTemplateFailureDomainsPredicate()
 			oldEmt := fake.NewElfMachineTemplate()
 			newEmt := oldEmt.DeepCopy()
-			newEmt.Spec.Template.Spec.FailureDomains = []infrav1.CloudFailureDomain{
+			newEmt.Spec.Template.Spec.FailureDomains = []capev1.CloudFailureDomain{
 				{ComputeCluster: "cluster1"},
 			}
 			Expect(p.UpdateFunc(event.UpdateEvent{ObjectOld: oldEmt, ObjectNew: newEmt})).To(BeTrue())
@@ -330,7 +332,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			emt := fake.NewElfMachineTemplate()
 			emt.OwnerReferences = []metav1.OwnerReference{
-				{Kind: "Cluster", Name: cluster.Name, APIVersion: clusterv1.GroupVersion.String()},
+				{Kind: "Cluster", Name: cluster.Name, APIVersion: capiv1beta1.GroupVersion.String()},
 			}
 			requests := reconciler.elfMachineTemplateToCluster()(ctx, emt)
 			Expect(requests).To(HaveLen(1))
@@ -356,8 +358,8 @@ var _ = Describe("ElfClusterReconciler", func() {
 
 		It("should return false when ElfMachineTemplate not found", func() {
 			kcp := fake.NewKCP()
-			kcp.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
-			kcp.Spec.MachineTemplate.InfrastructureRef.Name = "non-existent-emt"
+			kcp.Labels = map[string]string{capiv1.ClusterNameLabel: cluster.Name}
+			kcp.Spec.MachineTemplate.Spec.InfrastructureRef.Name = "non-existent-emt"
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, kcp)
 			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			clusterCtx := &context.ClusterContext{
@@ -373,13 +375,13 @@ var _ = Describe("ElfClusterReconciler", func() {
 
 		It("should set FailureDomains on ElfCluster from ElfMachineTemplate", func() {
 			emt := fake.NewElfMachineTemplate()
-			emt.Spec.Template.Spec.FailureDomains = []infrav1.CloudFailureDomain{
+			emt.Spec.Template.Spec.FailureDomains = []capev1.CloudFailureDomain{
 				{ComputeCluster: "cluster1"},
 				{ComputeCluster: "cluster2"},
 			}
 			kcp := fake.NewKCP()
-			kcp.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
-			kcp.Spec.MachineTemplate.InfrastructureRef.Name = emt.Name
+			kcp.Labels = map[string]string{capiv1.ClusterNameLabel: cluster.Name}
+			kcp.Spec.MachineTemplate.Spec.InfrastructureRef.Name = emt.Name
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, kcp, emt)
 			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			clusterCtx := &context.ClusterContext{
@@ -398,13 +400,13 @@ var _ = Describe("ElfClusterReconciler", func() {
 
 		It("should skip FailureDomain entries with empty ComputeCluster", func() {
 			emt := fake.NewElfMachineTemplate()
-			emt.Spec.Template.Spec.FailureDomains = []infrav1.CloudFailureDomain{
+			emt.Spec.Template.Spec.FailureDomains = []capev1.CloudFailureDomain{
 				{ComputeCluster: "cluster1"},
 				{ComputeCluster: ""},
 			}
 			kcp := fake.NewKCP()
-			kcp.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
-			kcp.Spec.MachineTemplate.InfrastructureRef.Name = emt.Name
+			kcp.Labels = map[string]string{capiv1.ClusterNameLabel: cluster.Name}
+			kcp.Spec.MachineTemplate.Spec.InfrastructureRef.Name = emt.Name
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, kcp, emt)
 			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			clusterCtx := &context.ClusterContext{
@@ -421,15 +423,15 @@ var _ = Describe("ElfClusterReconciler", func() {
 
 		It("should not log when FailureDomains not changed", func() {
 			emt := fake.NewElfMachineTemplate()
-			emt.Spec.Template.Spec.FailureDomains = []infrav1.CloudFailureDomain{
+			emt.Spec.Template.Spec.FailureDomains = []capev1.CloudFailureDomain{
 				{ComputeCluster: "cluster1"},
 			}
-			elfCluster.Status.FailureDomains = clusterv1.FailureDomains{
-				"cluster1": clusterv1.FailureDomainSpec{ControlPlane: true},
+			elfCluster.Status.FailureDomains = capiv1beta1.FailureDomains{
+				"cluster1": capiv1beta1.FailureDomainSpec{ControlPlane: true},
 			}
 			kcp := fake.NewKCP()
-			kcp.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
-			kcp.Spec.MachineTemplate.InfrastructureRef.Name = emt.Name
+			kcp.Labels = map[string]string{capiv1.ClusterNameLabel: cluster.Name}
+			kcp.Spec.MachineTemplate.Spec.InfrastructureRef.Name = emt.Name
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, kcp, emt)
 			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			clusterCtx := &context.ClusterContext{
@@ -447,7 +449,7 @@ var _ = Describe("ElfClusterReconciler", func() {
 
 	Context("reconcileElfCluster", func() {
 		It("should return true when clusterType is stretched", func() {
-			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStretched
+			elfCluster.Spec.ClusterType = capev1.ElfClusterTypeStretched
 			ctrlMgrCtx := fake.NewControllerManagerContext(cluster, elfCluster)
 			fake.InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
 			reconciler := &ElfClusterReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}

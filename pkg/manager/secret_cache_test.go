@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -58,7 +58,7 @@ func TestConfigureSecretCaching(t *testing.T) {
 		g.Expect(ok).To(gomega.BeTrue())
 		otherNamespaceCache, ok := secretCache.Namespaces[cache.AllNamespaces]
 		g.Expect(ok).To(gomega.BeTrue())
-		g.Expect(otherNamespaceCache.LabelSelector.Matches(labels.Set{clusterv1.ClusterNameLabel: "cluster-1"})).To(gomega.BeTrue())
+		g.Expect(otherNamespaceCache.LabelSelector.Matches(labels.Set{capiv1.ClusterNameLabel: "cluster-1"})).To(gomega.BeTrue())
 		g.Expect(otherNamespaceCache.LabelSelector.Matches(labels.Set{"app": "unrelated"})).To(gomega.BeFalse())
 	})
 
@@ -96,7 +96,7 @@ func TestConfigureSecretCaching(t *testing.T) {
 
 	t.Run("When getting a CAPI Secret outside the default namespace should read it from the cache", func(t *testing.T) {
 		g := gomega.NewWithT(t)
-		secretLabels := map[string]string{clusterv1.ClusterNameLabel: "cluster-1"}
+		secretLabels := map[string]string{capiv1.ClusterNameLabel: "cluster-1"}
 		cachedSecret := newTestSecret("tenant-1", "kubeconfig", "cache", secretLabels)
 		apiSecret := newTestSecret("tenant-1", "kubeconfig", "api-server", secretLabels)
 		k8sClient := newTestManagerClient(t, []*corev1.Secret{cachedSecret}, []*corev1.Secret{apiSecret})
@@ -130,7 +130,7 @@ func TestConfigureSecretCaching(t *testing.T) {
 
 	t.Run("When listing CAPI Secrets outside the default namespace should read them from the cache", func(t *testing.T) {
 		g := gomega.NewWithT(t)
-		secretLabels := map[string]string{clusterv1.ClusterNameLabel: "cluster-1"}
+		secretLabels := map[string]string{capiv1.ClusterNameLabel: "cluster-1"}
 		cachedSecret := newTestSecret("tenant-1", "cached", "cache", secretLabels)
 		apiSecret := newTestSecret("tenant-1", "live", "api-server", secretLabels)
 		k8sClient := newTestManagerClient(t, []*corev1.Secret{cachedSecret}, []*corev1.Secret{apiSecret})
@@ -138,7 +138,7 @@ func TestConfigureSecretCaching(t *testing.T) {
 		got := &corev1.SecretList{}
 		g.Expect(k8sClient.List(t.Context(), got,
 			client.InNamespace("tenant-1"),
-			client.HasLabels{clusterv1.ClusterNameLabel},
+			client.HasLabels{capiv1.ClusterNameLabel},
 		)).To(gomega.Succeed())
 		g.Expect(got.Items).To(gomega.HaveLen(1))
 		g.Expect(got.Items[0].Name).To(gomega.Equal("cached"))
@@ -146,7 +146,7 @@ func TestConfigureSecretCaching(t *testing.T) {
 
 	t.Run("When listing non-CAPI Secrets outside the default namespace should read them from the API server", func(t *testing.T) {
 		g := gomega.NewWithT(t)
-		cachedSecret := newTestSecret("tenant-1", "cached", "cache", map[string]string{clusterv1.ClusterNameLabel: "cluster-1"})
+		cachedSecret := newTestSecret("tenant-1", "cached", "cache", map[string]string{capiv1.ClusterNameLabel: "cluster-1"})
 		apiSecret := newTestSecret("tenant-1", "live", "api-server", nil)
 		k8sClient := newTestManagerClient(t, []*corev1.Secret{cachedSecret}, []*corev1.Secret{apiSecret})
 

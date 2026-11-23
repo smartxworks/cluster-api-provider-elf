@@ -23,11 +23,11 @@ import (
 
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
-	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	conditions "sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	labelsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
 	typesutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/types"
 )
@@ -49,9 +49,9 @@ var ErrNoMachineIPAddr = errors.New("no IP addresses found for machine")
 func GetElfMachinesInCluster(
 	ctx goctx.Context,
 	controllerClient client.Client,
-	namespace, clusterName string) ([]*infrav1.ElfMachine, error) {
-	labels := map[string]string{clusterv1.ClusterNameLabel: clusterName}
-	var machineList infrav1.ElfMachineList
+	namespace, clusterName string) ([]*capev1.ElfMachine, error) {
+	labels := map[string]string{capiv1.ClusterNameLabel: clusterName}
+	var machineList capev1.ElfMachineList
 
 	if err := controllerClient.List(
 		ctx, &machineList,
@@ -60,7 +60,7 @@ func GetElfMachinesInCluster(
 		return nil, err
 	}
 
-	machines := make([]*infrav1.ElfMachine, len(machineList.Items))
+	machines := make([]*capev1.ElfMachine, len(machineList.Items))
 	for i := range machineList.Items {
 		machines[i] = &machineList.Items[i]
 	}
@@ -69,18 +69,18 @@ func GetElfMachinesInCluster(
 }
 
 // GetControlPlaneElfMachinesInCluster gets a cluster's Control Plane ElfMachine resources.
-func GetControlPlaneElfMachinesInCluster(ctx goctx.Context, ctrlClient client.Client, namespace, clusterName string) ([]*infrav1.ElfMachine, error) {
-	var machineList infrav1.ElfMachineList
+func GetControlPlaneElfMachinesInCluster(ctx goctx.Context, ctrlClient client.Client, namespace, clusterName string) ([]*capev1.ElfMachine, error) {
+	var machineList capev1.ElfMachineList
 	labels := map[string]string{
-		clusterv1.ClusterNameLabel:         clusterName,
-		clusterv1.MachineControlPlaneLabel: "",
+		capiv1.ClusterNameLabel:         clusterName,
+		capiv1.MachineControlPlaneLabel: "",
 	}
 
 	if err := ctrlClient.List(ctx, &machineList, client.InNamespace(namespace), client.MatchingLabels(labels)); err != nil {
 		return nil, err
 	}
 
-	machines := make([]*infrav1.ElfMachine, len(machineList.Items))
+	machines := make([]*capev1.ElfMachine, len(machineList.Items))
 	for i := range machineList.Items {
 		machines[i] = &machineList.Items[i]
 	}
@@ -91,18 +91,18 @@ func GetControlPlaneElfMachinesInCluster(ctx goctx.Context, ctrlClient client.Cl
 func GetElfMachinesForMD(
 	ctx goctx.Context,
 	ctrlClient client.Client,
-	cluster *clusterv1.Cluster,
-	md *clusterv1.MachineDeployment) ([]*infrav1.ElfMachine, error) {
-	elfMachineList := &infrav1.ElfMachineList{}
+	cluster *capiv1.Cluster,
+	md *capiv1.MachineDeployment) ([]*capev1.ElfMachine, error) {
+	elfMachineList := &capev1.ElfMachineList{}
 	labels := map[string]string{
-		clusterv1.ClusterNameLabel:           cluster.Name,
-		clusterv1.MachineDeploymentNameLabel: md.Name,
+		capiv1.ClusterNameLabel:           cluster.Name,
+		capiv1.MachineDeploymentNameLabel: md.Name,
 	}
 	if err := ctrlClient.List(ctx, elfMachineList, client.InNamespace(md.Namespace), client.MatchingLabels(labels)); err != nil {
 		return nil, err
 	}
 
-	elfMachines := make([]*infrav1.ElfMachine, len(elfMachineList.Items))
+	elfMachines := make([]*capev1.ElfMachine, len(elfMachineList.Items))
 	for i := range elfMachineList.Items {
 		elfMachines[i] = &elfMachineList.Items[i]
 	}
@@ -110,18 +110,18 @@ func GetElfMachinesForMD(
 	return elfMachines, nil
 }
 
-func GetControlPlaneMachinesForCluster(ctx goctx.Context, ctrlClient client.Client, cluster *clusterv1.Cluster) ([]*clusterv1.Machine, error) {
-	ms := &clusterv1.MachineList{}
+func GetControlPlaneMachinesForCluster(ctx goctx.Context, ctrlClient client.Client, cluster *capiv1.Cluster) ([]*capiv1.Machine, error) {
+	ms := &capiv1.MachineList{}
 	labels := map[string]string{
-		clusterv1.ClusterNameLabel:         cluster.Name,
-		clusterv1.MachineControlPlaneLabel: "",
+		capiv1.ClusterNameLabel:         cluster.Name,
+		capiv1.MachineControlPlaneLabel: "",
 	}
 
 	if err := ctrlClient.List(ctx, ms, client.InNamespace(cluster.Namespace), client.MatchingLabels(labels)); err != nil {
 		return nil, err
 	}
 
-	machines := make([]*clusterv1.Machine, len(ms.Items))
+	machines := make([]*capiv1.Machine, len(ms.Items))
 	for i := range ms.Items {
 		machines[i] = &ms.Items[i]
 	}
@@ -137,12 +137,12 @@ func IsControlPlaneMachine(machine metav1.Object) bool {
 		return false
 	}
 
-	_, ok := labels[clusterv1.MachineControlPlaneLabel]
+	_, ok := labels[capiv1.MachineControlPlaneLabel]
 	return ok
 }
 
 // GetNodeGroupName returns the name of node group that the machine belongs.
-func GetNodeGroupName(machine *clusterv1.Machine) string {
+func GetNodeGroupName(machine *capiv1.Machine) string {
 	nodeGroupName := ""
 	if IsControlPlaneMachine(machine) {
 		nodeGroupName = GetKCPNameByMachine(machine)
@@ -156,17 +156,18 @@ func GetNodeGroupName(machine *clusterv1.Machine) string {
 }
 
 // IsNodeHealthyConditionUnknown returns whether the node's healthy condition is unknown.
-func IsNodeHealthyConditionUnknown(machine *clusterv1.Machine) bool {
-	if conditions.IsUnknown(machine, clusterv1.MachineNodeHealthyCondition) &&
-		conditions.GetReason(machine, clusterv1.MachineNodeHealthyCondition) == clusterv1.NodeConditionsFailedReason {
+func IsNodeHealthyConditionUnknown(machine *capiv1.Machine) bool {
+	if conditions.IsUnknown(machine, capiv1.MachineNodeHealthyCondition) &&
+		conditions.GetReason(machine, capiv1.MachineNodeHealthyCondition) == capiv1.NodeConditionsFailedV1Beta1Reason {
 		return true
 	}
 
 	return false
 }
 
-func IsMachineFailed(machine *clusterv1.Machine) bool {
-	return machine.Status.FailureReason != nil || machine.Status.FailureMessage != nil
+func IsMachineFailed(machine *capiv1.Machine) bool {
+	return machine.Status.Deprecated != nil && machine.Status.Deprecated.V1Beta1 != nil &&
+		(machine.Status.Deprecated.V1Beta1.FailureReason != nil || machine.Status.Deprecated.V1Beta1.FailureMessage != nil)
 }
 
 func ConvertProviderIDToUUID(providerID *string) string {
@@ -191,8 +192,8 @@ func ConvertUUIDToProviderID(uuid string) string {
 	return ProviderIDPrefix + uuid
 }
 
-func GetNetworkStatus(ipsStr string) []infrav1.NetworkStatus {
-	networks := []infrav1.NetworkStatus{}
+func GetNetworkStatus(ipsStr string) []capev1.NetworkStatus {
+	networks := []capev1.NetworkStatus{}
 
 	if ipsStr == "" {
 		return networks
@@ -204,7 +205,7 @@ func GetNetworkStatus(ipsStr string) []infrav1.NetworkStatus {
 			continue
 		}
 
-		networks = append(networks, infrav1.NetworkStatus{
+		networks = append(networks, capev1.NetworkStatus{
 			IPAddrs: []string{ip},
 		})
 	}

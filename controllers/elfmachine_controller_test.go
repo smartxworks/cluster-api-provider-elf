@@ -35,17 +35,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
-	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 	capiutil "sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
-	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
+	conditions "sigs.k8s.io/cluster-api/util/conditions"
+	conditionsv1beta1 "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	capeerrors "github.com/smartxworks/cluster-api-provider-elf/pkg/errors"
@@ -61,13 +63,13 @@ import (
 
 var _ = Describe("ElfMachineReconciler", func() {
 	var (
-		elfCluster       *infrav1.ElfCluster
-		cluster          *clusterv1.Cluster
-		elfMachine       *infrav1.ElfMachine
+		elfCluster       *capev1.ElfCluster
+		cluster          *capiv1.Cluster
+		elfMachine       *capev1.ElfMachine
 		k8sNode          *corev1.Node
-		machine          *clusterv1.Machine
+		machine          *capiv1.Machine
 		kcp              *controlplanev1.KubeadmControlPlane
-		md               *clusterv1.MachineDeployment
+		md               *capiv1.MachineDeployment
 		secret           *corev1.Secret
 		kubeConfigSecret *corev1.Secret
 		logBuffer        *bytes.Buffer
@@ -93,7 +95,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		// mock
 		mockCtrl = gomock.NewController(GinkgoT())
 		mockVMService = mock_services.NewMockVMService(mockCtrl)
-		mockNewVMService = func(_ goctx.Context, _ client.Client, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+		mockNewVMService = func(_ goctx.Context, _ client.Client, _ capev1.Tower, _ logr.Logger) (service.VMService, error) {
 			return mockVMService, nil
 		}
 
@@ -127,7 +129,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should not error and not requeue the request when Cluster is paused", func() {
-			cluster.Spec.Paused = true
+			cluster.Spec.Paused = ptr.To(true)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -158,14 +160,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, _ = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-			Expect(elfMachine.Finalizers).To(ContainElement(infrav1.MachineFinalizer))
+			Expect(elfMachine.Finalizers).To(ContainElement(capev1.MachineFinalizer))
 		})
 
 		It("should exit immediately if cluster infra isn't ready", func() {
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
-			cluster.Status.InfrastructureReady = false
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
+			cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(false)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -174,15 +176,15 @@ var _ = Describe("ElfMachineReconciler", func() {
 			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Cluster infrastructure is not ready yet"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForClusterInfrastructureReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForClusterInfrastructureReason}})
 		})
 
 		It("should exit immediately if bootstrap data secret reference isn't available", func() {
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
-			cluster.Status.InfrastructureReady = true
-			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
+			cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(true)
+			conditions.Set(cluster, metav1.Condition{Type: capiv1.ClusterControlPlaneInitializedCondition, Status: metav1.ConditionTrue})
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -191,14 +193,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for bootstrap data to be available"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForBootstrapDataReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForBootstrapDataReason}})
 		})
 
 		It("should wait cluster ControlPlaneInitialized true when create worker machine", func() {
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
-			cluster.Status.InfrastructureReady = true
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
+			cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(true)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -208,15 +210,15 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RequeueAfter).To(Equal(config.Cape.DefaultRequeueTimeout))
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the control plane to be initialized"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.WaitingForControlPlaneAvailableReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capiv1.WaitingForControlPlaneInitializedReason}})
 		})
 
 		It("should not wait cluster ControlPlaneInitialized true when create master machine", func() {
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
-			cluster.Status.InfrastructureReady = true
-			elfMachine.Labels[clusterv1.MachineControlPlaneLabel] = ""
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
+			cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(true)
+			elfMachine.Labels[capiv1.MachineControlPlaneLabel] = ""
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -225,15 +227,15 @@ var _ = Describe("ElfMachineReconciler", func() {
 			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for bootstrap data to be available"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForBootstrapDataReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForBootstrapDataReason}})
 		})
 
 		It("should requeue when node's healthy condition is unknown", func() {
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
-			ctrlutil.AddFinalizer(machine, infrav1.MachineFinalizer)
-			cluster.Status.InfrastructureReady = false
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
+			ctrlutil.AddFinalizer(machine, capev1.MachineFinalizer)
+			cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(false)
 
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -245,7 +247,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			logBuffer.Reset()
 			message := "The node's healthy condition is unknown, virtual machine may have been shut down, will reconcile"
-			conditions.MarkUnknown(machine, clusterv1.MachineNodeHealthyCondition, clusterv1.NodeConditionsFailedReason, "test")
+			conditions.Set(machine, metav1.Condition{Type: capiv1.MachineNodeHealthyCondition, Status: metav1.ConditionUnknown, Reason: capiv1.NodeConditionsFailedV1Beta1Reason, Message: "test"})
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
@@ -262,8 +264,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.IsZero()).To(BeTrue())
 
-			conditions.MarkUnknown(machine, clusterv1.MachineNodeHealthyCondition, clusterv1.NodeConditionsFailedReason, "test")
-			machine.Status.FailureMessage = ptr.To("error")
+			conditions.Set(machine, metav1.Condition{Type: capiv1.MachineNodeHealthyCondition, Status: metav1.ConditionUnknown, Reason: capiv1.NodeConditionsFailedV1Beta1Reason, Message: "test"})
+			machine.Status.Deprecated = &capiv1.MachineDeprecatedStatus{V1Beta1: &capiv1.MachineV1Beta1DeprecatedStatus{}}
+			machine.Status.Deprecated.V1Beta1.FailureMessage = ptr.To("error")
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			reconciler = &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
@@ -271,8 +274,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.IsZero()).To(BeTrue())
 
-			conditions.MarkUnknown(machine, clusterv1.MachineNodeHealthyCondition, clusterv1.NodeConditionsFailedReason, "test")
-			machine.Status.FailureMessage = nil
+			conditions.Set(machine, metav1.Condition{Type: capiv1.MachineNodeHealthyCondition, Status: metav1.ConditionUnknown, Reason: capiv1.NodeConditionsFailedV1Beta1Reason, Message: "test"})
+			machine.Status.Deprecated.V1Beta1.FailureMessage = nil
 			machine.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -307,16 +310,16 @@ var _ = Describe("ElfMachineReconciler", func() {
 	Context("Reconcile ElfMachine VM", func() {
 		var placementGroup *models.VMPlacementGroup
 		BeforeEach(func() {
-			cluster.Status.InfrastructureReady = true
-			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
-			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
+			cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(true)
+			conditions.Set(cluster, metav1.Condition{Type: capiv1.ClusterControlPlaneInitializedCondition, Status: metav1.ConditionTrue})
+			machine.Spec.Bootstrap = capiv1.Bootstrap{DataSecretName: &secret.Name}
 
 			placementGroup = fake.NewVMPlacementGroup([]string{fake.ID()})
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 		})
 
 		It("should set CloningFailedReason condition when failed to retrieve bootstrap data", func() {
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			machine.Spec.Bootstrap.DataSecretName = ptr.To("notfound")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -326,9 +329,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).To(BeZero())
 			Expect(err).Should(HaveOccurred())
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.CloningFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityWarning, capev1.CloningFailedReason}})
 		})
 
 		It("should create a new VM if not exists", func() {
@@ -337,10 +340,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.Name = &elfMachine.Name
 			elfCluster.Spec.Cluster = clusterInsufficientStorageKey
 			storageConfig := &models.StorageConfig{StorageClusterID: service.TowerString(storageClusterKey)}
-			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{StorageClusterID: storageClusterKey}
+			elfCluster.Spec.StorageCluster = capev1.StorageCluster{StorageClusterID: storageClusterKey}
 			task := fake.NewTowerTask("")
 			withTaskVM := fake.NewWithTaskVM(vm, task)
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -371,7 +374,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			logBuffer = new(bytes.Buffer)
 			klog.SetOutput(logBuffer)
 			mockVMService.EXPECT().Clone(gomock.Any(), gomock.Any(), gomock.Any()).
-				DoAndReturn(func(_ *infrav1.ElfCluster, _ *infrav1.ElfMachine, vmInfo *service.CloneVMInfo) (*models.WithTaskVM, error) {
+				DoAndReturn(func(_ *capev1.ElfCluster, _ *capev1.ElfMachine, vmInfo *service.CloneVMInfo) (*models.WithTaskVM, error) {
 					Expect(vmInfo.StorageConfig).To(Equal(storageConfig))
 
 					return withTaskVM, nil
@@ -387,7 +390,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("and the retry silence period passes, will try to create the VM again"))
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM task done"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.ID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
@@ -398,7 +401,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm := fake.NewTowerVM()
 			vm.Name = &elfMachine.Name
 			vm.LocalID = ptr.To("placeholder-%s" + *vm.LocalID)
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -412,14 +415,14 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM task done"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.ID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
 		})
 
 		It("should handle clone error", func() {
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -428,12 +431,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(err.Error()).To(ContainSubstring("failed to reconcile VM"))
 			Expect(elfMachine.Status.VMRef).To(Equal(""))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.CloningFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityWarning, capev1.CloningFailedReason}})
 		})
 
 		It("should allow VM to be temporarily disconnected", func() {
@@ -443,11 +446,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			status := models.VMStatusRUNNING
 			vm.Status = &status
 			elfMachine.Status.VMRef = *vm.LocalID
-			now := metav1.NewTime(time.Now().Add(-infrav1.VMDisconnectionTimeout))
+			now := metav1.NewTime(time.Now().Add(-capev1.VMDisconnectionTimeout))
 			elfMachine.SetVMDisconnectionTimestamp(&now)
 			nic := fake.NewTowerVMNic(0)
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -482,7 +485,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm := fake.NewTowerVM()
 			vm.EntityAsyncStatus = nil
 			elfMachine.Status.VMRef = *vm.LocalID
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -493,20 +496,20 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).NotTo(HaveOccurred())
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.GetVMDisconnectionTimestamp()).NotTo(BeNil())
 
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 			patchHelper, err := patch.NewHelper(elfMachine, reconciler.Client)
 			Expect(err).ToNot(HaveOccurred())
-			now := metav1.NewTime(time.Now().Add(-infrav1.VMDisconnectionTimeout))
+			now := metav1.NewTime(time.Now().Add(-capev1.VMDisconnectionTimeout))
 			elfMachine.SetVMDisconnectionTimestamp(&now)
 			Expect(patchHelper.Patch(ctx, elfMachine)).To(Succeed())
 			result, err = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).To(BeZero())
 			Expect(err).NotTo(HaveOccurred())
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(*elfMachine.Status.FailureReason).To(Equal(capeerrors.RemovedFromInfrastructureError))
 			Expect(*elfMachine.Status.FailureMessage).To(Equal(fmt.Sprintf("Unable to find VM by UUID %s. The VM was removed from infrastructure.", elfMachine.Status.VMRef)))
@@ -517,7 +520,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.EntityAsyncStatus = nil
 			vm.InRecycleBin = ptr.To[bool](true)
 			elfMachine.Status.VMRef = *vm.LocalID
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -541,7 +544,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task.Status = &status
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -554,11 +557,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("failed to create VM for ElfMachine"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(""))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.TaskFailureReason}})
 		})
 
 		It("should set failure when task with cloud-init config error", func() {
@@ -570,7 +573,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task.ErrorMessage = service.TowerString("Cannot unwrap Ok value of Result.Err.\r\ncode: CREATE_VM_FORM_TEMPLATE_FAILED\r\nmessage: {\"data\":{},\"ec\":\"VM_CLOUD_INIT_CONFIG_ERROR\",\"error\":{\"msg\":\"[VM_CLOUD_INIT_CONFIG_ERROR]The gateway [192.168.31.215] is unreachable. \"}}")
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -582,13 +585,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).To(BeZero())
 			Expect(err).ShouldNot(HaveOccurred())
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(""))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
 			Expect(elfMachine.IsFailed()).To(BeTrue())
 			Expect(*elfMachine.Status.FailureReason).To(Equal(capeerrors.CloudInitConfigError))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.TaskFailureReason}})
 		})
 
 		It("should power on the VM after it is created", func() {
@@ -603,7 +606,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task1.ID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			now := metav1.Now()
 			elfMachine.SetVMFirstBootTimestamp(&now)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -620,11 +623,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be powered on"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task2.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PoweringOnReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.PoweringOnReason}})
 		})
 
 		It("should expand the disk before starting the virtual machine for the first time", func() {
@@ -638,7 +641,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task1.ID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -668,7 +671,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task.Status = &taskStatus
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task.ID
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -681,11 +684,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("The VM is being created"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.ID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.TaskFailureReason}})
 		})
 
 		It("should handle power on error", func() {
@@ -699,7 +702,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task1.ID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			now := metav1.Now()
 			elfMachine.SetVMFirstBootTimestamp(&now)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -715,11 +718,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).To(BeZero())
 			Expect(err.Error()).To(ContainSubstring("failed to trigger power on for VM"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.PoweringOnFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityWarning, capev1.PoweringOnFailedReason}})
 		})
 
 		It(" handle power on task failure", func() {
@@ -734,7 +737,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Status.TaskRef = *task1.ID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			now := metav1.Now()
 			elfMachine.SetVMFirstBootTimestamp(&now)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -752,11 +755,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).To(BeZero())
 			Expect(logBuffer.String()).To(ContainSubstring("task failed"))
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be powered on"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task2.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PoweringOnReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.PoweringOnReason}})
 		})
 
 		It("should power off the VM when vm is in SUSPENDED status", func() {
@@ -771,7 +774,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task1.ID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -786,11 +789,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be powered off"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task2.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PowerOffReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.PowerOffReason}})
 		})
 
 		It("should handle power off error", func() {
@@ -804,7 +807,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachine.Status.VMRef = *vm.ID
 			elfMachine.Status.TaskRef = *task1.ID
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -818,11 +821,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).To(BeZero())
 			Expect(err.Error()).To(ContainSubstring("failed to trigger powering off for VM"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.PoweringOffFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityWarning, capev1.PoweringOffFailedReason}})
 		})
 	})
 
@@ -874,7 +877,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be powered on"))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PoweringOnReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.PoweringOnReason}})
 		})
 
 		It("should shut down the VM when configuration was modified and VM is running", func() {
@@ -893,7 +896,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("The VM configuration has been modified, shut down the VM first and then restore the VM configuration"))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.ShuttingDownReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.ShuttingDownReason}})
 		})
 
 		It("should power off the VM when configuration was modified and shut down failed", func() {
@@ -902,7 +905,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.Status = models.NewVMStatus(models.VMStatusRUNNING)
 			task := fake.NewTowerTask("")
 
-			conditions.MarkFalse(elfMachine, infrav1.VMProvisionedCondition, infrav1.TaskFailureReason, clusterv1.ConditionSeverityInfo, "JOB_VM_SHUTDOWN_TIMEOUT")
+			conditionsv1beta1.MarkFalse(elfMachine, capev1.VMProvisionedCondition, capev1.TaskFailureReason, capiv1beta1.ConditionSeverityInfo, "JOB_VM_SHUTDOWN_TIMEOUT")
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -914,7 +917,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("The VM configuration has been modified, power off the VM first and then restore the VM configuration"))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PowerOffReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.PowerOffReason}})
 		})
 
 		It("should restore the VM configuration when configuration was modified", func() {
@@ -938,7 +941,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("The VM configuration has been modified, and the VM is stopped, just restore the VM configuration to expected values"))
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be updated"))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.UpdatingReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.UpdatingReason}})
 		})
 
 		It("should power off the VM configuration when configuration and VM is suspended", func() {
@@ -956,7 +959,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err := reconciler.reconcileVMStatus(ctx, machineContext, vm)
 			Expect(ok).To(BeFalse())
 			Expect(err).NotTo(HaveOccurred())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PowerOffReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.PowerOffReason}})
 		})
 
 		Context("powerOnVM", func() {
@@ -982,12 +985,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 				err = reconciler.powerOnVM(ctx, machineContext, vm)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(logBuffer.String()).To(ContainSubstring("and the retry silence period passes, will try to power on the VM again"))
-				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.PoweringOnReason}})
+				expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.PoweringOnReason}})
 				resetMemoryCache()
 
 				// GPU
 				unexpectedError := errors.New("unexpected error")
-				elfMachine.Spec.GPUDevices = []infrav1.GPUPassthroughDeviceSpec{{Model: "A16", Count: 1}}
+				elfMachine.Spec.GPUDevices = []capev1.GPUPassthroughDeviceSpec{{Model: "A16", Count: 1}}
 				ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 				fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 				mockVMService.EXPECT().PowerOn(elfMachine.Status.VMRef, *vm.Host.ID).Return(nil, unexpectedError)
@@ -1016,7 +1019,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should update host for standard cluster", func() {
-			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
+			elfCluster.Spec.ClusterType = capev1.ElfClusterTypeStandard
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			machineCtx := &context.MachineContext{
@@ -1032,8 +1035,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should update storage cluster status from the VM volume", func() {
-			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
-			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{StorageClusterID: fake.ID()}
+			elfCluster.Spec.ClusterType = capev1.ElfClusterTypeStandard
+			elfCluster.Spec.StorageCluster = capev1.StorageCluster{StorageClusterID: fake.ID()}
 			storageClusterID := fake.ID()
 			storageClusterName := "storage-cluster-a"
 			vmVolume := fake.NewVMVolume(elfMachine)
@@ -1056,16 +1059,16 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := &ElfMachineReconciler{}
 			err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(elfMachine.Status.StorageCluster).To(Equal(infrav1.StorageClusterStatus{
+			Expect(elfMachine.Status.StorageCluster).To(Equal(capev1.StorageClusterStatus{
 				ClusterID: storageClusterID,
 				Name:      storageClusterName,
 			}))
-			Expect(elfMachine.Status.DataStore).To(Equal(infrav1.DataStoreStatus{}))
+			Expect(elfMachine.Status.DataStore).To(Equal(capev1.DataStoreStatus{}))
 		})
 
 		It("should update datastore status from the VM volume", func() {
-			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
-			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{DatastoreID: fake.ID()}
+			elfCluster.Spec.ClusterType = capev1.ElfClusterTypeStandard
+			elfCluster.Spec.StorageCluster = capev1.StorageCluster{DatastoreID: fake.ID()}
 			dataStoreID := fake.ID()
 			dataStoreName := "datastore-a"
 			vmVolume := fake.NewVMVolume(elfMachine)
@@ -1088,16 +1091,16 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := &ElfMachineReconciler{}
 			err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(elfMachine.Status.StorageCluster).To(Equal(infrav1.StorageClusterStatus{}))
-			Expect(elfMachine.Status.DataStore).To(Equal(infrav1.DataStoreStatus{
+			Expect(elfMachine.Status.StorageCluster).To(Equal(capev1.StorageClusterStatus{}))
+			Expect(elfMachine.Status.DataStore).To(Equal(capev1.DataStoreStatus{
 				DataStoreID: dataStoreID,
 				Name:        dataStoreName,
 			}))
 		})
 
 		It("should tolerate an empty storage volume response", func() {
-			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
-			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{StorageClusterID: fake.ID()}
+			elfCluster.Spec.ClusterType = capev1.ElfClusterTypeStandard
+			elfCluster.Spec.StorageCluster = capev1.StorageCluster{StorageClusterID: fake.ID()}
 			vmVolume := fake.NewVMVolume(elfMachine)
 			vmDisk := fake.NewVMDisk(vmVolume)
 			vm.VMDisks = []*models.NestedVMDisk{{ID: vmDisk.ID}}
@@ -1112,13 +1115,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := &ElfMachineReconciler{}
 			err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(elfMachine.Status.StorageCluster).To(Equal(infrav1.StorageClusterStatus{}))
-			Expect(elfMachine.Status.DataStore).To(Equal(infrav1.DataStoreStatus{}))
+			Expect(elfMachine.Status.StorageCluster).To(Equal(capev1.StorageClusterStatus{}))
+			Expect(elfMachine.Status.DataStore).To(Equal(capev1.DataStoreStatus{}))
 		})
 
 		It("should return an error when storage disks cannot be read", func() {
-			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStandard
-			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{StorageClusterID: fake.ID()}
+			elfCluster.Spec.ClusterType = capev1.ElfClusterTypeStandard
+			elfCluster.Spec.StorageCluster = capev1.StorageCluster{StorageClusterID: fake.ID()}
 			vmDiskID := fake.ID()
 			vm.VMDisks = []*models.NestedVMDisk{{ID: ptr.To(vmDiskID)}}
 			mockVMService.EXPECT().GetVMDisks([]string{vmDiskID}).Return(nil, errors.New("failed to get disks"))
@@ -1135,7 +1138,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should update zone status for stretched cluster", func() {
-			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStretched
+			elfCluster.Spec.ClusterType = capev1.ElfClusterTypeStretched
 			zone := fake.NewTowerPreferredZone()
 			zone.Hosts = []*models.NestedHost{nestedHost}
 			mockVMService.EXPECT().GetClusterZones(elfCluster.Spec.Cluster).Return([]*models.Zone{zone}, nil)
@@ -1152,11 +1155,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(elfMachine.Status.HostServerRef).To(Equal(*host.ID))
 			Expect(elfMachine.Status.HostServerName).To(Equal(*host.Name))
 			Expect(elfMachine.Status.Zone.ZoneID).To(Equal(*zone.ID))
-			Expect(elfMachine.Status.Zone.Type).To(Equal(infrav1.ElfClusterZoneTypePreferred))
+			Expect(elfMachine.Status.Zone.Type).To(Equal(capev1.ElfClusterZoneTypePreferred))
 		})
 
 		It("should update zone status for host in secondary zone", func() {
-			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStretched
+			elfCluster.Spec.ClusterType = capev1.ElfClusterTypeStretched
 			zone := fake.NewTowerSecondaryZone()
 			zone.Hosts = []*models.NestedHost{nestedHost}
 			mockVMService.EXPECT().GetClusterZones(elfCluster.Spec.Cluster).Return([]*models.Zone{zone}, nil)
@@ -1173,11 +1176,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(elfMachine.Status.HostServerRef).To(Equal(*host.ID))
 			Expect(elfMachine.Status.HostServerName).To(Equal(*host.Name))
 			Expect(elfMachine.Status.Zone.ZoneID).To(Equal(*zone.ID))
-			Expect(elfMachine.Status.Zone.Type).To(Equal(infrav1.ElfClusterZoneTypeSecondary))
+			Expect(elfMachine.Status.Zone.Type).To(Equal(capev1.ElfClusterZoneTypeSecondary))
 		})
 
 		It("should return error when host zone not found", func() {
-			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStretched
+			elfCluster.Spec.ClusterType = capev1.ElfClusterTypeStretched
 			mockVMService.EXPECT().GetClusterZones(elfCluster.Spec.Cluster).Return([]*models.Zone{}, nil)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -1195,7 +1198,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should return error when GetClusterZones failed", func() {
-			elfCluster.Spec.ClusterType = infrav1.ElfClusterTypeStretched
+			elfCluster.Spec.ClusterType = capev1.ElfClusterTypeStretched
 			mockVMService.EXPECT().GetClusterZones(elfCluster.Spec.Cluster).Return(nil, errors.New("failed to get zones"))
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -1215,9 +1218,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 	Context("Reconcile Join Placement Group", func() {
 		BeforeEach(func() {
-			cluster.Status.InfrastructureReady = true
-			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
-			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
+			cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(true)
+			conditions.Set(cluster, metav1.Condition{Type: capiv1.ClusterControlPlaneInitializedCondition, Status: metav1.ConditionTrue})
+			machine.Spec.Bootstrap = capiv1.Bootstrap{DataSecretName: &secret.Name}
 		})
 
 		It("should add vm to the placement group", func() {
@@ -1296,7 +1299,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			placementGroup1 := fake.NewVMPlacementGroup(nil)
 			placementGroup2 := fake.NewVMPlacementGroup(nil)
 			placementGroup2.EntityAsyncStatus = models.EntityAsyncStatusUPDATING.Pointer()
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -1309,10 +1312,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).To(BeZero())
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for placement group task done"))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.JoiningPlacementGroupReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.JoiningPlacementGroupReason}})
 		})
 
 		It("should handle placement group error", func() {
@@ -1322,7 +1325,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.Status = &status
 			elfMachine.Status.VMRef = *vm.LocalID
 			placementGroup := fake.NewVMPlacementGroup(nil)
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -1335,17 +1338,17 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).To(BeZero())
 			Expect(err).To(HaveOccurred())
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.JoiningPlacementGroupFailedReason}})
-			Expect(conditions.GetMessage(elfMachine, infrav1.VMProvisionedCondition)).To(Equal("some error"))
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityWarning, capev1.JoiningPlacementGroupFailedReason}})
+			Expect(conditionsv1beta1.GetMessage(elfMachine, capev1.VMProvisionedCondition)).To(Equal("some error"))
 		})
 
 		Context("Reconcile Placement Group - Control Plane", func() {
 			BeforeEach(func() {
-				cluster.Status.InfrastructureReady = true
-				conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
-				machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
+				cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(true)
+				conditions.Set(cluster, metav1.Condition{Type: capiv1.ClusterControlPlaneInitializedCondition, Status: metav1.ConditionTrue})
+				machine.Spec.Bootstrap = capiv1.Bootstrap{DataSecretName: &secret.Name}
 				fake.ToCPMachine(machine, kcp)
 				fake.ToCPMachine(elfMachine, kcp)
 			})
@@ -1354,8 +1357,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				elfCluster.Spec.StorageCluster.DatastoreID = "datastore"
 				kcp.Spec.Replicas = ptr.To[int32](1)
 				placementGroup := fake.NewVMPlacementGroup(nil)
-				kcp.Status.Replicas = *kcp.Spec.Replicas
-				kcp.Status.UpdatedReplicas = *kcp.Spec.Replicas
+				kcp.Status.Replicas = kcp.Spec.Replicas
+				kcp.Status.UpToDateReplicas = kcp.Spec.Replicas
 				ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kcp)
 				fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 				machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -1367,7 +1370,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				hostID, err := reconciler.preCheckPlacementGroup(ctx, machineContext)
 				Expect(err).To(MatchError(service.HostNotFound))
 				Expect(hostID).To(BeNil())
-				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForAvailableHostRequiredByPlacementGroupReason}})
+				expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForAvailableHostRequiredByPlacementGroupReason}})
 			})
 
 			It("should not count a running VM host excluded by the VCFS datastore filter as available", func() {
@@ -1380,8 +1383,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				placementGroup := fake.NewVMPlacementGroup([]string{fake.UUID()})
 				usedVM := fake.NewTowerVM()
 				usedVM.Host = &models.NestedHost{ID: host.ID, Name: host.Name}
-				kcp.Status.Replicas = *kcp.Spec.Replicas
-				kcp.Status.UpdatedReplicas = *kcp.Spec.Replicas
+				kcp.Status.Replicas = kcp.Spec.Replicas
+				kcp.Status.UpToDateReplicas = kcp.Spec.Replicas
 				ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kcp)
 				fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 				machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -1434,9 +1437,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				vm2.Host = &models.NestedHost{ID: host.ID, Name: host.Name}
 				placementGroup := fake.NewVMPlacementGroup([]string{*vm2.ID})
 				kcp.Spec.Replicas = ptr.To[int32](1)
-				kcp.Status.Replicas = 2
-				kcp.Status.UpdatedReplicas = 1
-				conditions.MarkFalse(kcp, controlplanev1.MachinesSpecUpToDateCondition, controlplanev1.RollingUpdateInProgressReason, clusterv1.ConditionSeverityWarning, "")
+				kcp.Status.Replicas = ptr.To[int32](2)
+				kcp.Status.UpToDateReplicas = ptr.To[int32](1)
 				ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
 				machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -1481,8 +1483,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
 				kcp.Spec.Replicas = ptr.To[int32](1)
-				kcp.Status.Replicas = 1
-				kcp.Status.UpdatedReplicas = 1
+				kcp.Status.Replicas = ptr.To[int32](1)
+				kcp.Status.UpToDateReplicas = ptr.To[int32](1)
 				ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
 				machineContext = newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -1550,9 +1552,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				newCP2.Host = &models.NestedHost{ID: service.TowerString(*host1.ID)}
 				placementGroup := fake.NewVMPlacementGroup([]string{*oldCP3.ID, *newCP2.ID})
 				kcp.Spec.Replicas = ptr.To[int32](3)
-				kcp.Status.UpdatedReplicas = 3
-				kcp.Status.Replicas = 4
-				conditions.MarkFalse(kcp, controlplanev1.MachinesSpecUpToDateCondition, controlplanev1.RollingUpdateInProgressReason, clusterv1.ConditionSeverityWarning, "")
+				kcp.Status.UpToDateReplicas = ptr.To[int32](3)
+				kcp.Status.Replicas = ptr.To[int32](4)
 				ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, kcp)
 				machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -1607,8 +1608,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				task := fake.NewTowerTask("")
 				withTaskVM := fake.NewWithTaskVM(vm1, task)
 				kcp.Spec.Replicas = ptr.To[int32](3)
-				kcp.Status.Replicas = 3
-				kcp.Status.UpdatedReplicas = 3
+				kcp.Status.Replicas = ptr.To[int32](3)
+				kcp.Status.UpToDateReplicas = ptr.To[int32](3)
 
 				ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2)
 				machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -1628,7 +1629,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
 				Expect(logBuffer.String()).To(ContainSubstring("Start migrating VM since KCP is not in rolling update process"))
 				Expect(logBuffer.String()).To(ContainSubstring("Waiting for the VM to be migrated from"))
-				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.JoiningPlacementGroupReason}})
+				expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.JoiningPlacementGroupReason}})
 
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
@@ -1680,9 +1681,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 	Context("Pre Check Placement Group", func() {
 		BeforeEach(func() {
-			cluster.Status.InfrastructureReady = true
-			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
-			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
+			cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(true)
+			conditions.Set(cluster, metav1.Condition{Type: capiv1.ClusterControlPlaneInitializedCondition, Status: metav1.ConditionTrue})
+			machine.Spec.Bootstrap = capiv1.Bootstrap{DataSecretName: &secret.Name}
 			fake.ToCPMachine(machine, kcp)
 			fake.ToCPMachine(elfMachine, kcp)
 		})
@@ -1707,8 +1708,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				placementGroup := fake.NewVMPlacementGroup([]string{})
 				placementGroup.Vms = []*models.NestedVM{}
 				kcp.Spec.Replicas = ptr.To[int32](3)
-				kcp.Status.Replicas = 3
-				kcp.Status.UpdatedReplicas = 3
+				kcp.Status.Replicas = ptr.To[int32](3)
+				kcp.Status.UpToDateReplicas = ptr.To[int32](3)
 				ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2, elfMachine3, machine3)
 				machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -1778,9 +1779,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 					{ID: vm3.ID, Name: vm3.Name},
 				}
 				kcp.Spec.Replicas = ptr.To[int32](3)
-				kcp.Status.Replicas = 4
-				kcp.Status.UpdatedReplicas = 1
-				conditions.MarkFalse(kcp, controlplanev1.MachinesSpecUpToDateCondition, controlplanev1.RollingUpdateInProgressReason, clusterv1.ConditionSeverityWarning, "")
+				kcp.Status.Replicas = ptr.To[int32](4)
+				kcp.Status.UpToDateReplicas = ptr.To[int32](1)
 				ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2, elfMachine3, machine3)
 				machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
 				fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -1848,8 +1848,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				logBuffer = new(bytes.Buffer)
 				klog.SetOutput(logBuffer)
 				kcp.Spec.Replicas = ptr.To[int32](5)
-				kcp.Status.Replicas = 6
-				kcp.Status.UpdatedReplicas = 4
+				kcp.Status.Replicas = ptr.To[int32](6)
+				kcp.Status.UpToDateReplicas = ptr.To[int32](4)
 				ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kcp, elfMachine1, machine1, elfMachine2, machine2, elfMachine3, machine3)
 				machineContext = newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
 				mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
@@ -1928,7 +1928,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		Context("Scale", func() {
 			It("kcp scale up", func() {
 				kcp.Spec.Replicas = ptr.To[int32](2)
-				kcp.Status.Replicas = 1
+				kcp.Status.Replicas = ptr.To[int32](1)
 				host1 := fake.NewTowerHost()
 				host2 := fake.NewTowerHost()
 				elfMachine1, machine1 := fake.NewMachineObjects(elfCluster, cluster)
@@ -1965,7 +1965,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(err).To(BeZero())
 				Expect(hostID).To(BeNil())
 				Expect(logBuffer.String()).To(ContainSubstring("KCP is not in rolling update and not in scaling down, the placement group is full, so wait for enough available hosts"))
-				expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForAvailableHostRequiredByPlacementGroupReason}})
+				expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForAvailableHostRequiredByPlacementGroupReason}})
 
 				elfMachine.Status.Conditions = nil
 				mockVMService.EXPECT().GetVMPlacementGroup(placementGroupName).Return(placementGroup, nil)
@@ -1992,9 +1992,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 			It("kcp scale down", func() {
 				kcp.Spec.Replicas = ptr.To[int32](1)
-				kcp.Status.Replicas = 2
-				kcp.Status.UpdatedReplicas = kcp.Status.Replicas
-				conditions.MarkFalse(kcp, controlplanev1.ResizedCondition, controlplanev1.ScalingDownReason, clusterv1.ConditionSeverityWarning, "")
+				kcp.Status.Replicas = ptr.To[int32](2)
+				kcp.Status.UpToDateReplicas = kcp.Status.Replicas
+				conditions.Set(kcp, metav1.Condition{
+					Type:   controlplanev1.KubeadmControlPlaneScalingDownCondition,
+					Status: metav1.ConditionTrue,
+					Reason: controlplanev1.KubeadmControlPlaneScalingDownReason,
+				})
 				host := fake.NewTowerHost()
 				elfMachine1, machine1 := fake.NewMachineObjects(elfCluster, cluster)
 				fake.ToCPMachine(machine1, kcp)
@@ -2021,7 +2025,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				Expect(hostID).To(BeNil())
 				Expect(logBuffer.String()).To(ContainSubstring("Add the delete machine annotation on KCP Machine in order to delete it"))
 				Expect(reconciler.Client.Get(ctx, capiutil.ObjectKey(machine), machine)).To(Succeed())
-				Expect(machine.Annotations).Should(HaveKey(clusterv1.DeleteMachineAnnotation))
+				Expect(machine.Annotations).Should(HaveKey(capiv1.DeleteMachineAnnotation))
 			})
 		})
 	})
@@ -2118,11 +2122,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 				{
 					name: "Spec ProviderID takes precedence",
 					machineCtx: &context.MachineContext{
-						ElfMachine: &infrav1.ElfMachine{
-							Spec: infrav1.ElfMachineSpec{
+						ElfMachine: &capev1.ElfMachine{
+							Spec: capev1.ElfMachineSpec{
 								ProviderID: ptr.To(otherProviderID),
 							},
-							Status: infrav1.ElfMachineStatus{
+							Status: capev1.ElfMachineStatus{
 								VMRef: vmRef,
 							},
 						},
@@ -2132,11 +2136,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 				{
 					name: "empty Spec ProviderID falls back to VMRef",
 					machineCtx: &context.MachineContext{
-						ElfMachine: &infrav1.ElfMachine{
-							Spec: infrav1.ElfMachineSpec{
+						ElfMachine: &capev1.ElfMachine{
+							Spec: capev1.ElfMachineSpec{
 								ProviderID: ptr.To(""),
 							},
-							Status: infrav1.ElfMachineStatus{
+							Status: capev1.ElfMachineStatus{
 								VMRef: vmRef,
 							},
 						},
@@ -2146,8 +2150,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				{
 					name: "nil Spec ProviderID falls back to VMRef",
 					machineCtx: &context.MachineContext{
-						ElfMachine: &infrav1.ElfMachine{
-							Status: infrav1.ElfMachineStatus{
+						ElfMachine: &capev1.ElfMachine{
+							Status: capev1.ElfMachineStatus{
 								VMRef: vmRef,
 							},
 						},
@@ -2157,8 +2161,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 				{
 					name: "invalid VMRef returns empty string",
 					machineCtx: &context.MachineContext{
-						ElfMachine: &infrav1.ElfMachine{
-							Status: infrav1.ElfMachineStatus{
+						ElfMachine: &capev1.ElfMachine{
+							Status: capev1.ElfMachineStatus{
 								VMRef: "not-a-uuid",
 							},
 						},
@@ -2176,9 +2180,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 	Context("Reconcile ElfMachine network", func() {
 		BeforeEach(func() {
-			cluster.Status.InfrastructureReady = true
-			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
-			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
+			cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(true)
+			conditions.Set(cluster, metav1.Condition{Type: capiv1.ClusterControlPlaneInitializedCondition, Status: metav1.ConditionTrue})
+			machine.Spec.Bootstrap = capiv1.Bootstrap{DataSecretName: &secret.Name}
 		})
 
 		Context("reconcileHostAndZone", func() {
@@ -2192,7 +2196,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 				err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(machineCtx.ElfMachine.Status.ComputeCluster).To(Equal(infrav1.ComputeClusterStatus{
+				Expect(machineCtx.ElfMachine.Status.ComputeCluster).To(Equal(capev1.ComputeClusterStatus{
 					ClusterID: computeClusterID,
 					Name:      computeClusterName,
 				}))
@@ -2204,7 +2208,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 				computeClusterID := fake.ID()
 				computeClusterName := "compute-cluster-a"
 				vm.Cluster = &models.NestedCluster{ID: service.TowerString(computeClusterID), Name: service.TowerString(computeClusterName)}
-				elfMachine.Status.ComputeCluster = infrav1.ComputeClusterStatus{
+				elfMachine.Status.ComputeCluster = capev1.ComputeClusterStatus{
 					ClusterID: computeClusterID,
 					Name:      computeClusterName,
 				}
@@ -2213,7 +2217,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 				err := reconciler.reconcileHostAndZone(ctx, machineCtx, vm)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(machineCtx.ElfMachine.Status.ComputeCluster).To(Equal(infrav1.ComputeClusterStatus{
+				Expect(machineCtx.ElfMachine.Status.ComputeCluster).To(Equal(capev1.ComputeClusterStatus{
 					ClusterID: computeClusterID,
 					Name:      computeClusterName,
 				}))
@@ -2221,8 +2225,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should wait VM network ready", func() {
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineStaticIPFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineStaticIPFinalizer)
 			vm := fake.NewTowerVMFromElfMachine(elfMachine)
 			providerID := machineutil.ConvertUUIDToProviderID(*vm.LocalID)
 			vm.EntityAsyncStatus = nil
@@ -2248,9 +2252,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			}
 
 			// test elfMachine has one network device with DHCP type
-			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
+			elfMachine.Spec.Network.Devices = []capev1.NetworkDeviceSpec{
 				{
-					NetworkType: infrav1.NetworkTypeIPV4DHCP,
+					NetworkType: capev1.NetworkTypeIPV4DHCP,
 				},
 			}
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
@@ -2279,7 +2283,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
-			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForNetworkAddressesReason}})
 			logBuffer.Reset()
 
 			// k8s node IP is null, VM has one nic IP
@@ -2300,7 +2304,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
-			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForNetworkAddressesReason}})
 			logBuffer.Reset()
 
 			patchNodeAddresses([]corev1.NodeAddress{
@@ -2317,7 +2321,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
-			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForNetworkAddressesReason}})
 			logBuffer.Reset()
 
 			patchNodeAddresses([]corev1.NodeAddress{
@@ -2337,10 +2341,10 @@ var _ = Describe("ElfMachineReconciler", func() {
 			logBuffer.Reset()
 
 			// test elfMachine has one network device with IPV4 type
-			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
+			elfMachine.Spec.Network.Devices = []capev1.NetworkDeviceSpec{
 				{
 					IPAddrs:     []string{"127.0.0.1"},
-					NetworkType: infrav1.NetworkTypeIPV4,
+					NetworkType: capev1.NetworkTypeIPV4,
 				},
 			}
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
@@ -2363,7 +2367,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
-			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForNetworkAddressesReason}})
 			logBuffer.Reset()
 
 			// k8s node IP is null, VM has one nic IP
@@ -2401,13 +2405,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 			logBuffer.Reset()
 
 			// test elfMachine has two network device, one is IPV4 type.
-			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
+			elfMachine.Spec.Network.Devices = []capev1.NetworkDeviceSpec{
 				{
-					NetworkType: infrav1.NetworkTypeIPV4,
+					NetworkType: capev1.NetworkTypeIPV4,
 					IPAddrs:     []string{"127.0.0.1"},
 				},
 				{
-					NetworkType: infrav1.NetworkTypeIPV4DHCP,
+					NetworkType: capev1.NetworkTypeIPV4DHCP,
 				},
 			}
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
@@ -2432,7 +2436,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
-			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForNetworkAddressesReason}})
 			logBuffer.Reset()
 
 			// k8s node IP is null, VM has two nic IP
@@ -2464,7 +2468,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
-			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForNetworkAddressesReason}})
 			logBuffer.Reset()
 
 			patchNodeAddresses([]corev1.NodeAddress{
@@ -2486,13 +2490,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 			logBuffer.Reset()
 
 			// test elfMachine has two network device, all network device are IPV4 type
-			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
+			elfMachine.Spec.Network.Devices = []capev1.NetworkDeviceSpec{
 				{
-					NetworkType: infrav1.NetworkTypeIPV4,
+					NetworkType: capev1.NetworkTypeIPV4,
 					IPAddrs:     []string{"127.0.0.1"},
 				},
 				{
-					NetworkType: infrav1.NetworkTypeIPV4,
+					NetworkType: capev1.NetworkTypeIPV4,
 					IPAddrs:     []string{"127.0.0.2"},
 				},
 			}
@@ -2518,7 +2522,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
-			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForNetworkAddressesReason}})
 			logBuffer.Reset()
 
 			// k8s node IP is null, VM has two nic IP
@@ -2551,12 +2555,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 			logBuffer.Reset()
 
 			// test elfMachine has two network device, all network device are DHCP type
-			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
+			elfMachine.Spec.Network.Devices = []capev1.NetworkDeviceSpec{
 				{
-					NetworkType: infrav1.NetworkTypeIPV4DHCP,
+					NetworkType: capev1.NetworkTypeIPV4DHCP,
 				},
 				{
-					NetworkType: infrav1.NetworkTypeIPV4DHCP,
+					NetworkType: capev1.NetworkTypeIPV4DHCP,
 				},
 			}
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
@@ -2570,7 +2574,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(ok).To(BeFalse())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("VM network is not ready yet"))
-			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNetworkAddressesReason}})
+			expectConditions(machineCtx.ElfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForNetworkAddressesReason}})
 			logBuffer.Reset()
 
 			patchNodeAddresses([]corev1.NodeAddress{
@@ -2592,15 +2596,15 @@ var _ = Describe("ElfMachineReconciler", func() {
 			logBuffer.Reset()
 
 			// test elfMachine has 3 network device, one network device is None type, other are DHCP type
-			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
+			elfMachine.Spec.Network.Devices = []capev1.NetworkDeviceSpec{
 				{
-					NetworkType: infrav1.NetworkTypeIPV4DHCP,
+					NetworkType: capev1.NetworkTypeIPV4DHCP,
 				},
 				{
-					NetworkType: infrav1.NetworkTypeIPV4DHCP,
+					NetworkType: capev1.NetworkTypeIPV4DHCP,
 				},
 				{
-					NetworkType: infrav1.NetworkTypeNone,
+					NetworkType: capev1.NetworkTypeNone,
 				},
 			}
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
@@ -2627,7 +2631,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			nic0 := fake.NewTowerVMNic(0)
 			nic1 := fake.NewTowerVMNic(1)
 			placementGroup := fake.NewVMPlacementGroup([]string{*vm.ID})
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md, kubeConfigSecret)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 
@@ -2653,16 +2657,16 @@ var _ = Describe("ElfMachineReconciler", func() {
 			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService, ClusterCache: clusterCache}
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, _ = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.Network).To(HaveLen(2))
-			Expect(elfMachine.Status.Network[0]).To(Equal(infrav1.NetworkStatus{
+			Expect(elfMachine.Status.Network[0]).To(Equal(capev1.NetworkStatus{
 				IPAddrs:    []string{service.GetTowerString(nic0.IPAddress)},
 				MACAddr:    service.GetTowerString(nic0.MacAddress),
 				Gateway:    service.GetTowerString(nic0.Gateway),
 				SubnetMask: service.GetTowerString(nic0.SubnetMask),
 			}))
-			Expect(elfMachine.Status.Network[1]).To(Equal(infrav1.NetworkStatus{
+			Expect(elfMachine.Status.Network[1]).To(Equal(capev1.NetworkStatus{
 				IPAddrs:    []string{service.GetTowerString(nic1.IPAddress)},
 				MACAddr:    service.GetTowerString(nic1.MacAddress),
 				Gateway:    service.GetTowerString(nic1.Gateway),
@@ -2670,37 +2674,37 @@ var _ = Describe("ElfMachineReconciler", func() {
 			}))
 			Expect(elfMachine.Status.Addresses).To(HaveLen(2))
 			Expect(elfMachine.Status.Addresses).To(ConsistOf(
-				clusterv1.MachineAddress{
-					Type:    clusterv1.MachineInternalIP,
+				capiv1beta1.MachineAddress{
+					Type:    capiv1beta1.MachineInternalIP,
 					Address: service.GetTowerString(nic0.IPAddress),
 				},
-				clusterv1.MachineAddress{
-					Type:    clusterv1.MachineInternalIP,
+				capiv1beta1.MachineAddress{
+					Type:    capiv1beta1.MachineInternalIP,
 					Address: service.GetTowerString(nic1.IPAddress),
 				},
 			))
 			Expect(elfMachine.Status.Ready).To(BeTrue())
-			expectConditions(elfMachine, []conditionAssertion{{conditionType: infrav1.VMProvisionedCondition, status: corev1.ConditionTrue}})
+			expectConditions(elfMachine, []conditionAssertion{{conditionType: capev1.VMProvisionedCondition, status: corev1.ConditionTrue}})
 		})
 	})
 
 	Context("Delete an ElfMachine", func() {
 		BeforeEach(func() {
-			cluster.Status.InfrastructureReady = true
-			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
-			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
+			cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(true)
+			conditions.Set(cluster, metav1.Condition{Type: capiv1.ClusterControlPlaneInitializedCondition, Status: metav1.ConditionTrue})
+			machine.Spec.Bootstrap = capiv1.Bootstrap{DataSecretName: &secret.Name}
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
 			elfMachine.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
 			elfMachine.Spec.VGPUDevices = nil
 			elfCluster.Spec.VMGracefulShutdown = true
 		})
 
 		It("should delete ElfMachine when tower is out of service and cluster need to force delete", func() {
-			mockNewVMService = func(_ goctx.Context, _ client.Client, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+			mockNewVMService = func(_ goctx.Context, _ client.Client, _ capev1.Tower, _ logr.Logger) (service.VMService, error) {
 				return mockVMService, errors.New("get vm service failed")
 			}
 			elfCluster.Annotations = map[string]string{
-				infrav1.ElfClusterForceDeleteAnnotation: "",
+				capev1.ElfClusterForceDeleteAnnotation: "",
 			}
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -2711,13 +2715,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result).To(BeZero())
 			Expect(err).To(Succeed())
 			Expect(logBuffer.String()).To(ContainSubstring("Skip VM deletion due to the force-delete-cluster annotation"))
-			elfCluster = &infrav1.ElfCluster{}
+			elfCluster = &capev1.ElfCluster{}
 			err = reconciler.Client.Get(ctx, elfMachineKey, elfCluster)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
 		It("should delete ElfMachine failed when tower is out of service", func() {
-			mockNewVMService = func(_ goctx.Context, _ client.Client, _ infrav1.Tower, _ logr.Logger) (service.VMService, error) {
+			mockNewVMService = func(_ goctx.Context, _ client.Client, _ capev1.Tower, _ logr.Logger) (service.VMService, error) {
 				return mockVMService, errors.New("get vm service failed")
 			}
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -2729,7 +2733,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result).To(BeZero())
 			Expect(err).To(HaveOccurred())
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-			Expect(elfMachine.Finalizers).To(ContainElement(infrav1.MachineFinalizer))
+			Expect(elfMachine.Finalizers).To(ContainElement(capev1.MachineFinalizer))
 		})
 
 		It("should delete ElfMachine when vmRef is empty and VM not found", func() {
@@ -2743,7 +2747,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result).To(BeZero())
 			Expect(err).To(Succeed())
 			Expect(logBuffer.String()).To(ContainSubstring("VM already deleted"))
-			elfCluster = &infrav1.ElfCluster{}
+			elfCluster = &capev1.ElfCluster{}
 			err = reconciler.Client.Get(ctx, elfMachineKey, elfCluster)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
@@ -2764,7 +2768,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM task done"))
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be deleted"))
-			elfCluster = &infrav1.ElfCluster{}
+			elfCluster = &capev1.ElfCluster{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.ID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
@@ -2789,11 +2793,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).To(BeZero())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM shut down"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capiv1.DeletingReason}})
 		})
 
 		It("should remove vmRef when VM not found", func() {
@@ -2814,7 +2818,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result).To(BeZero())
 			Expect(err).To(Succeed())
 			Expect(logBuffer.String()).To(ContainSubstring("VM already deleted"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			err = reconciler.Client.Get(ctx, elfMachineKey, elfMachine)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
@@ -2841,9 +2845,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).To(BeZero())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM task done"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capiv1.DeletingReason}})
 		})
 
 		It("should handle task - failed", func() {
@@ -2867,12 +2871,12 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, _ = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(logBuffer.String()).To(ContainSubstring("VM task failed"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, clusterv1.DeletionFailedReason}})
-			Expect(conditions.GetMessage(elfMachine, infrav1.VMProvisionedCondition)).To(Equal("some error"))
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityWarning, capiv1beta1.DeletionFailedReason}})
+			Expect(conditionsv1beta1.GetMessage(elfMachine, capev1.VMProvisionedCondition)).To(Equal("some error"))
 		})
 
 		It("should power off when VM is powered on and shut down failed", func() {
@@ -2899,11 +2903,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).To(BeZero())
 			Expect(logBuffer.String()).To(ContainSubstring("VM task failed"))
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM shut down"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
-			Expect(conditions.GetMessage(elfMachine, infrav1.VMProvisionedCondition)).To(Equal("JOB_VM_SHUTDOWN_TIMEOUT"))
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.TaskFailureReason}})
+			Expect(conditionsv1beta1.GetMessage(elfMachine, capev1.VMProvisionedCondition)).To(Equal("JOB_VM_SHUTDOWN_TIMEOUT"))
 		})
 
 		It("should power off when the VM which required vGPU devices is powered on and shut down failed", func() {
@@ -2930,11 +2934,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).To(BeZero())
 			Expect(logBuffer.String()).To(ContainSubstring("VM task failed"))
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM shut down"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
-			Expect(conditions.GetMessage(elfMachine, infrav1.VMProvisionedCondition)).To(Equal("JOB_VM_SHUTDOWN_TIMEOUT"))
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.TaskFailureReason}})
+			Expect(conditionsv1beta1.GetMessage(elfMachine, capev1.VMProvisionedCondition)).To(Equal("JOB_VM_SHUTDOWN_TIMEOUT"))
 		})
 
 		It("should handle task - done", func() {
@@ -2957,11 +2961,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			elfMachineKey := capiutil.ObjectKey(elfMachine)
 			_, _ = reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(logBuffer.String()).To(ContainSubstring("VM task succeeded"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(""))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, clusterv1.DeletionFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityWarning, capiv1beta1.DeletionFailedReason}})
 		})
 
 		It("should shut down when VM is powered on", func() {
@@ -2982,11 +2986,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).To(BeZero())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM shut down"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capiv1.DeletingReason}})
 		})
 
 		It("should shutdown VM when the VM which required vGPU devices is powered on and cluster VMGracefulShutdown is false", func() {
@@ -2994,7 +2998,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.EntityAsyncStatus = nil
 			task := fake.NewTowerTask("")
 			elfMachine.Status.VMRef = *vm.LocalID
-			elfMachine.Spec.VGPUDevices = []infrav1.VGPUDeviceSpec{{}}
+			elfMachine.Spec.VGPUDevices = []capev1.VGPUDeviceSpec{{}}
 			elfCluster.Spec.VMGracefulShutdown = false
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -3009,11 +3013,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).To(BeZero())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM shut down"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capiv1.DeletingReason}})
 		})
 
 		It("should handle delete error", func() {
@@ -3036,9 +3040,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).To(BeZero())
 			Expect(err).ToNot(BeZero())
 			Expect(logBuffer.String()).To(ContainSubstring("Destroying VM"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, clusterv1.DeletionFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityWarning, capiv1beta1.DeletionFailedReason}})
 		})
 
 		It("should delete when VM is not running", func() {
@@ -3062,11 +3066,11 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).To(BeZero())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be deleted"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capiv1.DeletingReason}})
 		})
 
 		It("should power off when VM is running and VMGracefulShutdown is false", func() {
@@ -3090,16 +3094,16 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).To(BeZero())
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM shut down"))
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capiv1.DeletingReason}})
 		})
 
 		It("should delete placement group when the deployment is deleted", func() {
 			cluster.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
-			cluster.Finalizers = append(cluster.Finalizers, clusterv1.ClusterFinalizer)
+			cluster.Finalizers = append(cluster.Finalizers, capiv1.ClusterFinalizer)
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -3138,7 +3142,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			md.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
-			md.Finalizers = append(md.Finalizers, clusterv1.ClusterFinalizer)
+			md.Finalizers = append(md.Finalizers, capiv1.ClusterFinalizer)
 			ctrlMgrCtx = fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			machineContext = newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
@@ -3197,7 +3201,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			task := fake.NewTowerTask("")
 			elfMachine.Status.VMRef = *vm.LocalID
 			Expect(elfMachine.Spec.ProviderID).To(BeNil())
-			cluster.Status.ControlPlaneReady = true
+			cluster.Status.Initialization.ControlPlaneInitialized = ptr.To(true)
+			conditions.Set(cluster, metav1.Condition{Type: capiv1.ClusterControlPlaneAvailableCondition, Status: metav1.ConditionTrue})
 
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			ctrlMgrCtx.Client = testEnv.Client
@@ -3240,13 +3245,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be deleted"))
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capiv1.DeletingReason}})
 		})
 
 		It("should skip deleting k8s node when providerID is unavailable", func() {
 			vm := fake.NewTowerVM()
 			elfMachine.Status.VMRef = *vm.ID
-			cluster.Status.ControlPlaneReady = true
+			cluster.Status.Initialization.ControlPlaneInitialized = ptr.To(true)
 
 			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
 			reconciler := &ElfMachineReconciler{}
@@ -3265,9 +3270,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.Status = &status
 			task := fake.NewTowerTask("")
 			elfMachine.Status.VMRef = *vm.LocalID
-			cluster.Status.ControlPlaneReady = true
+			cluster.Status.Initialization.ControlPlaneInitialized = ptr.To(true)
 			cluster.DeletionTimestamp = &metav1.Time{Time: time.Now().UTC()}
-			cluster.Finalizers = append(cluster.Finalizers, clusterv1.ClusterFinalizer)
+			cluster.Finalizers = append(cluster.Finalizers, capiv1.ClusterFinalizer)
 			mockVMService.EXPECT().FindVMsByName(elfMachine.Name).Return(nil, nil)
 
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -3308,7 +3313,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be deleted"))
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capiv1.DeletingReason}})
 		})
 
 		It("should not delete k8s node when control plane is not ready", func() {
@@ -3318,7 +3323,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.Status = &status
 			task := fake.NewTowerTask("")
 			elfMachine.Status.VMRef = *vm.LocalID
-			cluster.Status.ControlPlaneReady = false
+			cluster.Status.Initialization.ControlPlaneInitialized = ptr.To(false)
 
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			ctrlMgrCtx.Client = testEnv.Client
@@ -3359,7 +3364,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(logBuffer.String()).To(ContainSubstring("Waiting for VM to be deleted"))
 			Expect(elfMachine.Status.VMRef).To(Equal(*vm.LocalID))
 			Expect(elfMachine.Status.TaskRef).To(Equal(*task.ID))
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, clusterv1.DeletingReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capiv1.DeletingReason}})
 		})
 
 		It("should handle error when delete k8s node failed", func() {
@@ -3370,7 +3375,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 			vm.Status = &status
 			elfMachine.Status.VMRef = *vm.LocalID
 			elfMachine.Spec.ProviderID = ptr.To(providerID)
-			cluster.Status.ControlPlaneReady = true
+			cluster.Status.Initialization.ControlPlaneInitialized = ptr.To(true)
+			conditions.Set(cluster, metav1.Condition{Type: capiv1.ClusterControlPlaneAvailableCondition, Status: metav1.ConditionTrue})
 
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			ctrlMgrCtx.Client = testEnv.Client
@@ -3403,9 +3409,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 	Context("Reconcile Placement Group", func() {
 		BeforeEach(func() {
-			cluster.Status.InfrastructureReady = true
-			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
-			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
+			cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(true)
+			conditions.Set(cluster, metav1.Condition{Type: capiv1.ClusterControlPlaneInitializedCondition, Status: metav1.ConditionTrue})
+			machine.Spec.Bootstrap = capiv1.Bootstrap{DataSecretName: &secret.Name}
 		})
 
 		It("should makes sure that the placement group exist", func() {
@@ -3532,9 +3538,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 	Context("Reconcile static IP allocation", func() {
 		BeforeEach(func() {
-			cluster.Status.InfrastructureReady = true
-			conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
-			machine.Spec.Bootstrap = clusterv1.Bootstrap{DataSecretName: &secret.Name}
+			cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(true)
+			conditions.Set(cluster, metav1.Condition{Type: capiv1.ClusterControlPlaneInitializedCondition, Status: metav1.ConditionTrue})
+			machine.Spec.Bootstrap = capiv1.Bootstrap{DataSecretName: &secret.Name}
 		})
 
 		It("should wait for MachineFinalizer", func() {
@@ -3548,17 +3554,17 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(result.RequeueAfter).NotTo(BeZero())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-			Expect(elfMachine.Finalizers).To(Equal([]string{infrav1.MachineFinalizer}))
+			Expect(elfMachine.Finalizers).To(Equal([]string{capev1.MachineFinalizer}))
 
-			err = patchutil.AddFinalizerWithOptimisticLock(ctx, reconciler.Client, originalElfMachine, infrav1.MachineFinalizer)
+			err = patchutil.AddFinalizerWithOptimisticLock(ctx, reconciler.Client, originalElfMachine, capev1.MachineFinalizer)
 			Expect(err).To(HaveOccurred())
 			Expect(apierrors.IsConflict(err)).To(BeTrue())
 		})
 
 		It("should wait for MachineStaticIPFinalizer", func() {
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
-			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
-				{NetworkType: infrav1.NetworkTypeIPV4},
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
+			elfMachine.Spec.Network.Devices = []capev1.NetworkDeviceSpec{
+				{NetworkType: capev1.NetworkTypeIPV4},
 			}
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -3572,41 +3578,41 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should wait for IP allocation", func() {
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineStaticIPFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineStaticIPFinalizer)
 			placementGroup := fake.NewVMPlacementGroup([]string{fake.ID()})
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Times(3).Return(placementGroup, nil)
 
 			// one IPV4 device without ipAddrs
-			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
-				{NetworkType: infrav1.NetworkTypeIPV4},
+			elfMachine.Spec.Network.Devices = []capev1.NetworkDeviceSpec{
+				{NetworkType: capev1.NetworkTypeIPV4},
 			}
 			waitStaticIPAllocationSpec(mockNewVMService, elfCluster, cluster, elfMachine, machine, secret, md)
 
 			// one IPV4 device without ipAddrs and one with ipAddrs
-			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
-				{NetworkType: infrav1.NetworkTypeIPV4},
-				{NetworkType: infrav1.NetworkTypeIPV4, IPAddrs: []string{"127.0.0.1"}},
+			elfMachine.Spec.Network.Devices = []capev1.NetworkDeviceSpec{
+				{NetworkType: capev1.NetworkTypeIPV4},
+				{NetworkType: capev1.NetworkTypeIPV4, IPAddrs: []string{"127.0.0.1"}},
 			}
 			waitStaticIPAllocationSpec(mockNewVMService, elfCluster, cluster, elfMachine, machine, secret, md)
 
 			// one IPV4 device without ipAddrs and one DHCP device
-			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
-				{NetworkType: infrav1.NetworkTypeIPV4},
-				{NetworkType: infrav1.NetworkTypeIPV4DHCP},
+			elfMachine.Spec.Network.Devices = []capev1.NetworkDeviceSpec{
+				{NetworkType: capev1.NetworkTypeIPV4},
+				{NetworkType: capev1.NetworkTypeIPV4DHCP},
 			}
 			waitStaticIPAllocationSpec(mockNewVMService, elfCluster, cluster, elfMachine, machine, secret, md)
 		})
 
 		It("should not wait for IP allocation", func() {
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineFinalizer)
-			ctrlutil.AddFinalizer(elfMachine, infrav1.MachineStaticIPFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineFinalizer)
+			ctrlutil.AddFinalizer(elfMachine, capev1.MachineStaticIPFinalizer)
 			placementGroup := fake.NewVMPlacementGroup([]string{fake.ID()})
 			mockVMService.EXPECT().GetVMPlacementGroup(gomock.Any()).Return(placementGroup, nil)
 
 			// one IPV4 device with ipAddrs
-			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
-				{NetworkType: infrav1.NetworkTypeIPV4, IPAddrs: []string{"127.0.0.1"}},
+			elfMachine.Spec.Network.Devices = []capev1.NetworkDeviceSpec{
+				{NetworkType: capev1.NetworkTypeIPV4, IPAddrs: []string{"127.0.0.1"}},
 			}
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
@@ -3617,9 +3623,9 @@ var _ = Describe("ElfMachineReconciler", func() {
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: elfMachineKey})
 			Expect(result.RequeueAfter).To(BeZero())
 			Expect(err).Should(HaveOccurred())
-			elfMachine = &infrav1.ElfMachine{}
+			elfMachine = &capev1.ElfMachine{}
 			Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.CloningFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityWarning, capev1.CloningFailedReason}})
 		})
 	})
 
@@ -3685,7 +3691,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should handle failed/succeeded task", func() {
-			elfMachine.Spec.GPUDevices = []infrav1.GPUPassthroughDeviceSpec{{Model: "A16", Count: 1}}
+			elfMachine.Spec.GPUDevices = []capev1.GPUPassthroughDeviceSpec{{Model: "A16", Count: 1}}
 
 			resetMemoryCache()
 			task := fake.NewTowerTask("")
@@ -3775,15 +3781,15 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err = reconciler.reconcileVMTask(ctx, machineContext, nil)
 			Expect(ok).Should(BeTrue())
 			Expect(err).ShouldNot(HaveOccurred())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.TaskFailureReason}})
 
 			elfMachine.Status.TaskRef = *task.ID
 			elfMachine.Status.Conditions = nil
-			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
+			conditionsv1beta1.MarkFalse(elfMachine, capev1.ResourcesHotUpdatedCondition, capev1.ExpandingVMDiskReason, capiv1beta1.ConditionSeverityInfo, "")
 			ok, err = reconciler.reconcileVMTask(ctx, machineContext, nil)
 			Expect(ok).Should(BeTrue())
 			Expect(err).ShouldNot(HaveOccurred())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMDiskFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityWarning, capev1.ExpandingVMDiskFailedReason}})
 
 			// Edit VM CPU/Memory
 			task.Status = models.NewTaskStatus(models.TaskStatusFAILED)
@@ -3793,15 +3799,15 @@ var _ = Describe("ElfMachineReconciler", func() {
 			ok, err = reconciler.reconcileVMTask(ctx, machineContext, nil)
 			Expect(ok).Should(BeTrue())
 			Expect(err).ShouldNot(HaveOccurred())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.TaskFailureReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.TaskFailureReason}})
 
 			elfMachine.Status.TaskRef = *task.ID
 			elfMachine.Status.Conditions = nil
-			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			conditionsv1beta1.MarkFalse(elfMachine, capev1.ResourcesHotUpdatedCondition, capev1.ExpandingVMComputeResourcesReason, capiv1beta1.ConditionSeverityInfo, "")
 			ok, err = reconciler.reconcileVMTask(ctx, machineContext, nil)
 			Expect(ok).Should(BeTrue())
 			Expect(err).ShouldNot(HaveOccurred())
-			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.ExpandingVMComputeResourcesFailedReason}})
+			expectConditions(elfMachine, []conditionAssertion{{capev1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityWarning, capev1.ExpandingVMComputeResourcesFailedReason}})
 
 			// GPU
 			gpuDeviceInfo := &service.GPUDeviceInfo{ID: "gpu", AllocatedCount: 0, AvailableCount: 1}
@@ -3844,21 +3850,21 @@ var _ = Describe("ElfMachineReconciler", func() {
 		})
 
 		It("should set providerID and labels for node", func() {
-			elfMachine.Spec.GPUDevices = []infrav1.GPUPassthroughDeviceSpec{{Model: "H100"}}
-			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{StorageClusterID: "storage-cluster-id"}
-			elfMachine.Status.ComputeCluster = infrav1.ComputeClusterStatus{
+			elfMachine.Spec.GPUDevices = []capev1.GPUPassthroughDeviceSpec{{Model: "H100"}}
+			elfCluster.Spec.StorageCluster = capev1.StorageCluster{StorageClusterID: "storage-cluster-id"}
+			elfMachine.Status.ComputeCluster = capev1.ComputeClusterStatus{
 				ClusterID: fake.UUID(),
 				Name:      fake.UUID(),
 			}
-			elfMachine.Status.StorageCluster = infrav1.StorageClusterStatus{
+			elfMachine.Status.StorageCluster = capev1.StorageClusterStatus{
 				ClusterID: "observed-storage-cluster-id",
 				Name:      "observed-storage-cluster-name",
 			}
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
-			elfMachine.Status.Zone = infrav1.ZoneStatus{
+			elfMachine.Status.Zone = capev1.ZoneStatus{
 				ZoneID: fake.UUID(),
-				Type:   infrav1.ElfClusterZoneTypePreferred,
+				Type:   capev1.ElfClusterZoneTypePreferred,
 			}
 			vm := fake.NewTowerVM()
 			providerID := machineutil.ConvertUUIDToProviderID(*vm.LocalID)
@@ -3901,34 +3907,34 @@ var _ = Describe("ElfMachineReconciler", func() {
 				}
 
 				return node.Spec.ProviderID == providerID &&
-					node.Labels[infrav1.ComputeClusterIDLabel] == elfMachine.Status.ComputeCluster.ClusterID &&
-					node.Labels[infrav1.ComputeClusterNameLabel] == elfMachine.Status.ComputeCluster.Name &&
-					node.Labels[infrav1.StorageClusterIDLabel] == elfMachine.Status.StorageCluster.ClusterID &&
-					node.Labels[infrav1.StorageClusterNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.StorageCluster.Name) &&
-					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
-					node.Labels[infrav1.HostServerNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.HostServerName) &&
-					node.Labels[infrav1.ZoneIDLabel] == elfMachine.Status.Zone.ZoneID &&
-					node.Labels[infrav1.ZoneTypeLabel] == elfMachine.Status.Zone.Type.ToLower() &&
-					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID &&
-					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine) &&
+					node.Labels[capev1.ComputeClusterIDLabel] == elfMachine.Status.ComputeCluster.ClusterID &&
+					node.Labels[capev1.ComputeClusterNameLabel] == elfMachine.Status.ComputeCluster.Name &&
+					node.Labels[capev1.StorageClusterIDLabel] == elfMachine.Status.StorageCluster.ClusterID &&
+					node.Labels[capev1.StorageClusterNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.StorageCluster.Name) &&
+					node.Labels[capev1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
+					node.Labels[capev1.HostServerNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.HostServerName) &&
+					node.Labels[capev1.ZoneIDLabel] == elfMachine.Status.Zone.ZoneID &&
+					node.Labels[capev1.ZoneTypeLabel] == elfMachine.Status.Zone.Type.ToLower() &&
+					node.Labels[capev1.TowerVMIDLabel] == *vm.ID &&
+					node.Labels[capev1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine) &&
 					node.Labels[labelsutil.ClusterAutoscalerCAPIGPULabel] == "H100"
 			}, timeout).Should(BeTrue())
 		})
 
 		It("should update labels but not update providerID", func() {
-			elfMachine.Spec.VGPUDevices = []infrav1.VGPUDeviceSpec{{Type: "H300"}}
-			elfCluster.Spec.StorageCluster = infrav1.StorageCluster{DatastoreID: "datastore-id"}
-			elfMachine.Status.ComputeCluster = infrav1.ComputeClusterStatus{
+			elfMachine.Spec.VGPUDevices = []capev1.VGPUDeviceSpec{{Type: "H300"}}
+			elfCluster.Spec.StorageCluster = capev1.StorageCluster{DatastoreID: "datastore-id"}
+			elfMachine.Status.ComputeCluster = capev1.ComputeClusterStatus{
 				ClusterID: fake.UUID(),
 				Name:      fake.UUID(),
 			}
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
-			elfMachine.Status.Zone = infrav1.ZoneStatus{
+			elfMachine.Status.Zone = capev1.ZoneStatus{
 				ZoneID: fake.UUID(),
-				Type:   infrav1.ElfClusterZoneTypePreferred,
+				Type:   capev1.ElfClusterZoneTypePreferred,
 			}
-			elfMachine.Status.DataStore = infrav1.DataStoreStatus{
+			elfMachine.Status.DataStore = capev1.DataStoreStatus{
 				DataStoreID: "observed-datastore-id",
 				Name:        "observed-datastore-name",
 			}
@@ -3951,18 +3957,18 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: elfMachine.Name,
 					Labels: map[string]string{
-						infrav1.ComputeClusterIDLabel:            "old-cluster-id",
-						infrav1.ComputeClusterNameLabel:          "old-cluster-name",
-						infrav1.StorageClusterIDLabel:            "old-storage-cluster-id",
-						infrav1.StorageClusterNameLabel:          "old-storage-cluster-name",
-						infrav1.DataStoreIDLabel:                 "old-datastore-id",
-						infrav1.DataStoreNameLabel:               "old-datastore-name",
-						infrav1.HostServerIDLabel:                "old-host-id",
-						infrav1.HostServerNameLabel:              "old-host-name",
-						infrav1.ZoneIDLabel:                      "old-zone-id",
-						infrav1.ZoneTypeLabel:                    "old-zone-type",
-						infrav1.TowerVMIDLabel:                   "old-vm-id",
-						infrav1.NodeGroupLabel:                   "old-node-group",
+						capev1.ComputeClusterIDLabel:             "old-cluster-id",
+						capev1.ComputeClusterNameLabel:           "old-cluster-name",
+						capev1.StorageClusterIDLabel:             "old-storage-cluster-id",
+						capev1.StorageClusterNameLabel:           "old-storage-cluster-name",
+						capev1.DataStoreIDLabel:                  "old-datastore-id",
+						capev1.DataStoreNameLabel:                "old-datastore-name",
+						capev1.HostServerIDLabel:                 "old-host-id",
+						capev1.HostServerNameLabel:               "old-host-name",
+						capev1.ZoneIDLabel:                       "old-zone-id",
+						capev1.ZoneTypeLabel:                     "old-zone-type",
+						capev1.TowerVMIDLabel:                    "old-vm-id",
+						capev1.NodeGroupLabel:                    "old-node-group",
 						labelsutil.ClusterAutoscalerCAPIGPULabel: "old-gpu",
 					},
 				},
@@ -3988,22 +3994,22 @@ var _ = Describe("ElfMachineReconciler", func() {
 				}
 
 				return node.Spec.ProviderID == providerID &&
-					node.Labels[infrav1.ComputeClusterIDLabel] == elfMachine.Status.ComputeCluster.ClusterID &&
-					node.Labels[infrav1.ComputeClusterNameLabel] == elfMachine.Status.ComputeCluster.Name &&
-					node.Labels[infrav1.DataStoreIDLabel] == elfMachine.Status.DataStore.DataStoreID &&
-					node.Labels[infrav1.DataStoreNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.DataStore.Name) &&
-					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
-					node.Labels[infrav1.HostServerNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.HostServerName) &&
-					node.Labels[infrav1.ZoneIDLabel] == elfMachine.Status.Zone.ZoneID &&
-					node.Labels[infrav1.ZoneTypeLabel] == elfMachine.Status.Zone.Type.ToLower() &&
-					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine) &&
+					node.Labels[capev1.ComputeClusterIDLabel] == elfMachine.Status.ComputeCluster.ClusterID &&
+					node.Labels[capev1.ComputeClusterNameLabel] == elfMachine.Status.ComputeCluster.Name &&
+					node.Labels[capev1.DataStoreIDLabel] == elfMachine.Status.DataStore.DataStoreID &&
+					node.Labels[capev1.DataStoreNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.DataStore.Name) &&
+					node.Labels[capev1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
+					node.Labels[capev1.HostServerNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.HostServerName) &&
+					node.Labels[capev1.ZoneIDLabel] == elfMachine.Status.Zone.ZoneID &&
+					node.Labels[capev1.ZoneTypeLabel] == elfMachine.Status.Zone.Type.ToLower() &&
+					node.Labels[capev1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine) &&
 					node.Labels[labelsutil.ClusterAutoscalerCAPIGPULabel] == "H300" &&
-					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID
+					node.Labels[capev1.TowerVMIDLabel] == *vm.ID
 			}, timeout).Should(BeTrue())
 		})
 
 		It("should remove unused labels", func() {
-			elfMachine.Status.ComputeCluster = infrav1.ComputeClusterStatus{}
+			elfMachine.Status.ComputeCluster = capev1.ComputeClusterStatus{}
 			elfMachine.Status.HostServerRef = fake.UUID()
 			elfMachine.Status.HostServerName = fake.UUID()
 			vm := fake.NewTowerVM()
@@ -4025,18 +4031,18 @@ var _ = Describe("ElfMachineReconciler", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: elfMachine.Name,
 					Labels: map[string]string{
-						infrav1.ComputeClusterIDLabel:            "old-cluster-id",
-						infrav1.ComputeClusterNameLabel:          "old-cluster-name",
-						infrav1.StorageClusterIDLabel:            "old-storage-cluster-id",
-						infrav1.StorageClusterNameLabel:          "old-storage-cluster-name",
-						infrav1.DataStoreIDLabel:                 "old-datastore-id",
-						infrav1.DataStoreNameLabel:               "old-datastore-name",
-						infrav1.HostServerIDLabel:                elfMachine.Status.HostServerRef,
-						infrav1.HostServerNameLabel:              elfMachine.Status.HostServerName,
-						infrav1.TowerVMIDLabel:                   *vm.ID,
-						infrav1.NodeGroupLabel:                   machineutil.GetNodeGroupName(machine),
-						infrav1.ZoneIDLabel:                      "",
-						infrav1.ZoneTypeLabel:                    "",
+						capev1.ComputeClusterIDLabel:             "old-cluster-id",
+						capev1.ComputeClusterNameLabel:           "old-cluster-name",
+						capev1.StorageClusterIDLabel:             "old-storage-cluster-id",
+						capev1.StorageClusterNameLabel:           "old-storage-cluster-name",
+						capev1.DataStoreIDLabel:                  "old-datastore-id",
+						capev1.DataStoreNameLabel:                "old-datastore-name",
+						capev1.HostServerIDLabel:                 elfMachine.Status.HostServerRef,
+						capev1.HostServerNameLabel:               elfMachine.Status.HostServerName,
+						capev1.TowerVMIDLabel:                    *vm.ID,
+						capev1.NodeGroupLabel:                    machineutil.GetNodeGroupName(machine),
+						capev1.ZoneIDLabel:                       "",
+						capev1.ZoneTypeLabel:                     "",
 						labelsutil.ClusterAutoscalerCAPIGPULabel: "",
 					},
 				},
@@ -4062,18 +4068,18 @@ var _ = Describe("ElfMachineReconciler", func() {
 				}
 
 				return node.Spec.ProviderID == providerID &&
-					node.Labels[infrav1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
-					node.Labels[infrav1.HostServerNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.HostServerName) &&
-					node.Labels[infrav1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine) &&
-					node.Labels[infrav1.TowerVMIDLabel] == *vm.ID &&
-					node.Labels[infrav1.ComputeClusterIDLabel] == "" &&
-					node.Labels[infrav1.ComputeClusterNameLabel] == "" &&
-					!labelsutil.HasLabel(node, infrav1.StorageClusterIDLabel) &&
-					!labelsutil.HasLabel(node, infrav1.StorageClusterNameLabel) &&
-					!labelsutil.HasLabel(node, infrav1.DataStoreIDLabel) &&
-					!labelsutil.HasLabel(node, infrav1.DataStoreNameLabel) &&
-					!labelsutil.HasLabel(node, infrav1.ZoneIDLabel) &&
-					!labelsutil.HasLabel(node, infrav1.ZoneTypeLabel) &&
+					node.Labels[capev1.HostServerIDLabel] == elfMachine.Status.HostServerRef &&
+					node.Labels[capev1.HostServerNameLabel] == labelsutil.ConvertToLabelValue(elfMachine.Status.HostServerName) &&
+					node.Labels[capev1.NodeGroupLabel] == machineutil.GetNodeGroupName(machine) &&
+					node.Labels[capev1.TowerVMIDLabel] == *vm.ID &&
+					node.Labels[capev1.ComputeClusterIDLabel] == "" &&
+					node.Labels[capev1.ComputeClusterNameLabel] == "" &&
+					!labelsutil.HasLabel(node, capev1.StorageClusterIDLabel) &&
+					!labelsutil.HasLabel(node, capev1.StorageClusterNameLabel) &&
+					!labelsutil.HasLabel(node, capev1.DataStoreIDLabel) &&
+					!labelsutil.HasLabel(node, capev1.DataStoreNameLabel) &&
+					!labelsutil.HasLabel(node, capev1.ZoneIDLabel) &&
+					!labelsutil.HasLabel(node, capev1.ZoneTypeLabel) &&
 					!labelsutil.HasLabel(node, labelsutil.ClusterAutoscalerCAPIGPULabel)
 			}, timeout).Should(BeTrue())
 		})
@@ -4226,7 +4232,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should return false when failure domain is set but cloud failure domain is not found", func() {
 			failureDomain := "fd-not-found"
-			machine.Spec.FailureDomain = &failureDomain
+			machine.Spec.FailureDomain = failureDomain
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 			machineContext := &context.MachineContext{
 				Cluster:    cluster,
@@ -4242,13 +4248,13 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should set network from failure domain when machine network is empty", func() {
 			fdName := "fd-network-empty"
-			machine.Spec.FailureDomain = &fdName
-			fdNetwork := infrav1.NetworkSpec{
-				Devices: []infrav1.NetworkDeviceSpec{
-					{NetworkType: infrav1.NetworkTypeIPV4, Vlan: "vlan-1"},
+			machine.Spec.FailureDomain = fdName
+			fdNetwork := capev1.NetworkSpec{
+				Devices: []capev1.NetworkDeviceSpec{
+					{NetworkType: capev1.NetworkTypeIPV4, Vlan: "vlan-1"},
 				},
 			}
-			elfMachine.Spec.FailureDomains = []infrav1.CloudFailureDomain{
+			elfMachine.Spec.FailureDomains = []capev1.CloudFailureDomain{
 				{ComputeCluster: fdName, Network: fdNetwork},
 			}
 			elfMachine.Spec.Network.Devices = nil
@@ -4269,18 +4275,18 @@ var _ = Describe("ElfMachineReconciler", func() {
 
 		It("should add new network devices from failure domain when machine has fewer devices", func() {
 			fdName := "fd-devices"
-			machine.Spec.FailureDomain = &fdName
-			fdNetwork := infrav1.NetworkSpec{
-				Devices: []infrav1.NetworkDeviceSpec{
-					{NetworkType: infrav1.NetworkTypeIPV4, Vlan: "vlan-1"},
-					{NetworkType: infrav1.NetworkTypeIPV4, Vlan: "vlan-2"},
+			machine.Spec.FailureDomain = fdName
+			fdNetwork := capev1.NetworkSpec{
+				Devices: []capev1.NetworkDeviceSpec{
+					{NetworkType: capev1.NetworkTypeIPV4, Vlan: "vlan-1"},
+					{NetworkType: capev1.NetworkTypeIPV4, Vlan: "vlan-2"},
 				},
 			}
-			elfMachine.Spec.FailureDomains = []infrav1.CloudFailureDomain{
+			elfMachine.Spec.FailureDomains = []capev1.CloudFailureDomain{
 				{ComputeCluster: fdName, Network: fdNetwork},
 			}
-			elfMachine.Spec.Network.Devices = []infrav1.NetworkDeviceSpec{
-				{NetworkType: infrav1.NetworkTypeIPV4, Vlan: "vlan-1"},
+			elfMachine.Spec.Network.Devices = []capev1.NetworkDeviceSpec{
+				{NetworkType: capev1.NetworkTypeIPV4, Vlan: "vlan-1"},
 			}
 
 			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
@@ -4301,8 +4307,8 @@ var _ = Describe("ElfMachineReconciler", func() {
 })
 
 func waitStaticIPAllocationSpec(mockNewVMService service.NewVMServiceFunc,
-	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
-	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine, secret *corev1.Secret, md *clusterv1.MachineDeployment) {
+	elfCluster *capev1.ElfCluster, cluster *capiv1.Cluster,
+	elfMachine *capev1.ElfMachine, machine *capiv1.Machine, secret *corev1.Secret, md *capiv1.MachineDeployment) {
 	ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, md)
 	fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 	logBuffer := new(bytes.Buffer)
@@ -4314,7 +4320,7 @@ func waitStaticIPAllocationSpec(mockNewVMService service.NewVMServiceFunc,
 	Expect(result.RequeueAfter).To(BeZero())
 	Expect(err).ShouldNot(HaveOccurred())
 	Expect(logBuffer.String()).To(ContainSubstring("VM is waiting for static ip to be available"))
-	elfMachine = &infrav1.ElfMachine{}
+	elfMachine = &capev1.ElfMachine{}
 	Expect(reconciler.Client.Get(ctx, elfMachineKey, elfMachine)).To(Succeed())
-	expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForStaticIPAllocationReason}})
+	expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForStaticIPAllocationReason}})
 }

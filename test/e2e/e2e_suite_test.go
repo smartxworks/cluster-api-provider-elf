@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/cluster-api/test/framework/bootstrap"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/test/helpers"
 )
 
@@ -153,7 +153,7 @@ var _ = SynchronizedAfterSuite(func() {
 func initScheme() *runtime.Scheme {
 	sc := runtime.NewScheme()
 	framework.TryAddDefaultSchemes(sc)
-	_ = infrav1.AddToScheme(sc)
+	_ = capev1.AddToScheme(sc)
 
 	return sc
 }

@@ -23,11 +23,11 @@ import (
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
-	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	conditionsv1beta1 "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
@@ -56,13 +56,13 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 	var availableHosts service.Hosts
 	defer func() {
 		if reterr != nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.SelectingGPUFailedReason, clusterv1.ConditionSeverityError, "%s", reterr.Error())
+			conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.SelectingGPUFailedReason, capiv1beta1.ConditionSeverityError, "%s", reterr.Error())
 		} else if rethost == nil {
 			if availableHosts.Len() == 0 {
-				conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForELFClusterWithSufficientMemoryReason, clusterv1.ConditionSeverityWarning, "")
+				conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.WaitingForELFClusterWithSufficientMemoryReason, capiv1beta1.ConditionSeverityWarning, "")
 				log.V(1).Info("Waiting for enough available hosts")
 			} else {
-				conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForAvailableHostWithEnoughGPUsReason, clusterv1.ConditionSeverityInfo, "")
+				conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.WaitingForAvailableHostWithEnoughGPUsReason, capiv1beta1.ConditionSeverityInfo, "")
 				log.V(1).Info("No host with the required GPU devices for the virtual machine, so wait for enough available hosts")
 			}
 		}
@@ -167,7 +167,7 @@ func (r *ElfMachineReconciler) selectHostAndGPUsForVM(ctx goctx.Context, machine
 
 // selectGPUDevicesForVM selects the GPU devices required by the virtual machine from the host's GPU devices.
 // Empty GPU devices indicates that the host's GPU devices cannot meet the GPU requirements of the virtual machine.
-func selectGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredGPUDevices []infrav1.GPUPassthroughDeviceSpec) []*service.GPUDeviceInfo {
+func selectGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredGPUDevices []capev1.GPUPassthroughDeviceSpec) []*service.GPUDeviceInfo {
 	// Group GPU devices by model.
 	modelGPUVMInfoMap := make(map[string][]*models.GpuVMInfo)
 	hostGPUVMInfos.Iterate(func(gpuVMInfo *models.GpuVMInfo) {
@@ -196,7 +196,7 @@ func selectGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredGPUDevices
 
 // selectVGPUDevicesForVM selects the vGPU devices required by the virtual machine from the host's vGPU devices.
 // Empty vGPU devices indicates that the host's vGPU devices cannot meet the vGPU requirements of the virtual machine.
-func selectVGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredVGPUDevices []infrav1.VGPUDeviceSpec) []*service.GPUDeviceInfo {
+func selectVGPUDevicesForVM(hostGPUVMInfos service.GPUVMInfos, requiredVGPUDevices []capev1.VGPUDeviceSpec) []*service.GPUDeviceInfo {
 	// Group vGPU devices by vGPU type.
 	typeVGPUVMInfoMap := make(map[string][]*models.GpuVMInfo)
 	hostGPUVMInfos.Iterate(func(gpuVMInfo *models.GpuVMInfo) {
@@ -254,9 +254,9 @@ func (r *ElfMachineReconciler) reconcileGPUDevices(ctx goctx.Context, machineCtx
 	}
 
 	// Ensure GPUStatus is set or up to date.
-	gpuDevices := make([]infrav1.GPUStatus, len(vm.GpuDevices))
+	gpuDevices := make([]capev1.GPUStatus, len(vm.GpuDevices))
 	for i := range len(vm.GpuDevices) {
-		gpuDevices[i] = infrav1.GPUStatus{GPUID: *vm.GpuDevices[i].ID, Name: *vm.GpuDevices[i].Name}
+		gpuDevices[i] = capev1.GPUStatus{GPUID: *vm.GpuDevices[i].ID, Name: *vm.GpuDevices[i].Name}
 	}
 	machineCtx.ElfMachine.Status.GPUDevices = gpuDevices
 
@@ -270,7 +270,7 @@ func (r *ElfMachineReconciler) reconcileGPUDevices(ctx goctx.Context, machineCtx
 	}
 
 	// If the GPU devices are already in use, remove the GPU devices first and then reselect the new GPU devices.
-	message := conditions.GetMessage(machineCtx.ElfMachine, infrav1.VMProvisionedCondition)
+	message := conditionsv1beta1.GetMessage(machineCtx.ElfMachine, capev1.VMProvisionedCondition)
 	if service.IsGPUAssignFailed(message) || service.IsVGPUInsufficientError(message) {
 		log.Info("GPU devices of the host are not sufficient and the virtual machine cannot be started, so remove the GPU devices and reallocate.")
 
@@ -317,14 +317,14 @@ func (r *ElfMachineReconciler) addGPUDevicesForVM(ctx goctx.Context, machineCtx 
 
 	task, err := machineCtx.VMService.AddGPUDevices(machineCtx.ElfMachine.Status.VMRef, gpuDeviceInfos)
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.AttachingGPUFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.AttachingGPUFailedReason, capiv1beta1.ConditionSeverityWarning, "%s", err.Error())
 
 		unlockGPUDevicesLockedByVM(machineCtx.GetElfClusterID(), machineCtx.ElfMachine.Name)
 
 		return false, errors.Wrapf(err, "failed to trigger attaching GPU devices for VM %s", machineCtx.ElfMachine.Status.VMRef)
 	}
 
-	conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.UpdatingReason, clusterv1.ConditionSeverityInfo, "")
+	conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.UpdatingReason, capiv1beta1.ConditionSeverityInfo, "")
 
 	machineCtx.ElfMachine.SetTask(*task.ID)
 
@@ -363,15 +363,15 @@ func (r *ElfMachineReconciler) removeVMGPUDevices(ctx goctx.Context, machineCtx 
 	if err != nil {
 		// If the GPU/vGPU is removed due to insufficient GPU/vGPU,
 		// the original error message will not be overwritten if the remove fails.
-		message := conditions.GetMessage(machineCtx.ElfMachine, infrav1.VMProvisionedCondition)
-		if !(service.IsGPUAssignFailed(message) || service.IsVGPUInsufficientError(message)) {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.DetachingGPUFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
+		message := conditionsv1beta1.GetMessage(machineCtx.ElfMachine, capev1.VMProvisionedCondition)
+		if !service.IsGPUAssignFailed(message) && !service.IsVGPUInsufficientError(message) {
+			conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.DetachingGPUFailedReason, capiv1beta1.ConditionSeverityWarning, "%s", err.Error())
 		}
 
 		return errors.Wrapf(err, "failed to trigger detaching stale GPU devices for VM %s", machineCtx.ElfMachine.Status.VMRef)
 	}
 
-	conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.UpdatingReason, clusterv1.ConditionSeverityInfo, "")
+	conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.UpdatingReason, capiv1beta1.ConditionSeverityInfo, "")
 
 	machineCtx.ElfMachine.SetTask(*task.ID)
 

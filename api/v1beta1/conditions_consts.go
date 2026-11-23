@@ -17,14 +17,14 @@ limitations under the License.
 package v1beta1
 
 import (
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 // Conditions and condition Reasons for the ElfMachine object.
 
 const (
 	// VMProvisionedCondition documents the status of the provisioning of a VM.
-	VMProvisionedCondition clusterv1.ConditionType = "VMProvisioned"
+	VMProvisionedCondition capiv1beta1.ConditionType = "VMProvisioned"
 
 	// WaitingForClusterInfrastructureReason (Severity=Info) documents an ElfMachine waiting for the cluster
 	// infrastructure to be ready before starting the provisioning process.
@@ -134,7 +134,7 @@ const (
 	WaitingForAvailableHostWithEnoughGPUsReason = "WaitingForAvailableHostWithEnoughGPUs"
 
 	// ResourcesHotUpdatedCondition documents the status of the hot updating resources of a VM.
-	ResourcesHotUpdatedCondition = "ResourceHotUpdated"
+	ResourcesHotUpdatedCondition capiv1beta1.ConditionType = "ResourceHotUpdated"
 
 	// ExpandingVMDiskReason documents (Severity=Info) ElfMachine currently executing the expand disk operation.
 	ExpandingVMDiskReason = "ExpandingVMDisk"
@@ -193,7 +193,7 @@ const (
 
 const (
 	// TowerAvailableCondition documents the connectivity with tower.
-	TowerAvailableCondition clusterv1.ConditionType = "TowerAvailable"
+	TowerAvailableCondition capiv1beta1.ConditionType = "TowerAvailable"
 
 	// TowerUnreachableReason (Severity=Error) documents a controller detecting
 	// issues with tower reachability.
@@ -204,7 +204,7 @@ const (
 
 const (
 	// ControlPlaneEndpointReadyCondition documents the status of control plane endpoint.
-	ControlPlaneEndpointReadyCondition clusterv1.ConditionType = "ControlPlaneEndpointReady"
+	ControlPlaneEndpointReadyCondition capiv1beta1.ConditionType = "ControlPlaneEndpointReady"
 
 	// WaitingForVIPReason (Severity=Info) documents the control plane endpoint of ElfCluster
 	// waiting for an IP Address and port.

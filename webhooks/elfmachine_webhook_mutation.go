@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/version"
 )
@@ -41,7 +41,7 @@ func (m *ElfMachineMutation) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register("/mutate-infrastructure-cluster-x-k8s-io-v1beta1-elfmachine", &webhook.Admission{Handler: m})
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&infrav1.ElfMachine{}).
+		For(&capev1.ElfMachine{}).
 		Complete()
 }
 
@@ -55,7 +55,7 @@ type ElfMachineMutation struct {
 }
 
 func (m *ElfMachineMutation) Handle(ctx goctx.Context, request admission.Request) admission.Response {
-	var elfMachine infrav1.ElfMachine
+	var elfMachine capev1.ElfMachine
 	if err := m.decoder.Decode(request, &elfMachine); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
@@ -68,7 +68,7 @@ func (m *ElfMachineMutation) Handle(ctx goctx.Context, request admission.Request
 		// Prefer to set the value to be the same as elfMachineTemplate
 		elfMachineTemplateName := annotationsutil.GetTemplateClonedFromName(&elfMachine)
 		if elfMachineTemplateName != "" {
-			var elfMachineTemplate infrav1.ElfMachineTemplate
+			var elfMachineTemplate capev1.ElfMachineTemplate
 			if err := m.Get(ctx, client.ObjectKey{
 				Namespace: elfMachine.Namespace,
 				Name:      annotationsutil.GetTemplateClonedFromName(&elfMachine),

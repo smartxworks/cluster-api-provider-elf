@@ -42,7 +42,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 var lastGCTime = time.Now()
@@ -60,7 +60,7 @@ var towerSecretConfigGroup singleflight.Group
 type cacheItem struct {
 	LastUsedTime time.Time
 	TowerClient  *towerclient.Cloudtower
-	TowerConfig  *infrav1.TowerClientConfig
+	TowerConfig  *capev1.TowerClientConfig
 }
 
 // NewTowerClient gets a cached client or creates a new one if one does not
@@ -78,15 +78,15 @@ func NewTowerClient(ctx goctx.Context, k8sClient client.Client, secretKey apityp
 
 // NewTowerClientAndConfig creates a Tower client from the cloudtower.yaml in
 // the Secret referenced by secretKey and returns the resolved client config.
-func NewTowerClientAndConfig(ctx goctx.Context, k8sClient client.Client, secretKey apitypes.NamespacedName) (*towerclient.Cloudtower, infrav1.TowerClientConfig, error) {
+func NewTowerClientAndConfig(ctx goctx.Context, k8sClient client.Client, secretKey apitypes.NamespacedName) (*towerclient.Cloudtower, capev1.TowerClientConfig, error) {
 	clientConfig, err := GetTowerClientConfig(ctx, k8sClient, secretKey)
 	if err != nil {
-		return nil, infrav1.TowerClientConfig{}, err
+		return nil, capev1.TowerClientConfig{}, err
 	}
 
 	towerClient, err := getOrCreateTowerClient(ctx, getTowerSecretCacheKey(secretKey), clientConfig, true)
 	if err != nil {
-		return nil, infrav1.TowerClientConfig{}, err
+		return nil, capev1.TowerClientConfig{}, err
 	}
 
 	return towerClient, clientConfig, nil
@@ -95,7 +95,7 @@ func NewTowerClientAndConfig(ctx goctx.Context, k8sClient client.Client, secretK
 // NewTowerClientWithConfig gets a cached client or creates a new one if one
 // does not already exist. The client is created from the given inline
 // TowerClientConfig, and clients are cached by the config content.
-func NewTowerClientWithConfig(ctx goctx.Context, clientConfig infrav1.TowerClientConfig) (*towerclient.Cloudtower, error) {
+func NewTowerClientWithConfig(ctx goctx.Context, clientConfig capev1.TowerClientConfig) (*towerclient.Cloudtower, error) {
 	return getOrCreateTowerClient(ctx, getTowerClientCacheKey(&clientConfig), clientConfig, false)
 }
 
@@ -105,7 +105,7 @@ func NewTowerClientWithConfig(ctx goctx.Context, clientConfig infrav1.TowerClien
 // hit is always valid. Clients created from a Secret are cached by the Secret
 // reference and must be dropped when the config it was created from has
 // changed, e.g. because the cloudtower.yaml in the Secret was updated.
-func getOrCreateTowerClient(ctx goctx.Context, clientKey string, clientConfig infrav1.TowerClientConfig, fromSecret bool) (*towerclient.Cloudtower, error) {
+func getOrCreateTowerClient(ctx goctx.Context, clientKey string, clientConfig capev1.TowerClientConfig, fromSecret bool) (*towerclient.Cloudtower, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName("client").WithValues("server", clientConfig.Server, "username", clientConfig.Username, "source", clientConfig.AuthMode)
 
 	defer func() {
@@ -200,7 +200,7 @@ func ClearClientCache() {
 // tower config or the referenced Secret. Configs parsed from Secrets are
 // deliberately not cached so changes to the cloudtower.yaml are always picked
 // up on the next call.
-func GetTowerClientConfig(ctx goctx.Context, k8sClient client.Client, secretKey apitypes.NamespacedName) (infrav1.TowerClientConfig, error) {
+func GetTowerClientConfig(ctx goctx.Context, k8sClient client.Client, secretKey apitypes.NamespacedName) (capev1.TowerClientConfig, error) {
 	value, err, _ := towerSecretConfigGroup.Do(secretKey.String(), func() (interface{}, error) {
 		var secret corev1.Secret
 		if err := k8sClient.Get(ctx, secretKey, &secret); err != nil {
@@ -210,10 +210,10 @@ func GetTowerClientConfig(ctx goctx.Context, k8sClient client.Client, secretKey 
 		return ParseTowerClientConfigFromSecret(&secret)
 	})
 	if err != nil {
-		return infrav1.TowerClientConfig{}, err
+		return capev1.TowerClientConfig{}, err
 	}
 
-	return value.(infrav1.TowerClientConfig), nil
+	return value.(capev1.TowerClientConfig), nil
 }
 
 func loadCacheItem(cacheKey string) (*cacheItem, bool) {
@@ -228,22 +228,22 @@ func loadCacheItem(cacheKey string) (*cacheItem, bool) {
 	return item, true
 }
 
-func ParseTowerClientConfigFromSecret(secret *corev1.Secret) (infrav1.TowerClientConfig, error) {
+func ParseTowerClientConfigFromSecret(secret *corev1.Secret) (capev1.TowerClientConfig, error) {
 	data, ok := secret.Data["cloudtower.yaml"]
 	if !ok {
-		return infrav1.TowerClientConfig{}, errors.Errorf("tower secret %s missing cloudtower.yaml", client.ObjectKeyFromObject(secret))
+		return capev1.TowerClientConfig{}, errors.Errorf("tower secret %s missing cloudtower.yaml", client.ObjectKeyFromObject(secret))
 	}
 
 	decoder := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 1024)
-	var config infrav1.TowerClientConfig
+	var config capev1.TowerClientConfig
 	if err := decoder.Decode(&config); err != nil {
-		return infrav1.TowerClientConfig{}, errors.Wrapf(err, "failed to decode cloudtower.yaml in tower secret %s", client.ObjectKeyFromObject(secret))
+		return capev1.TowerClientConfig{}, errors.Wrapf(err, "failed to decode cloudtower.yaml in tower secret %s", client.ObjectKeyFromObject(secret))
 	}
 
 	return config, nil
 }
 
-func getTowerClientCacheKey(tower *infrav1.TowerClientConfig) string {
+func getTowerClientCacheKey(tower *capev1.TowerClientConfig) string {
 	return "tower-client:" + getClientKey(tower)
 }
 
@@ -251,11 +251,11 @@ func getTowerSecretCacheKey(secretKey apitypes.NamespacedName) string {
 	return "tower-secret:" + secretKey.String()
 }
 
-func getClientKey(tower *infrav1.TowerClientConfig) string {
+func getClientKey(tower *capev1.TowerClientConfig) string {
 	encryptedTower := *tower
 	sum256 := sha256.Sum256([]byte(tower.Password))
 	encryptedTower.Password = hex.EncodeToString(sum256[:])
-	key, err := json.Marshal(encryptedTower)
+	key, err := json.Marshal(encryptedTower) //nolint:gosec // the password is hashed before serializing the cache key
 	if err != nil {
 		return fmt.Sprintf("%v", encryptedTower)
 	}

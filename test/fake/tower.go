@@ -26,7 +26,7 @@ import (
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/utils/ptr"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
@@ -112,7 +112,7 @@ func NewTowerVM() *models.VM {
 	}
 }
 
-func NewTowerVMFromElfMachine(elfMachine *infrav1.ElfMachine) *models.VM {
+func NewTowerVMFromElfMachine(elfMachine *capev1.ElfMachine) *models.VM {
 	vm := NewTowerVM()
 
 	vm.Name = service.TowerString(elfMachine.Name)
@@ -222,7 +222,7 @@ func NewTowerVGPUVMInfo(vGPUCount int32) *models.GpuVMInfo {
 	}
 }
 
-func NewVMVolume(elfMachine *infrav1.ElfMachine) *models.VMVolume {
+func NewVMVolume(elfMachine *capev1.ElfMachine) *models.VMVolume {
 	return &models.VMVolume{
 		ID:   ptr.To(ID()),
 		Name: ptr.To(ID()),

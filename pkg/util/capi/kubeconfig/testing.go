@@ -22,11 +22,11 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 // FromEnvTestConfig returns a new Kubeconfig in byte form when running in envtest.
-func FromEnvTestConfig(cfg *rest.Config, cluster *clusterv1.Cluster) []byte {
+func FromEnvTestConfig(cfg *rest.Config, cluster *capiv1.Cluster) []byte {
 	contextName := fmt.Sprintf("%s@%s", cfg.Username, cluster.Name)
 	c := api.Config{
 		Clusters: map[string]*api.Cluster{

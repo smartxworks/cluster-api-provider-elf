@@ -21,7 +21,7 @@ import (
 
 	"github.com/onsi/gomega"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
 
@@ -188,32 +188,32 @@ func TestGetNetworkStatus(t *testing.T) {
 	testCases := []struct {
 		name          string
 		ips           string
-		networkStatus []infrav1.NetworkStatus
+		networkStatus []capev1.NetworkStatus
 	}{
 		{
 			name:          "empty",
 			ips:           "",
-			networkStatus: []infrav1.NetworkStatus{},
+			networkStatus: []capev1.NetworkStatus{},
 		},
 		{
 			name:          "local ip",
 			ips:           "127.0.0.1",
-			networkStatus: []infrav1.NetworkStatus{},
+			networkStatus: []capev1.NetworkStatus{},
 		},
 		{
 			name:          "169.254 prefix",
 			ips:           "169.254.0.1",
-			networkStatus: []infrav1.NetworkStatus{},
+			networkStatus: []capev1.NetworkStatus{},
 		},
 		{
 			name:          "172.17.0 prefix",
 			ips:           "172.17.0.1",
-			networkStatus: []infrav1.NetworkStatus{},
+			networkStatus: []capev1.NetworkStatus{},
 		},
 		{
 			name: "valid IP",
 			ips:  "116.116.116.116",
-			networkStatus: []infrav1.NetworkStatus{{
+			networkStatus: []capev1.NetworkStatus{{
 				IPAddrs: []string{"116.116.116.116"},
 			}},
 		},

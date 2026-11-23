@@ -23,22 +23,22 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	clusterv2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/test/framework"
 	capiutil "sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
+	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 // UpgradeMachineDeploymentsAndWaitInput is the input type for UpgradeMachineDeploymentsAndWait.
 type UpgradeMachineDeploymentsAndWaitInput struct {
 	ClusterProxy                framework.ClusterProxy
-	Cluster                     *clusterv2.Cluster
+	Cluster                     *capiv1.Cluster
 	UpgradeVersion              string
 	VMTemplate                  string
-	MachineDeployments          []*clusterv2.MachineDeployment
+	MachineDeployments          []*capiv1.MachineDeployment
 	WaitForMachinesToBeUpgraded []interface{}
 }
 
@@ -57,7 +57,7 @@ func UpgradeMachineDeploymentsAndWait(ctx context.Context, input UpgradeMachineD
 		Logf("Patching the new kubernetes version to Machine Deployment %s/%s", deployment.Namespace, deployment.Name)
 		// Retrieve infra object
 		infraRef := deployment.Spec.Template.Spec.InfrastructureRef
-		var elfMachineTemplate infrav1.ElfMachineTemplate
+		var elfMachineTemplate capev1.ElfMachineTemplate
 		Expect(mgmtClient.Get(ctx, client.ObjectKey{
 			Namespace: input.Cluster.Namespace,
 			Name:      infraRef.Name,
@@ -69,7 +69,7 @@ func UpgradeMachineDeploymentsAndWait(ctx context.Context, input UpgradeMachineD
 		elfMachineTemplateData, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&elfMachineTemplate)
 		Expect(err).NotTo(HaveOccurred())
 		infraObj := &unstructured.Unstructured{Object: elfMachineTemplateData}
-		infraObj.SetGroupVersionKind(infrav1.GroupVersion.WithKind("ElfMachineTemplate"))
+		infraObj.SetGroupVersionKind(capev1.GroupVersion.WithKind("ElfMachineTemplate"))
 
 		// Creates a new infra object
 		newInfraObj := infraObj

@@ -1,5 +1,5 @@
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
   name: "${CLUSTER_NAME}"
@@ -11,12 +11,12 @@ spec:
     pods:
       cidrBlocks: ["172.16.0.0/16"]
   infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    apiGroup: infrastructure.cluster.x-k8s.io
     kind: ElfCluster
     name: "${CLUSTER_NAME}"
   controlPlaneRef:
     kind: KubeadmControlPlane
-    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    apiGroup: controlplane.cluster.x-k8s.io
     name: "${CLUSTER_NAME}-control-plane"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
@@ -57,7 +57,7 @@ spec:
         - networkType: IPV4_DHCP
           vlan: "${ELF_VLAN}"
 ---
-apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
 kind: KubeadmControlPlane
 metadata:
   name: "${CLUSTER_NAME}-control-plane"
@@ -66,28 +66,23 @@ spec:
   replicas: ${CONTROL_PLANE_MACHINE_COUNT}
   version: "${KUBERNETES_VERSION}"
   machineTemplate:
-    infrastructureRef:
-      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-      kind: ElfMachineTemplate
-      name: "${CLUSTER_NAME}-control-plane"
-      namespace: "${NAMESPACE}"
-    metadata: {}
-  rolloutStrategy:
-    rollingUpdate:
-      maxSurge: 1
-    type: RollingUpdate
+    spec:
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: ElfMachineTemplate
+        name: "${CLUSTER_NAME}-control-plane"
+  rollout:
+    strategy:
+      rollingUpdate:
+        maxSurge: 1
+      type: RollingUpdate
   kubeadmConfigSpec:
     clusterConfiguration:
-      clusterName: "${CLUSTER_NAME}"
       imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
-      apiServer:
-        extraArgs:
-      controllerManager:
-        extraArgs:
     format: cloud-config
     initConfiguration:
       nodeRegistration:
-        kubeletExtraArgs:
+        imagePullPolicy: IfNotPresent
     preKubeadmCommands:
       - /etc/kube-vip-prepare.sh
       #! If you need to expand the system disk capacity (based on the capacity of
@@ -119,7 +114,6 @@ spec:
       #!     echo "$result"
       #!     exit 1
       #!   fi
-    useExperimentalRetryJoin: true
     files:
     - content: |
         apiVersion: v1
@@ -240,7 +234,7 @@ spec:
       path: /etc/kube-vip-prepare.sh
       permissions: "0700"
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
 kind: KubeadmConfigTemplate
 metadata:
   name: "${CLUSTER_NAME}-md-0"
@@ -249,13 +243,11 @@ spec:
   template:
     spec:
       clusterConfiguration:
-        clusterName: "${CLUSTER_NAME}"
         imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
       format: cloud-config
       joinConfiguration:
         nodeRegistration:
-          kubeletExtraArgs:
-      preKubeadmCommands:
+          imagePullPolicy: IfNotPresent
       #! If you need to expand the system disk capacity (based on the capacity of
       #! the virtual machine template disk) when creating a node virtual machine,
       #! you need to set the following commands. CAPE will add new disk capacity
@@ -307,7 +299,7 @@ spec:
         - networkType: IPV4_DHCP
           vlan: "${ELF_VLAN}"
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineDeployment
 metadata:
   name: "${CLUSTER_NAME}-md-0"
@@ -316,10 +308,7 @@ metadata:
     cluster.x-k8s.io/cluster-name: "${CLUSTER_NAME}"
 spec:
   clusterName: "${CLUSTER_NAME}"
-  minReadySeconds: 0
-  progressDeadlineSeconds: 600
   replicas: ${WORKER_MACHINE_COUNT}
-  revisionHistoryLimit: 1
   selector:
     matchLabels:
       cluster.x-k8s.io/cluster-name: "${CLUSTER_NAME}"
@@ -334,10 +323,10 @@ spec:
       version: "${KUBERNETES_VERSION}"
       bootstrap:
         configRef:
-          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          apiGroup: bootstrap.cluster.x-k8s.io
           kind: KubeadmConfigTemplate
           name: "${CLUSTER_NAME}-md-0"
       infrastructureRef:
-        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        apiGroup: infrastructure.cluster.x-k8s.io
         kind: ElfMachineTemplate
         name: "${CLUSTER_NAME}-worker"

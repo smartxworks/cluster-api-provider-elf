@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/onsi/gomega"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	"github.com/smartxworks/cluster-api-provider-elf/test/fake"
 )
@@ -44,7 +44,7 @@ func TestGetMDsForCluster(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 	_, cluster := fake.NewClusterObjects()
 	md1 := fake.NewMD()
-	md1.Labels = map[string]string{clusterv1.ClusterNameLabel: cluster.Name}
+	md1.Labels = map[string]string{capiv1.ClusterNameLabel: cluster.Name}
 	md2 := fake.NewMD()
 	ctrlMgrCtx := fake.NewControllerManagerContext(md1, md2)
 

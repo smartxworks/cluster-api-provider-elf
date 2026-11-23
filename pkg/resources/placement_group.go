@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
@@ -29,7 +29,7 @@ import (
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 )
 
-func GetVMPlacementGroupName(ctx goctx.Context, ctrlClient client.Client, machine *clusterv1.Machine, cluster *clusterv1.Cluster) (string, error) {
+func GetVMPlacementGroupName(ctx goctx.Context, ctrlClient client.Client, machine *capiv1.Machine, cluster *capiv1.Cluster) (string, error) {
 	groupName := ""
 	if machineutil.IsControlPlaneMachine(machine) {
 		kcp, err := machineutil.GetKCPByMachine(ctx, ctrlClient, machine)
@@ -63,9 +63,9 @@ func GetVMPlacementGroupName(ctx goctx.Context, ctrlClient client.Client, machin
 
 	placementGroupName := fmt.Sprintf("%s-%s", GetVMPlacementGroupNamePrefix(cluster), groupName)
 
-	if machine.Spec.FailureDomain != nil {
+	if machine.Spec.FailureDomain != "" {
 		// Use first 8 characters of elfClusterID to keep the name reasonably short.
-		shortID := *machine.Spec.FailureDomain
+		shortID := machine.Spec.FailureDomain
 		if len(shortID) > 8 {
 			shortID = shortID[:8]
 		}
@@ -76,11 +76,11 @@ func GetVMPlacementGroupName(ctx goctx.Context, ctrlClient client.Client, machin
 	return placementGroupName, nil
 }
 
-func GetVMPlacementGroupNamePrefix(cluster *clusterv1.Cluster) string {
+func GetVMPlacementGroupNamePrefix(cluster *capiv1.Cluster) string {
 	return fmt.Sprintf("%s-managed-%s-%s", GetResourcePrefix(), cluster.UID, cluster.Namespace)
 }
 
-func GetVMPlacementGroupPolicy(machine *clusterv1.Machine) models.VMVMPolicy {
+func GetVMPlacementGroupPolicy(machine *capiv1.Machine) models.VMVMPolicy {
 	if machineutil.IsControlPlaneMachine(machine) {
 		return models.VMVMPolicyMUSTDIFFERENT
 	}

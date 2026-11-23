@@ -21,12 +21,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
-	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	controlplanev1beta1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
+	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 )
 
@@ -53,14 +55,16 @@ const (
 func NewControllerManagerContext(initObjects ...client.Object) *context.ControllerManagerContext {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(cgscheme.AddToScheme(scheme))
-	utilruntime.Must(clusterv1.AddToScheme(scheme))
+	utilruntime.Must(capiv1beta1.AddToScheme(scheme))
+	utilruntime.Must(capiv1.AddToScheme(scheme))
+	utilruntime.Must(controlplanev1beta1.AddToScheme(scheme))
 	utilruntime.Must(controlplanev1.AddToScheme(scheme))
-	utilruntime.Must(infrav1.AddToScheme(scheme))
+	utilruntime.Must(capev1.AddToScheme(scheme))
 	utilruntime.Must(agentv1.AddToScheme(scheme))
 
 	clientWithObjects := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(
-		&infrav1.ElfCluster{},
-		&infrav1.ElfMachine{},
+		&capev1.ElfCluster{},
+		&capev1.ElfMachine{},
 	).WithObjects(initObjects...).Build()
 
 	return &context.ControllerManagerContext{

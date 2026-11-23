@@ -17,24 +17,27 @@ limitations under the License.
 */
 
 import (
-	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
-	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
+	conditions "sigs.k8s.io/cluster-api/util/conditions"
 )
 
 // IsKCPInRollingUpdate returns whether KCP is in rolling update.
 //
-// When *kcp.Spec.Replicas > kcp.Status.UpdatedReplicas, it must be in a KCP rolling update process.
-// When *kcp.Spec.Replicas == kcp.Status.UpdatedReplicas, it could be in one of the following cases:
+// When *kcp.Spec.Replicas > *kcp.Status.UpToDateReplicas, it must be in a KCP rolling update process.
+// When *kcp.Spec.Replicas == *kcp.Status.UpToDateReplicas, it could be in one of the following cases:
 //  1. It's not in a KCP rolling update process. So kcp.Spec.Replicas == kcp.Status.Replicas.
 //  2. It's at the end of a KCP rolling update process, and the last KCP replica (i.e the last KCP ElfMachine) is created just now.
 //     There is still an old KCP ElfMachine, so kcp.Spec.Replicas + 1 == kcp.Status.Replicas.
 //
-// For more information about KCP replicas, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/controlplane/kubeadm/api/v1beta1/kubeadm_control_plane_types.go
+// For more information about KCP replicas, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/api/controlplane/kubeadm/v1beta2/kubeadm_control_plane_types.go
 // For more information about KCP rollout, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20191017-kubeadm-based-control-plane.md#kubeadmcontrolplane-rollout
 func IsKCPInRollingUpdate(kcp *controlplanev1.KubeadmControlPlane) bool {
-	if (*kcp.Spec.Replicas > kcp.Status.UpdatedReplicas && *kcp.Spec.Replicas <= kcp.Status.Replicas) ||
-		(*kcp.Spec.Replicas == kcp.Status.UpdatedReplicas && *kcp.Spec.Replicas < kcp.Status.Replicas) {
+	if kcp == nil || kcp.Spec.Replicas == nil || kcp.Status.Replicas == nil || kcp.Status.UpToDateReplicas == nil {
+		return false
+	}
+
+	if (*kcp.Spec.Replicas > *kcp.Status.UpToDateReplicas && *kcp.Spec.Replicas <= *kcp.Status.Replicas) ||
+		(*kcp.Spec.Replicas == *kcp.Status.UpToDateReplicas && *kcp.Spec.Replicas < *kcp.Status.Replicas) {
 		return true
 	}
 
@@ -43,12 +46,14 @@ func IsKCPInRollingUpdate(kcp *controlplanev1.KubeadmControlPlane) bool {
 
 // IsKCPInScalingDown returns whether KCP is in scaling down.
 //
-// When KCP is in scaling down/rolling update, KCP controller marks
-// ResizedCondition to false and ScalingDownReason as Reason.
+// When KCP is scaling down, the KCP controller sets the ScalingDown condition to true.
 //
-// For more information about KCP ResizedCondition and ScalingDownReason, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/api/v1beta1/condition_consts.go
+// For more information about KCP ScalingDownCondition, refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/api/core/v1beta2/condition_consts.go
 func IsKCPInScalingDown(kcp *controlplanev1.KubeadmControlPlane) bool {
-	return conditions.IsFalse(kcp, clusterv1.ResizedCondition) &&
-		conditions.GetReason(kcp, controlplanev1.ResizedCondition) == controlplanev1.ScalingDownReason &&
-		*kcp.Spec.Replicas < kcp.Status.UpdatedReplicas
+	if kcp == nil || kcp.Spec.Replicas == nil || kcp.Status.UpToDateReplicas == nil {
+		return false
+	}
+
+	return conditions.IsTrue(kcp, controlplanev1.KubeadmControlPlaneScalingDownCondition) &&
+		*kcp.Spec.Replicas < *kcp.Status.UpToDateReplicas
 }

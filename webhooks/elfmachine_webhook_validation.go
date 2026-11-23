@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 )
 
@@ -44,7 +44,7 @@ const (
 
 func (v *ElfMachineValidator) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&infrav1.ElfMachine{}).
+		For(&capev1.ElfMachine{}).
 		WithValidator(v).
 		Complete()
 }
@@ -65,11 +65,11 @@ func (v *ElfMachineValidator) ValidateCreate(ctx goctx.Context, obj runtime.Obje
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
 func (v *ElfMachineValidator) ValidateUpdate(ctx goctx.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldElfMachine, ok := oldObj.(*infrav1.ElfMachine) //nolint:forcetypeassert
+	oldElfMachine, ok := oldObj.(*capev1.ElfMachine) //nolint:forcetypeassert
 	if !ok {
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an ElfMachine but got a %T", oldObj))
 	}
-	elfMachine, ok := newObj.(*infrav1.ElfMachine) //nolint:forcetypeassert
+	elfMachine, ok := newObj.(*capev1.ElfMachine) //nolint:forcetypeassert
 	if !ok {
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("expected an ElfMachine but got a %T", newObj))
 	}
@@ -80,8 +80,8 @@ func (v *ElfMachineValidator) ValidateUpdate(ctx goctx.Context, oldObj, newObj r
 	if elfMachineTemplateName != "" {
 		// If the ElfMachine was created using ElfMachineTemplate. ElfMachine's
 		// resources should be the same as this ElfMachineTemplate.
-		var elfMachineTemplate infrav1.ElfMachineTemplate
-		if err := v.Client.Get(ctx, client.ObjectKey{
+		var elfMachineTemplate capev1.ElfMachineTemplate
+		if err := v.Get(ctx, client.ObjectKey{
 			Namespace: elfMachine.Namespace,
 			Name:      annotationsutil.GetTemplateClonedFromName(elfMachine),
 		}, &elfMachineTemplate); err != nil {

@@ -25,10 +25,10 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	corev1 "k8s.io/api/core/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
@@ -170,7 +170,7 @@ var _ = Describe("TowerCache", func() {
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(ContainSubstring("Insufficient memory detected for the ELF cluster"))
 		Expect(err).ShouldNot(HaveOccurred())
-		expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForELFClusterWithSufficientMemoryReason}})
+		expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForELFClusterWithSufficientMemoryReason}})
 
 		resetMemoryCache()
 		elfCluster.Spec.Cluster = clusterInsufficientStorageKey
@@ -179,7 +179,7 @@ var _ = Describe("TowerCache", func() {
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(ContainSubstring("Insufficient storage detected for the ELF cluster clusterInsufficientStorage"))
 		Expect(err).ShouldNot(HaveOccurred())
-		expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForELFClusterWithSufficientStorageReason}})
+		expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForELFClusterWithSufficientStorageReason}})
 
 		resetMemoryCache()
 		recordOrClearError(ctx, machineCtx, ctrlMgrCtx.Client, placementGroupKey, true)
@@ -187,7 +187,7 @@ var _ = Describe("TowerCache", func() {
 		Expect(ok).To(BeTrue())
 		Expect(msg).To(ContainSubstring("Not satisfy policy detected for the placement group"))
 		Expect(err).ShouldNot(HaveOccurred())
-		expectConditions(elfMachine, []conditionAssertion{{infrav1.VMProvisionedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForPlacementGroupPolicySatisfiedReason}})
+		expectConditions(elfMachine, []conditionAssertion{{capev1.VMProvisionedCondition, corev1.ConditionFalse, capiv1beta1.ConditionSeverityInfo, capev1.WaitingForPlacementGroupPolicySatisfiedReason}})
 	})
 
 	It("PG Cache", func() {
@@ -226,9 +226,10 @@ func removeGPUVMInfosCache(gpuIDs []string) {
 }
 
 func getKey(ctx goctx.Context, machineCtx *context.MachineContext, ctrlClient client.Client, name string) string {
-	if name == clusterInsufficientMemoryKey {
+	switch name {
+	case clusterInsufficientMemoryKey:
 		return getKeyForInsufficientMemoryError(name)
-	} else if name == clusterInsufficientStorageKey {
+	case clusterInsufficientStorageKey:
 		return getKeyForInsufficientStorageError(name)
 	}
 

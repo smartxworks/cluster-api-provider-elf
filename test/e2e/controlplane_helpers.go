@@ -26,20 +26,20 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
-	controlplanev2 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
-	clusterv2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/test/framework"
 	capiutil "sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
+	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 type ScaleAndWaitControlPlaneInput struct {
 	ClusterProxy        framework.ClusterProxy
-	Cluster             *clusterv2.Cluster
-	ControlPlane        *controlplanev2.KubeadmControlPlane
+	Cluster             *capiv1.Cluster
+	ControlPlane        *controlplanev1.KubeadmControlPlane
 	Replicas            int32
 	WaitForControlPlane []interface{}
 }
@@ -83,8 +83,8 @@ func ScaleAndWaitControlPlane(ctx context.Context, input ScaleAndWaitControlPlan
 // UpgradeControlPlaneAndWaitForUpgradeInput is the input type for UpgradeControlPlaneAndWaitForUpgrade.
 type UpgradeControlPlaneAndWaitForUpgradeInput struct {
 	ClusterProxy                framework.ClusterProxy
-	Cluster                     *clusterv2.Cluster
-	ControlPlane                *controlplanev2.KubeadmControlPlane
+	Cluster                     *capiv1.Cluster
+	ControlPlane                *controlplanev1.KubeadmControlPlane
 	KubernetesUpgradeVersion    string
 	EtcdImageTag                string
 	DNSImageTag                 string
@@ -112,7 +112,7 @@ func UpgradeControlPlaneAndWaitForUpgrade(ctx context.Context, input UpgradeCont
 
 	// Retrieve infra object
 	infraRef := input.ControlPlane.Spec.MachineTemplate.Spec.InfrastructureRef
-	var elfMachineTemplate infrav1.ElfMachineTemplate
+	var elfMachineTemplate capev1.ElfMachineTemplate
 	elfMachineTemplateKey := client.ObjectKey{
 		Namespace: input.Cluster.Namespace,
 		Name:      infraRef.Name,
@@ -125,7 +125,7 @@ func UpgradeControlPlaneAndWaitForUpgrade(ctx context.Context, input UpgradeCont
 	elfMachineTemplateData, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&elfMachineTemplate)
 	Expect(err).NotTo(HaveOccurred())
 	infraObj := &unstructured.Unstructured{Object: elfMachineTemplateData}
-	infraObj.SetGroupVersionKind(infrav1.GroupVersion.WithKind("ElfMachineTemplate"))
+	infraObj.SetGroupVersionKind(capev1.GroupVersion.WithKind("ElfMachineTemplate"))
 
 	// Creates a new infra object
 	newInfraObj := infraObj

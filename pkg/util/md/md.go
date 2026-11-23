@@ -18,36 +18,20 @@ limitations under the License.
 
 import (
 	intstrutil "k8s.io/apimachinery/pkg/util/intstr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
-
-// IsMDInRollingUpdate returns whether MD is in rolling update.
-//
-// When *md.Spec.Replicas > md.Status.UpdatedReplicas, it must be in a MD rolling update process.
-// When *md.Spec.Replicas == md.Status.UpdatedReplicas, it could be in one of the following cases:
-//  1. It's not in a MD rolling update process. So md.Spec.Replicas == md.Status.Replicas.
-//  2. It's at the end of a MD rolling update process, and the last MD replica (i.e the last MD ElfMachine) is created just now.
-//     There is still an old MD ElfMachine, so md.Spec.Replicas + 1 == md.Status.Replicas.
-func IsMDInRollingUpdate(md *clusterv1.MachineDeployment) bool {
-	if (*md.Spec.Replicas > md.Status.UpdatedReplicas && *md.Spec.Replicas <= md.Status.Replicas) ||
-		(*md.Spec.Replicas == md.Status.UpdatedReplicas && *md.Spec.Replicas < md.Status.Replicas) {
-		return true
-	}
-
-	return false
-}
 
 /*
 Copy from CAPI: https://github.com/kubernetes-sigs/cluster-api/blob/release-1.5/internal/controllers/machinedeployment/mdutil/util.go
 */
 
 // MaxUnavailable returns the maximum unavailable machines a rolling deployment can take.
-func MaxUnavailable(deployment clusterv1.MachineDeployment) int32 {
-	if deployment.Spec.Strategy.Type != clusterv1.RollingUpdateMachineDeploymentStrategyType || *(deployment.Spec.Replicas) == 0 {
+func MaxUnavailable(deployment capiv1.MachineDeployment) int32 {
+	if deployment.Spec.Rollout.Strategy.Type != capiv1.RollingUpdateMachineDeploymentStrategyType || deployment.Spec.Replicas == nil || *(deployment.Spec.Replicas) == 0 {
 		return int32(0)
 	}
 	// Error caught by validation
-	_, maxUnavailable, _ := ResolveFenceposts(deployment.Spec.Strategy.RollingUpdate.MaxSurge, deployment.Spec.Strategy.RollingUpdate.MaxUnavailable, *(deployment.Spec.Replicas))
+	_, maxUnavailable, _ := ResolveFenceposts(deployment.Spec.Rollout.Strategy.RollingUpdate.MaxSurge, deployment.Spec.Rollout.Strategy.RollingUpdate.MaxUnavailable, *(deployment.Spec.Replicas))
 	if maxUnavailable > *deployment.Spec.Replicas {
 		return *deployment.Spec.Replicas
 	}
@@ -55,12 +39,12 @@ func MaxUnavailable(deployment clusterv1.MachineDeployment) int32 {
 }
 
 // MaxSurge returns the maximum surge machines a rolling deployment can take.
-func MaxSurge(deployment clusterv1.MachineDeployment) int32 {
-	if deployment.Spec.Strategy.Type != clusterv1.RollingUpdateMachineDeploymentStrategyType {
+func MaxSurge(deployment capiv1.MachineDeployment) int32 {
+	if deployment.Spec.Rollout.Strategy.Type != capiv1.RollingUpdateMachineDeploymentStrategyType || deployment.Spec.Replicas == nil {
 		return int32(0)
 	}
 	// Error caught by validation
-	maxSurge, _, _ := ResolveFenceposts(deployment.Spec.Strategy.RollingUpdate.MaxSurge, deployment.Spec.Strategy.RollingUpdate.MaxUnavailable, *(deployment.Spec.Replicas))
+	maxSurge, _, _ := ResolveFenceposts(deployment.Spec.Rollout.Strategy.RollingUpdate.MaxSurge, deployment.Spec.Rollout.Strategy.RollingUpdate.MaxUnavailable, *(deployment.Spec.Replicas))
 	return maxSurge
 }
 

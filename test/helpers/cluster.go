@@ -9,7 +9,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	"k8s.io/utils/ptr"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capisecret "sigs.k8s.io/cluster-api/util/secret"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -75,17 +76,17 @@ func NewKubeConfigSecret(testEnv *TestEnvironment, namespace, clusterName string
 			Name:      capisecret.Name(clusterName, capisecret.Kubeconfig),
 			Namespace: namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterNameLabel: clusterName,
+				capiv1.ClusterNameLabel: clusterName,
 			},
 		},
 		Data: map[string][]byte{
 			capisecret.KubeconfigDataName: bs,
 		},
-		Type: clusterv1.ClusterSecretType,
+		Type: capiv1.ClusterSecretType,
 	}, nil
 }
 
-func EnsureClusterForClusterCacheTest(ctx goctx.Context, testEnv *TestEnvironment, cluster *clusterv1.Cluster) error {
+func EnsureClusterForClusterCacheTest(ctx goctx.Context, testEnv *TestEnvironment, cluster *capiv1.Cluster) error {
 	clusterCopy := cluster.DeepCopy()
 	clusterCopy.ResourceVersion = ""
 	if err := testEnv.CreateAndWait(ctx, clusterCopy); err != nil {
@@ -94,7 +95,15 @@ func EnsureClusterForClusterCacheTest(ctx goctx.Context, testEnv *TestEnvironmen
 		}
 	}
 	patch := client.MergeFrom(clusterCopy.DeepCopy())
-	cluster.Status.InfrastructureReady = true
+	cluster.Status.Initialization.InfrastructureProvisioned = ptr.To(true)
+	// CAPI v1beta2 validates that every condition has a non-empty reason.
+	// Unit tests often only set the condition type and status, so provide a
+	// neutral reason before sending the status through the envtest API server.
+	for i := range cluster.Status.Conditions {
+		if cluster.Status.Conditions[i].Reason == "" {
+			cluster.Status.Conditions[i].Reason = "Test"
+		}
+	}
 	clusterCopy.Status = cluster.Status
 	if err := testEnv.Status().Patch(ctx, clusterCopy, patch); err != nil {
 		return err

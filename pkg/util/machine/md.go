@@ -20,14 +20,14 @@ import (
 	goctx "context"
 
 	apitypes "k8s.io/apimachinery/pkg/types"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	labelutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/labels"
 )
 
-func GetMDByMachine(ctx goctx.Context, ctrlClient client.Client, machine *clusterv1.Machine) (*clusterv1.MachineDeployment, error) {
-	var md clusterv1.MachineDeployment
+func GetMDByMachine(ctx goctx.Context, ctrlClient client.Client, machine *capiv1.Machine) (*capiv1.MachineDeployment, error) {
+	var md capiv1.MachineDeployment
 	if err := ctrlClient.Get(ctx, apitypes.NamespacedName{Namespace: machine.Namespace, Name: labelutil.GetDeploymentNameLabel(machine)}, &md); err != nil {
 		return nil, err
 	}
@@ -38,9 +38,9 @@ func GetMDByMachine(ctx goctx.Context, ctrlClient client.Client, machine *cluste
 func GetMDsForCluster(
 	ctx goctx.Context,
 	ctrlClient client.Client,
-	namespace, clusterName string) ([]*clusterv1.MachineDeployment, error) {
-	var mdList clusterv1.MachineDeploymentList
-	labels := map[string]string{clusterv1.ClusterNameLabel: clusterName}
+	namespace, clusterName string) ([]*capiv1.MachineDeployment, error) {
+	var mdList capiv1.MachineDeploymentList
+	labels := map[string]string{capiv1.ClusterNameLabel: clusterName}
 
 	if err := ctrlClient.List(
 		ctx, &mdList,
@@ -49,7 +49,7 @@ func GetMDsForCluster(
 		return nil, err
 	}
 
-	mds := make([]*clusterv1.MachineDeployment, len(mdList.Items))
+	mds := make([]*capiv1.MachineDeployment, len(mdList.Items))
 	for i := range mdList.Items {
 		mds[i] = &mdList.Items[i]
 	}

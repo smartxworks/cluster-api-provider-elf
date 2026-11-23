@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -31,14 +31,14 @@ func newScheme(t *testing.T) *runtime.Scheme {
 
 	scheme := runtime.NewScheme()
 	g := NewWithT(t)
-	g.Expect(clusterv1.AddToScheme(scheme)).To(Succeed())
+	g.Expect(capiv1.AddToScheme(scheme)).To(Succeed())
 	return scheme
 }
 
 func TestGetOwnerClusterSuccessByName(t *testing.T) {
 	g := NewWithT(t)
 
-	myCluster := &clusterv1.Cluster{
+	myCluster := &capiv1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-cluster",
 			Namespace: metav1.NamespaceDefault,
@@ -54,7 +54,7 @@ func TestGetOwnerClusterSuccessByName(t *testing.T) {
 		OwnerReferences: []metav1.OwnerReference{
 			{
 				Kind:       "Cluster",
-				APIVersion: clusterv1.GroupVersion.String(),
+				APIVersion: capiv1.GroupVersion.String(),
 				Name:       "my-cluster",
 			},
 		},

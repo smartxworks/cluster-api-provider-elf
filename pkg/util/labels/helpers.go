@@ -21,9 +21,9 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 const (
@@ -48,23 +48,23 @@ func HasLabel(o metav1.Object, label string) bool {
 }
 
 func GetHostServerIDLabel(o metav1.Object) string {
-	return GetLabelValue(o, infrav1.HostServerIDLabel)
+	return GetLabelValue(o, capev1.HostServerIDLabel)
 }
 
 func GetHostServerNameLabel(o metav1.Object) string {
-	return GetLabelValue(o, infrav1.HostServerNameLabel)
+	return GetLabelValue(o, capev1.HostServerNameLabel)
 }
 
 func GetZoneIDLabel(o metav1.Object) string {
-	return GetLabelValue(o, infrav1.ZoneIDLabel)
+	return GetLabelValue(o, capev1.ZoneIDLabel)
 }
 
 func GetZoneTypeLabel(o metav1.Object) string {
-	return GetLabelValue(o, infrav1.ZoneTypeLabel)
+	return GetLabelValue(o, capev1.ZoneTypeLabel)
 }
 
 func GetTowerVMIDLabel(o metav1.Object) string {
-	return GetLabelValue(o, infrav1.TowerVMIDLabel)
+	return GetLabelValue(o, capev1.TowerVMIDLabel)
 }
 
 func GetClusterAutoscalerCAPIGPULabel(o metav1.Object) string {
@@ -72,19 +72,19 @@ func GetClusterAutoscalerCAPIGPULabel(o metav1.Object) string {
 }
 
 func GetNodeGroupLabel(o metav1.Object) string {
-	return GetLabelValue(o, infrav1.NodeGroupLabel)
+	return GetLabelValue(o, capev1.NodeGroupLabel)
 }
 
 func GetClusterNameLabelLabel(o metav1.Object) string {
-	return GetLabelValue(o, clusterv1.ClusterNameLabel)
+	return GetLabelValue(o, capiv1.ClusterNameLabel)
 }
 
 func GetDeploymentNameLabel(o metav1.Object) string {
-	return GetLabelValue(o, clusterv1.MachineDeploymentNameLabel)
+	return GetLabelValue(o, capiv1.MachineDeploymentNameLabel)
 }
 
 func GetClusterNameLabel(o metav1.Object) string {
-	return GetLabelValue(o, clusterv1.ClusterNameLabel)
+	return GetLabelValue(o, capiv1.ClusterNameLabel)
 }
 
 func GetLabelValue(o metav1.Object, label string) string {

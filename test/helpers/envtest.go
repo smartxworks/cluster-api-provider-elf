@@ -46,14 +46,14 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog/v2"
-	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
-	controlplanev2 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
-	clusterv2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	controlplanev1beta1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
+	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	kcpwebhooks "sigs.k8s.io/cluster-api/controlplane/kubeadm/webhooks"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	capicontract "sigs.k8s.io/cluster-api/util/contract"
-	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
+	"sigs.k8s.io/cluster-api/util/patch"
 	capiwebhooks "sigs.k8s.io/cluster-api/webhooks"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,7 +64,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 	"sigs.k8s.io/yaml"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/manager"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/util/capi/kubeconfig"
@@ -93,11 +93,11 @@ func init() {
 	utilruntime.Must(cgscheme.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(admissionv1.AddToScheme(scheme))
-	utilruntime.Must(clusterv1.AddToScheme(scheme))
-	utilruntime.Must(clusterv2.AddToScheme(scheme))
+	utilruntime.Must(capiv1beta1.AddToScheme(scheme))
+	utilruntime.Must(capiv1.AddToScheme(scheme))
+	utilruntime.Must(controlplanev1beta1.AddToScheme(scheme))
 	utilruntime.Must(controlplanev1.AddToScheme(scheme))
-	utilruntime.Must(controlplanev2.AddToScheme(scheme))
-	utilruntime.Must(infrav1.AddToScheme(scheme))
+	utilruntime.Must(capev1.AddToScheme(scheme))
 
 	// Get the root of the current file to use in CRD paths.
 	_, filename, _, _ := goruntime.Caller(0) //nolint
@@ -173,8 +173,13 @@ func NewTestEnvironment(ctx goctx.Context) *TestEnvironment {
 		apiVersionGetter := func(gk schema.GroupKind) (string, error) {
 			return getAPIVersionForGroupKind(ctx, mgr.GetClient(), gk)
 		}
-		clusterv1.SetAPIVersionGetter(apiVersionGetter)
-		controlplanev1.SetAPIVersionGetter(apiVersionGetter)
+		// CAPI's v1beta1 conversion implementations need to know the storage
+		// version when converting contract references. The production manager
+		// configures these getters before registering webhooks; envtest must do
+		// the same or every conversion request fails with "apiVersionGetter not
+		// set".
+		capiv1beta1.SetAPIVersionGetter(apiVersionGetter)
+		controlplanev1beta1.SetAPIVersionGetter(apiVersionGetter)
 
 		if err := (&capiwebhooks.Cluster{Client: mgr.GetClient()}).SetupWebhookWithManager(mgr); err != nil {
 			return err
@@ -251,7 +256,7 @@ func (t *TestEnvironment) StartManager(ctx goctx.Context) error {
 	ctx, cancel := goctx.WithCancel(ctx)
 	t.cancel = cancel
 
-	return t.Manager.Start(ctx)
+	return t.Start(ctx)
 }
 
 // WaitForWebhooks waits for the webhook server to be available.
@@ -291,7 +296,7 @@ func (t *TestEnvironment) Stop() error {
 func (t *TestEnvironment) Cleanup(ctx goctx.Context, objs ...client.Object) error {
 	errs := make([]error, 0, len(objs))
 	for _, o := range objs {
-		err := t.Client.Delete(ctx, o)
+		err := t.Delete(ctx, o)
 		if apierrors.IsNotFound(err) {
 			// If the object is not found, it must've been garbage collected
 			// already. For example, if we delete namespace first and then
@@ -315,14 +320,14 @@ func (t *TestEnvironment) CreateNamespace(ctx goctx.Context, name string) (*core
 		},
 	}
 
-	if err := t.Client.Create(ctx, ns); err != nil {
+	if err := t.Create(ctx, ns); err != nil {
 		return nil, err
 	}
 
 	return ns, nil
 }
 
-func (t *TestEnvironment) CreateKubeconfigSecret(ctx goctx.Context, cluster *clusterv1.Cluster) error {
+func (t *TestEnvironment) CreateKubeconfigSecret(ctx goctx.Context, cluster *capiv1.Cluster) error {
 	return t.Create(ctx, kubeconfig.GenerateSecret(cluster, kubeconfig.FromEnvTestConfig(t.Config, cluster)))
 }
 
@@ -467,7 +472,7 @@ func filterCRDDirectoryVersions(dir string, dropVersions map[string]bool) (strin
 			out = in
 		}
 
-		if err := os.WriteFile(dstPath, out, 0o600); err != nil {
+		if err := os.WriteFile(dstPath, out, 0o600); err != nil { //nolint:gosec // dstPath is built from a filename returned by os.ReadDir
 			return "", err
 		}
 	}

@@ -23,13 +23,12 @@ import (
 	agentv1 "github.com/smartxworks/host-config-agent-api/api/v1alpha1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
-	bootstrapv1 "sigs.k8s.io/cluster-api/api/bootstrap/kubeadm/v1beta1"
-	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
-	clusterv2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	bootstrapv1 "sigs.k8s.io/cluster-api/api/bootstrap/kubeadm/v1beta2"
+	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/product"
 )
@@ -48,11 +47,10 @@ func New(ctx goctx.Context, opts Options) (Manager, error) {
 	opts.defaults()
 
 	utilruntime.Must(cgscheme.AddToScheme(opts.Scheme))
-	utilruntime.Must(clusterv1.AddToScheme(opts.Scheme))
-	utilruntime.Must(clusterv2.AddToScheme(opts.Scheme))
-	utilruntime.Must(infrav1.AddToScheme(opts.Scheme))
+	utilruntime.Must(capiv1.AddToScheme(opts.Scheme))
 	utilruntime.Must(bootstrapv1.AddToScheme(opts.Scheme))
 	utilruntime.Must(controlplanev1.AddToScheme(opts.Scheme))
+	utilruntime.Must(capev1.AddToScheme(opts.Scheme))
 	product.InitHostAgentAPIGroup(&agentv1.GroupVersion, agentv1.SchemeBuilder)
 	utilruntime.Must(agentv1.AddToScheme(opts.Scheme))
 	// +kubebuilder:scaffold:scheme

@@ -21,11 +21,12 @@ import (
 	"fmt"
 
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capiutil "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
@@ -35,10 +36,10 @@ const (
 
 // MachineContext is a Go context used with an ElfMachine.
 type MachineContext struct {
-	Cluster     *clusterv1.Cluster
-	Machine     *clusterv1.Machine
-	ElfCluster  *infrav1.ElfCluster
-	ElfMachine  *infrav1.ElfMachine
+	Cluster     *capiv1.Cluster
+	Machine     *capiv1.Machine
+	ElfCluster  *capev1.ElfCluster
+	ElfMachine  *capev1.ElfMachine
 	PatchHelper *patch.Helper
 	VMService   service.VMService
 }
@@ -50,18 +51,25 @@ func (c *MachineContext) String() string {
 
 // Patch updates the object and its status on the API server.
 func (c *MachineContext) Patch(ctx goctx.Context) error {
-	return c.PatchHelper.Patch(ctx, c.ElfMachine)
+	return c.PatchHelper.Patch(ctx, c.ElfMachine,
+		patch.WithOwnedConditions{Conditions: []capiv1beta1.ConditionType{
+			capiv1beta1.ReadyCondition,
+			capev1.TowerAvailableCondition,
+			capev1.VMProvisionedCondition,
+			capev1.ResourcesHotUpdatedCondition,
+		}},
+	)
 }
 
 func (c *MachineContext) GetFailureDomain() string {
-	if c.Machine != nil && c.Machine.Spec.FailureDomain != nil {
-		return *c.Machine.Spec.FailureDomain
+	if c.Machine != nil && c.Machine.Spec.FailureDomain != "" {
+		return c.Machine.Spec.FailureDomain
 	}
 
 	return ""
 }
 
-func (c *MachineContext) GetCloudFailureDomain() *infrav1.CloudFailureDomain {
+func (c *MachineContext) GetCloudFailureDomain() *capev1.CloudFailureDomain {
 	fd := c.GetFailureDomain()
 	if fd == "" {
 		return nil

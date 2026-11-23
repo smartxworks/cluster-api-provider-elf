@@ -24,11 +24,11 @@ import (
 
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/apimachinery/pkg/api/resource"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
-	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	conditionsv1beta1 "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
@@ -65,10 +65,10 @@ func isELFScheduleVMErrorRecorded(ctx goctx.Context, machineCtx *context.Machine
 	defer lock.Unlock()
 
 	if insufficient, msg := isELFClusterMemoryInsufficient(machineCtx); insufficient {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForELFClusterWithSufficientMemoryReason, clusterv1.ConditionSeverityInfo, "")
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.WaitingForELFClusterWithSufficientMemoryReason, capiv1beta1.ConditionSeverityInfo, "")
 		return true, msg, nil
 	} else if insufficient, msg := isELFClusterStorageInsufficient(machineCtx); insufficient {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForELFClusterWithSufficientStorageReason, clusterv1.ConditionSeverityInfo, "")
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.WaitingForELFClusterWithSufficientStorageReason, capiv1beta1.ConditionSeverityInfo, "")
 		return true, msg, nil
 	}
 
@@ -78,7 +78,7 @@ func isELFScheduleVMErrorRecorded(ctx goctx.Context, machineCtx *context.Machine
 	}
 
 	if resource := getClusterResource(getKeyForDuplicatePlacementGroupError(placementGroupName)); resource != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForPlacementGroupPolicySatisfiedReason, clusterv1.ConditionSeverityInfo, "")
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.WaitingForPlacementGroupPolicySatisfiedReason, capiv1beta1.ConditionSeverityInfo, "")
 
 		return true, "Not satisfy policy detected for the placement group " + placementGroupName, nil
 	}

@@ -31,16 +31,16 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	cgscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
-	clusterv2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/controllers/clustercache"
 	"sigs.k8s.io/cluster-api/controllers/remote"
-	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	conditionsv1beta1 "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/manager"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
@@ -92,9 +92,9 @@ func setup() {
 		panic(errors.Wrapf(err, "Error setting alsologtostderr flag"))
 	}
 
-	utilruntime.Must(infrav1.AddToScheme(cgscheme.Scheme))
-	utilruntime.Must(clusterv1.AddToScheme(cgscheme.Scheme))
-	utilruntime.Must(clusterv2.AddToScheme(cgscheme.Scheme))
+	utilruntime.Must(capev1.AddToScheme(cgscheme.Scheme))
+	utilruntime.Must(capiv1beta1.AddToScheme(cgscheme.Scheme))
+	utilruntime.Must(capiv1.AddToScheme(cgscheme.Scheme))
 
 	testEnv = helpers.NewTestEnvironment(ctx)
 
@@ -107,7 +107,7 @@ func setup() {
 			panic(fmt.Sprintf("failed to start the envtest manager: %v", err))
 		}
 	}()
-	<-testEnv.Manager.Elected()
+	<-testEnv.Elected()
 	testEnv.WaitForWebhooks(ctx)
 
 	// create manager pod namespace
@@ -123,7 +123,7 @@ func setup() {
 	controllerOpts := controller.Options{MaxConcurrentReconciles: 10}
 
 	clusterCache, err = clustercache.SetupWithManager(ctx, testEnv.Manager, clustercache.Options{
-		SecretClient: testEnv.Manager.GetClient(),
+		SecretClient: testEnv.GetClient(),
 		Cache: clustercache.CacheOptions{
 			Indexes: []clustercache.CacheOptionsIndex{clustercache.NodeProviderIDIndex},
 		},
@@ -163,8 +163,8 @@ func teardown() {
 }
 
 func newMachineContext(
-	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
-	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine,
+	elfCluster *capev1.ElfCluster, cluster *capiv1.Cluster,
+	elfMachine *capev1.ElfMachine, machine *capiv1.Machine,
 	vmService service.VMService) *context.MachineContext {
 	return &context.MachineContext{
 		Cluster:    cluster,
@@ -176,16 +176,16 @@ func newMachineContext(
 }
 
 type conditionAssertion struct {
-	conditionType clusterv1.ConditionType
+	conditionType capiv1beta1.ConditionType
 	status        corev1.ConditionStatus
-	severity      clusterv1.ConditionSeverity
+	severity      capiv1beta1.ConditionSeverity
 	reason        string
 }
 
-func expectConditions(getter conditions.Getter, expected []conditionAssertion) {
+func expectConditions(getter conditionsv1beta1.Getter, expected []conditionAssertion) {
 	Expect(len(getter.GetConditions())).To(BeNumerically(">=", len(expected)), "number of conditions")
 	for _, c := range expected {
-		actual := conditions.Get(getter, c.conditionType)
+		actual := conditionsv1beta1.Get(getter, c.conditionType)
 		Expect(actual).To(Not(BeNil()))
 		Expect(actual.Type).To(Equal(c.conditionType))
 		Expect(actual.Status).To(Equal(c.status))

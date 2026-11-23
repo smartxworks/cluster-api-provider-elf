@@ -38,6 +38,12 @@ const (
 	// CAPEVersion1_7_0 defines version v1.7.0.
 	CAPEVersion1_7_0 = "v1.7.0"
 
+	// CAPEVersion1_8_0 defines version v1.8.0.
+	CAPEVersion1_8_0 = "v1.8.0"
+
+	// CAPEVersion1_9_0 defines version v1.9.0.
+	CAPEVersion1_9_0 = "v1.9.0"
+
 	// CAPEVersionLatest defines version latest.
 	CAPEVersionLatest = "latest"
 

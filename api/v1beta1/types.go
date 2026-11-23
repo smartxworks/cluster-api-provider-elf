@@ -105,7 +105,7 @@ func (t *Tower) String() string {
 		return fmt.Sprintf("%s/%s", t.SecretRef.Namespace, t.SecretRef.Name)
 	}
 
-	return t.TowerClientConfig.Server
+	return t.Server
 }
 
 func (t *Tower) SecretKey() apitypes.NamespacedName {
@@ -251,7 +251,7 @@ type NetworkDeviceSpec struct {
 }
 
 func (d *NetworkDeviceSpec) HasNetworkType() bool {
-	return !(d.NetworkType == "" || d.NetworkType == NetworkTypeNone)
+	return d.NetworkType != "" && d.NetworkType != NetworkTypeNone
 }
 
 // NetworkDeviceRouteSpec defines the network configuration for a virtual machine's

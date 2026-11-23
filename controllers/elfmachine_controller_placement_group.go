@@ -27,22 +27,23 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
-	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/annotations"
-	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
-	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
+	"sigs.k8s.io/cluster-api/util/collections"
+	conditionsv1beta1 "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	towerresources "github.com/smartxworks/cluster-api-provider-elf/pkg/resources"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 	annotationsutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/annotations"
 	capieutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/capi"
-	capiecollections "github.com/smartxworks/cluster-api-provider-elf/pkg/util/capi/collections"
 	kcputil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/kcp"
 	machineutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/machine"
 	typesutil "github.com/smartxworks/cluster-api-provider-elf/pkg/util/types"
@@ -140,7 +141,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx goctx.Context, machine
 
 	defer func() {
 		if rethost == nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.WaitingForAvailableHostRequiredByPlacementGroupReason, clusterv1.ConditionSeverityInfo, "")
+			conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.WaitingForAvailableHostRequiredByPlacementGroupReason, capiv1beta1.ConditionSeverityInfo, "")
 		}
 	}()
 
@@ -200,7 +201,7 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx goctx.Context, machine
 	// so the Machine will not be deleted.
 	// We can add delete machine annotation on the Machine and KCP will delete it.
 	if kcputil.IsKCPInScalingDown(kcp) {
-		if annotationsutil.HasAnnotation(machineCtx.Machine, clusterv1.DeleteMachineAnnotation) {
+		if annotationsutil.HasAnnotation(machineCtx.Machine, capiv1.DeleteMachineAnnotation) {
 			return nil, nil
 		}
 
@@ -221,9 +222,9 @@ func (r *ElfMachineReconciler) preCheckPlacementGroup(ctx goctx.Context, machine
 		//   4.all machines
 		//
 		// Refer to https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20191017-kubeadm-based-control-plane.md#scale-down
-		annotations.AddAnnotations(newMachine, map[string]string{clusterv1.DeleteMachineAnnotation: ""})
+		annotations.AddAnnotations(newMachine, map[string]string{capiv1.DeleteMachineAnnotation: ""})
 		if err := patchHelper.Patch(ctx, newMachine); err != nil {
-			return nil, errors.Wrapf(err, "failed to patch Machine %s to add delete machine annotation %s.", klog.KObj(newMachine), clusterv1.DeleteMachineAnnotation)
+			return nil, errors.Wrapf(err, "failed to patch Machine %s to add delete machine annotation %s.", klog.KObj(newMachine), capiv1.DeleteMachineAnnotation)
 		}
 
 		return nil, nil
@@ -270,14 +271,14 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx goctx.Context, mach
 		return "", err
 	}
 
-	elfMachineMap := make(map[string]*infrav1.ElfMachine)
+	elfMachineMap := make(map[string]*capev1.ElfMachine)
 	for i := range elfMachines {
 		if typesutil.IsUUID(elfMachines[i].Status.VMRef) {
 			elfMachineMap[elfMachines[i].Name] = elfMachines[i]
 		}
 	}
 
-	placementGroupMachines := make([]*clusterv1.Machine, 0, len(placementGroup.Vms))
+	placementGroupMachines := make([]*capiv1.Machine, 0, len(placementGroup.Vms))
 	vmMap := make(map[string]string)
 	for i := range len(placementGroup.Vms) {
 		if elfMachine, ok := elfMachineMap[*placementGroup.Vms[i].Name]; ok {
@@ -291,7 +292,7 @@ func (r *ElfMachineReconciler) getVMHostForRollingUpdate(ctx goctx.Context, mach
 		}
 	}
 
-	machines := capiecollections.FromMachines(placementGroupMachines...)
+	machines := collections.FromMachines(placementGroupMachines...)
 	newestMachine := machines.Newest()
 	if newestMachine == nil {
 		log.Info("Newest machine not found, skip selecting host for VM", "vmRef", machineCtx.ElfMachine.Status.VMRef)
@@ -401,9 +402,9 @@ func (r *ElfMachineReconciler) joinPlacementGroup(ctx goctx.Context, machineCtx 
 
 	defer func() {
 		if reterr != nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.JoiningPlacementGroupFailedReason, clusterv1.ConditionSeverityWarning, "%s", reterr.Error())
+			conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.JoiningPlacementGroupFailedReason, capiv1beta1.ConditionSeverityWarning, "%s", reterr.Error())
 		} else if !ret {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.VMProvisionedCondition, infrav1.JoiningPlacementGroupReason, clusterv1.ConditionSeverityInfo, "")
+			conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.VMProvisionedCondition, capev1.JoiningPlacementGroupReason, capiv1beta1.ConditionSeverityInfo, "")
 		}
 	}()
 
@@ -711,5 +712,18 @@ func formatKCP(kcp *controlplanev1.KubeadmControlPlane) string {
 		return "{}"
 	}
 
-	return fmt.Sprintf("{name:%s,namespace:%s,spec:{replicas:%d},status:{replicas:%d,readyReplicas:%d,updatedReplicas:%d,unavailableReplicas:%d}}", kcp.Name, kcp.Namespace, *kcp.Spec.Replicas, kcp.Status.Replicas, kcp.Status.ReadyReplicas, kcp.Status.UpdatedReplicas, kcp.Status.UnavailableReplicas)
+	var spec, replicas, ready, updated, unavailable int32
+	if kcp.Spec.Replicas != nil {
+		spec = *kcp.Spec.Replicas
+	}
+	if kcp.Status.Replicas != nil {
+		replicas = *kcp.Status.Replicas
+	}
+	if kcp.Status.ReadyReplicas != nil {
+		ready = *kcp.Status.ReadyReplicas
+	}
+	if kcp.Status.UpToDateReplicas != nil {
+		updated = *kcp.Status.UpToDateReplicas
+	}
+	return fmt.Sprintf("{name:%s,namespace:%s,spec:{replicas:%d},status:{replicas:%d,readyReplicas:%d,updatedReplicas:%d,unavailableReplicas:%d}}", kcp.Name, kcp.Namespace, spec, replicas, ready, updated, unavailable)
 }

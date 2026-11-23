@@ -25,11 +25,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/storage/names"
 	"k8s.io/utils/ptr"
-	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/patch"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 )
 
@@ -59,55 +59,55 @@ const (
 	MemoryMiB = 1024 * 7
 )
 
-func NewClusterObjects() (*infrav1.ElfCluster, *clusterv1.Cluster) {
-	elfCluster := &infrav1.ElfCluster{
+func NewClusterObjects() (*capev1.ElfCluster, *capiv1.Cluster) {
+	elfCluster := &capev1.ElfCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      names.SimpleNameGenerator.GenerateName("elfcluster-"),
 			Namespace: Namespace,
 		},
-		Spec: infrav1.ElfClusterSpec{
-			ClusterType: infrav1.ElfClusterTypeStandard,
+		Spec: capev1.ElfClusterSpec{
+			ClusterType: capev1.ElfClusterTypeStandard,
 		},
-		Status: infrav1.ElfClusterStatus{},
+		Status: capev1.ElfClusterStatus{},
 	}
 
-	cluster := &clusterv1.Cluster{
+	cluster := &capiv1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      elfCluster.Name,
 			Namespace: Namespace,
 		},
-		Spec: clusterv1.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				APIVersion: infrav1.GroupVersion.String(),
-				Kind:       ElfClusterKind,
-				Name:       elfCluster.Name,
+		Spec: capiv1.ClusterSpec{
+			InfrastructureRef: capiv1.ContractVersionedObjectReference{
+				APIGroup: capev1.GroupVersion.Group,
+				Kind:     ElfClusterKind,
+				Name:     elfCluster.Name,
 			},
 		},
-		Status: clusterv1.ClusterStatus{},
+		Status: capiv1.ClusterStatus{},
 	}
 
 	return elfCluster, cluster
 }
 
-func NewMachineObjects(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster) (*infrav1.ElfMachine, *clusterv1.Machine) {
+func NewMachineObjects(elfCluster *capev1.ElfCluster, cluster *capiv1.Cluster) (*capev1.ElfMachine, *capiv1.Machine) {
 	elfMachine := NewElfMachine(elfCluster)
 
-	machine := &clusterv1.Machine{
+	machine := &capiv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      names.SimpleNameGenerator.GenerateName("machine-"),
 			Namespace: Namespace,
 			Labels: map[string]string{
-				clusterv1.ClusterNameLabel: cluster.Name,
+				capiv1.ClusterNameLabel: cluster.Name,
 			},
 			CreationTimestamp: metav1.Now(),
 		},
-		Spec: clusterv1.MachineSpec{
+		Spec: capiv1.MachineSpec{
 			ClusterName: cluster.Name,
-			Version:     ptr.To("1.26.0"),
-			InfrastructureRef: corev1.ObjectReference{
-				APIVersion: infrav1.GroupVersion.String(),
-				Kind:       ElfMachineKind,
-				Name:       elfMachine.Name,
+			Version:     "1.26.0",
+			InfrastructureRef: capiv1.ContractVersionedObjectReference{
+				APIGroup: capev1.GroupVersion.Group,
+				Kind:     ElfMachineKind,
+				Name:     elfMachine.Name,
 			},
 		},
 	}
@@ -115,24 +115,24 @@ func NewMachineObjects(elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluste
 	return elfMachine, machine
 }
 
-func NewElfMachine(elfCluster *infrav1.ElfCluster) *infrav1.ElfMachine {
-	elfMachine := &infrav1.ElfMachine{
+func NewElfMachine(elfCluster *capev1.ElfCluster) *capev1.ElfMachine {
+	elfMachine := &capev1.ElfMachine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              names.SimpleNameGenerator.GenerateName("elfmachine-"),
 			Namespace:         Namespace,
 			CreationTimestamp: metav1.Now(),
-			Annotations:       map[string]string{infrav1.CAPEVersionAnnotation: "latest"},
+			Annotations:       map[string]string{capev1.CAPEVersionAnnotation: "latest"},
 		},
-		Spec: infrav1.ElfMachineSpec{
+		Spec: capev1.ElfMachineSpec{
 			HA:                true,
 			NumCPUs:           NumCPUs,
 			NumCoresPerSocket: NumCoresPerSocket,
 			MemoryMiB:         MemoryMiB,
 			DiskGiB:           DiskGiB,
-			Network: infrav1.NetworkSpec{
-				Devices: []infrav1.NetworkDeviceSpec{
+			Network: capev1.NetworkSpec{
+				Devices: []capev1.NetworkDeviceSpec{
 					{
-						NetworkType: infrav1.NetworkTypeIPV4DHCP,
+						NetworkType: capev1.NetworkTypeIPV4DHCP,
 					},
 				},
 			},
@@ -141,14 +141,14 @@ func NewElfMachine(elfCluster *infrav1.ElfCluster) *infrav1.ElfMachine {
 
 	if elfCluster != nil {
 		elfMachine.Labels = map[string]string{
-			clusterv1.ClusterNameLabel: elfCluster.Name,
+			capiv1.ClusterNameLabel: elfCluster.Name,
 		}
 	}
 
 	return elfMachine
 }
 
-func NewClusterAndMachineObjects() (*infrav1.ElfCluster, *clusterv1.Cluster, *infrav1.ElfMachine, *clusterv1.Machine, *corev1.Secret) {
+func NewClusterAndMachineObjects() (*capev1.ElfCluster, *capiv1.Cluster, *capev1.ElfMachine, *capiv1.Machine, *corev1.Secret) {
 	elfCluster, cluster := NewClusterObjects()
 	elfMachine, machine := NewMachineObjects(elfCluster, cluster)
 
@@ -176,39 +176,39 @@ func NewKCP() *controlplanev1.KubeadmControlPlane {
 	}
 }
 
-func NewMD() *clusterv1.MachineDeployment {
-	return &clusterv1.MachineDeployment{
+func NewMD() *capiv1.MachineDeployment {
+	return &capiv1.MachineDeployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      names.SimpleNameGenerator.GenerateName("md-"),
 			Namespace: Namespace,
 		},
-		Spec:   clusterv1.MachineDeploymentSpec{Replicas: ptr.To[int32](1)},
-		Status: clusterv1.MachineDeploymentStatus{},
+		Spec:   capiv1.MachineDeploymentSpec{Replicas: ptr.To[int32](1)},
+		Status: capiv1.MachineDeploymentStatus{},
 	}
 }
 
 func InitClusterOwnerReferences(ctx goctx.Context, ctrlMgrCtx *context.ControllerManagerContext,
-	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster) {
+	elfCluster *capev1.ElfCluster, cluster *capiv1.Cluster) {
 	By("setting the OwnerRef on the ElfCluster")
 	ph, err := patch.NewHelper(elfCluster, ctrlMgrCtx.Client)
 	Expect(err).ShouldNot(HaveOccurred())
-	elfCluster.OwnerReferences = append(elfCluster.OwnerReferences, metav1.OwnerReference{Kind: ClusterKind, APIVersion: clusterv1.GroupVersion.String(), Name: cluster.Name, UID: "blah"})
+	elfCluster.OwnerReferences = append(elfCluster.OwnerReferences, metav1.OwnerReference{Kind: ClusterKind, APIVersion: capiv1.GroupVersion.String(), Name: cluster.Name, UID: "blah"})
 	Expect(ph.Patch(ctx, elfCluster, patch.WithStatusObservedGeneration{})).ShouldNot(HaveOccurred())
 }
 
 func InitMachineOwnerReferences(ctx goctx.Context, ctrlMgrCtx *context.ControllerManagerContext,
-	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine) {
+	elfMachine *capev1.ElfMachine, machine *capiv1.Machine) {
 	By("setting the OwnerRef on the ElfMachine")
 	ph, err := patch.NewHelper(elfMachine, ctrlMgrCtx.Client)
 	Expect(err).ShouldNot(HaveOccurred())
-	elfMachine.OwnerReferences = append(elfMachine.OwnerReferences, metav1.OwnerReference{Kind: MachineKind, APIVersion: clusterv1.GroupVersion.String(), Name: machine.Name, UID: "blah"})
+	elfMachine.OwnerReferences = append(elfMachine.OwnerReferences, metav1.OwnerReference{Kind: MachineKind, APIVersion: capiv1.GroupVersion.String(), Name: machine.Name, UID: "blah"})
 	Expect(ph.Patch(ctx, elfMachine, patch.WithStatusObservedGeneration{})).ShouldNot(HaveOccurred())
 }
 
 func InitOwnerReferences(
 	ctx goctx.Context, ctrlMgrCtx *context.ControllerManagerContext,
-	elfCluster *infrav1.ElfCluster, cluster *clusterv1.Cluster,
-	elfMachine *infrav1.ElfMachine, machine *clusterv1.Machine) {
+	elfCluster *capev1.ElfCluster, cluster *capiv1.Cluster,
+	elfMachine *capev1.ElfMachine, machine *capiv1.Machine) {
 	if elfCluster != nil {
 		InitClusterOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster)
 	}
@@ -224,41 +224,41 @@ func ToCPMachine(machine metav1.Object, kcp *controlplanev1.KubeadmControlPlane)
 		labels = make(map[string]string)
 	}
 
-	labels[clusterv1.MachineControlPlaneLabel] = ""
+	labels[capiv1.MachineControlPlaneLabel] = ""
 	machine.SetLabels(labels)
 
 	machine.SetOwnerReferences([]metav1.OwnerReference{*metav1.NewControllerRef(kcp, controlplanev1.GroupVersion.WithKind("KubeadmControlPlane"))})
 }
 
-func ToWorkerMachine(machine metav1.Object, md *clusterv1.MachineDeployment) {
+func ToWorkerMachine(machine metav1.Object, md *capiv1.MachineDeployment) {
 	labels := machine.GetLabels()
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
-	labels[clusterv1.MachineDeploymentNameLabel] = ""
+	labels[capiv1.MachineDeploymentNameLabel] = ""
 	if md != nil {
-		labels[clusterv1.MachineDeploymentNameLabel] = md.Name
+		labels[capiv1.MachineDeploymentNameLabel] = md.Name
 	}
-	delete(labels, clusterv1.MachineControlPlaneLabel)
+	delete(labels, capiv1.MachineControlPlaneLabel)
 
 	machine.SetLabels(labels)
 }
 
-func NewElfMachineTemplate() *infrav1.ElfMachineTemplate {
-	return &infrav1.ElfMachineTemplate{
+func NewElfMachineTemplate() *capev1.ElfMachineTemplate {
+	return &capev1.ElfMachineTemplate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      names.SimpleNameGenerator.GenerateName("elfMachineTemplate-"),
 			Namespace: Namespace,
 		},
-		Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					DiskGiB: DiskGiB,
-					Network: infrav1.NetworkSpec{
-						Devices: []infrav1.NetworkDeviceSpec{
+					Network: capev1.NetworkSpec{
+						Devices: []capev1.NetworkDeviceSpec{
 							{
-								NetworkType: infrav1.NetworkTypeIPV4DHCP,
+								NetworkType: capev1.NetworkTypeIPV4DHCP,
 							},
 						},
 					},
@@ -268,10 +268,10 @@ func NewElfMachineTemplate() *infrav1.ElfMachineTemplate {
 	}
 }
 
-func SetElfMachineTemplateForElfMachine(elfMachine *infrav1.ElfMachine, emt *infrav1.ElfMachineTemplate) {
+func SetElfMachineTemplateForElfMachine(elfMachine *capev1.ElfMachine, emt *capev1.ElfMachineTemplate) {
 	if elfMachine.Annotations == nil {
 		elfMachine.Annotations = make(map[string]string)
 	}
-	elfMachine.Annotations[clusterv1.TemplateClonedFromNameAnnotation] = emt.Name
+	elfMachine.Annotations[capiv1.TemplateClonedFromNameAnnotation] = emt.Name
 	elfMachine.Spec = *emt.Spec.Template.Spec.DeepCopy()
 }

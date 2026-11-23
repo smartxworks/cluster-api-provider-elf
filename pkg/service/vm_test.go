@@ -26,7 +26,7 @@ import (
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 type hostQueryClient struct {
@@ -73,7 +73,7 @@ func TestCreateVMFromTemplateParams(t *testing.T) {
 	t.Run("includes the Tower server in the VM description", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 
-		params := newTestCreateVMFromTemplateParams(t, infrav1.ElfClusterTypeStandard, nil)
+		params := newTestCreateVMFromTemplateParams(t, capev1.ElfClusterTypeStandard, nil)
 
 		g.Expect(*params.Description).To(gomega.Equal("Automatically created Kubernetes node by server tower.example.com."))
 	})
@@ -81,7 +81,7 @@ func TestCreateVMFromTemplateParams(t *testing.T) {
 	t.Run("when storage cluster is set should use top-level storage config", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 
-		params := newTestCreateVMFromTemplateParams(t, infrav1.ElfClusterTypeStandard, &models.StorageConfig{StorageClusterID: TowerString("storage-cluster")})
+		params := newTestCreateVMFromTemplateParams(t, capev1.ElfClusterTypeStandard, &models.StorageConfig{StorageClusterID: TowerString("storage-cluster")})
 
 		g.Expect(params.StorageConfig).NotTo(gomega.BeNil())
 		g.Expect(*params.StorageConfig.StorageClusterID).To(gomega.Equal("storage-cluster"))
@@ -99,7 +99,7 @@ func TestCreateVMFromTemplateParams(t *testing.T) {
 	t.Run("when datastore is set should use top-level storage config", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 
-		params := newTestCreateVMFromTemplateParams(t, infrav1.ElfClusterTypeStandard, &models.StorageConfig{DatastoreID: TowerString("datastore")})
+		params := newTestCreateVMFromTemplateParams(t, capev1.ElfClusterTypeStandard, &models.StorageConfig{DatastoreID: TowerString("datastore")})
 
 		g.Expect(params.StorageConfig).NotTo(gomega.BeNil())
 		g.Expect(*params.StorageConfig.DatastoreID).To(gomega.Equal("datastore"))
@@ -109,7 +109,7 @@ func TestCreateVMFromTemplateParams(t *testing.T) {
 	t.Run("when storage cluster is unset should omit storage config", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 
-		params := newTestCreateVMFromTemplateParams(t, infrav1.ElfClusterTypeStandard, nil)
+		params := newTestCreateVMFromTemplateParams(t, capev1.ElfClusterTypeStandard, nil)
 
 		g.Expect(params.StorageConfig).To(gomega.BeNil())
 
@@ -123,7 +123,7 @@ func TestCreateVMFromTemplateParams(t *testing.T) {
 	t.Run("when stretched and storage cluster is set should use disk storage config", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 
-		params := newTestCreateVMFromTemplateParams(t, infrav1.ElfClusterTypeStretched, &models.StorageConfig{StorageClusterID: TowerString("storage-cluster")})
+		params := newTestCreateVMFromTemplateParams(t, capev1.ElfClusterTypeStretched, &models.StorageConfig{StorageClusterID: TowerString("storage-cluster")})
 
 		g.Expect(params.DiskOperate).NotTo(gomega.BeNil())
 		g.Expect(params.DiskOperate.NewDisks.MountNewCreateDisks).To(gomega.HaveLen(1))
@@ -149,19 +149,19 @@ func TestCreateVMFromTemplateParams(t *testing.T) {
 	})
 }
 
-func newTestCreateVMFromTemplateParams(t *testing.T, clusterType infrav1.ElfClusterType, config *models.StorageConfig) *models.VMCreateVMFromContentLibraryTemplateParams {
+func newTestCreateVMFromTemplateParams(t *testing.T, clusterType capev1.ElfClusterType, config *models.StorageConfig) *models.VMCreateVMFromContentLibraryTemplateParams {
 	t.Helper()
 
 	service := &TowerVMService{TowerServer: "tower.example.com"}
-	elfCluster := &infrav1.ElfCluster{
-		Spec: infrav1.ElfClusterSpec{
+	elfCluster := &capev1.ElfCluster{
+		Spec: capev1.ElfClusterSpec{
 			ClusterType: clusterType,
-			Tower:       infrav1.Tower{TowerClientConfig: infrav1.TowerClientConfig{Server: "tower.example.com"}},
+			Tower:       capev1.Tower{TowerClientConfig: capev1.TowerClientConfig{Server: "tower.example.com"}},
 		},
 	}
-	elfMachine := &infrav1.ElfMachine{
+	elfMachine := &capev1.ElfMachine{
 		ObjectMeta: metav1.ObjectMeta{Name: "machine"},
-		Spec: infrav1.ElfMachineSpec{
+		Spec: capev1.ElfMachineSpec{
 			NumCPUs:           1,
 			NumCoresPerSocket: 1,
 			MemoryMiB:         1024,
@@ -171,7 +171,7 @@ func newTestCreateVMFromTemplateParams(t *testing.T, clusterType infrav1.ElfClus
 	template := &models.ContentLibraryVMTemplate{
 		ID: TowerString("template"),
 	}
-	if clusterType == infrav1.ElfClusterTypeStretched {
+	if clusterType == capev1.ElfClusterTypeStretched {
 		template.VMDisks = []*models.NestedContentLibraryVMTemplateDisk{
 			{
 				Type:  models.NewVMDiskType(models.VMDiskTypeDISK),

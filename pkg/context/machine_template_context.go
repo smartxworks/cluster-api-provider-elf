@@ -19,17 +19,17 @@ package context
 import (
 	"fmt"
 
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
 // MachineTemplateContext is a Go context used with an ElfMachineTemplate.
 type MachineTemplateContext struct {
-	Cluster            *clusterv1.Cluster
-	ElfCluster         *infrav1.ElfCluster
-	ElfMachineTemplate *infrav1.ElfMachineTemplate
+	Cluster            *capiv1.Cluster
+	ElfCluster         *capev1.ElfCluster
+	ElfMachineTemplate *capev1.ElfMachineTemplate
 	VMService          service.VMService
 }
 

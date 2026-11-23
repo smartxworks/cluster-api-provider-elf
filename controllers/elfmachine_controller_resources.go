@@ -25,13 +25,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	capiremote "sigs.k8s.io/cluster-api/controllers/remote"
-	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	conditionsv1beta1 "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/hostagent"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
@@ -46,7 +46,7 @@ func (r *ElfMachineReconciler) reconcileVMResources(ctx goctx.Context, machineCt
 		return ok, err
 	}
 
-	if ok, err := r.reconcieVMVolume(ctx, machineCtx, vm, infrav1.ResourcesHotUpdatedCondition); err != nil || !ok {
+	if ok, err := r.reconcieVMVolume(ctx, machineCtx, vm, capev1.ResourcesHotUpdatedCondition); err != nil || !ok {
 		return ok, err
 	}
 
@@ -58,8 +58,8 @@ func (r *ElfMachineReconciler) reconcileVMResources(ctx goctx.Context, machineCt
 		return ok, err
 	}
 
-	if conditions.IsFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition) {
-		conditions.MarkTrue(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	if conditionsv1beta1.IsFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition) {
+		conditionsv1beta1.MarkTrue(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition)
 	}
 
 	return true, nil
@@ -68,7 +68,7 @@ func (r *ElfMachineReconciler) reconcileVMResources(ctx goctx.Context, machineCt
 // reconcieVMVolume ensures that the vm disk size is as expected.
 //
 // The conditionType param: VMProvisionedCondition/ResourcesHotUpdatedCondition.
-func (r *ElfMachineReconciler) reconcieVMVolume(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM, conditionType clusterv1.ConditionType) (bool, error) {
+func (r *ElfMachineReconciler) reconcieVMVolume(ctx goctx.Context, machineCtx *context.MachineContext, vm *models.VM, conditionType capiv1beta1.ConditionType) (bool, error) {
 	// If the capacity is 0, it means that the disk size has not changed and returns directly.
 	if machineCtx.ElfMachine.Spec.DiskGiB == 0 {
 		return true, nil
@@ -107,13 +107,13 @@ func (r *ElfMachineReconciler) reconcieVMVolume(ctx goctx.Context, machineCtx *c
 }
 
 // resizeVMVolume sets the volume to the specified size.
-func (r *ElfMachineReconciler) resizeVMVolume(ctx goctx.Context, machineCtx *context.MachineContext, vmVolume *models.VMVolume, diskSize int64, conditionType clusterv1.ConditionType) error {
+func (r *ElfMachineReconciler) resizeVMVolume(ctx goctx.Context, machineCtx *context.MachineContext, vmVolume *models.VMVolume, diskSize int64, conditionType capiv1beta1.ConditionType) error {
 	log := ctrl.LoggerFrom(ctx)
 
-	reason := conditions.GetReason(machineCtx.ElfMachine, conditionType)
+	reason := conditionsv1beta1.GetReason(machineCtx.ElfMachine, conditionType)
 	if reason == "" ||
-		(reason != infrav1.ExpandingVMDiskReason && reason != infrav1.ExpandingVMDiskFailedReason) {
-		conditions.MarkFalse(machineCtx.ElfMachine, conditionType, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
+		(reason != capev1.ExpandingVMDiskReason && reason != capev1.ExpandingVMDiskFailedReason) {
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, conditionType, capev1.ExpandingVMDiskReason, capiv1beta1.ConditionSeverityInfo, "")
 
 		// Save the conditionType first, and then expand the disk capacity.
 		// This prevents the disk expansion from succeeding but failing to save the
@@ -123,7 +123,7 @@ func (r *ElfMachineReconciler) resizeVMVolume(ctx goctx.Context, machineCtx *con
 
 	if insufficient, message := isELFClusterStorageInsufficient(machineCtx); insufficient {
 		if canRetry := canRetryStorageAllocation(machineCtx); !canRetry {
-			conditions.MarkFalse(machineCtx.ElfMachine, conditionType, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "Waiting for the ELF cluster with sufficient storage")
+			conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, conditionType, capev1.ExpandingVMDiskReason, capiv1beta1.ConditionSeverityInfo, "Waiting for the ELF cluster with sufficient storage")
 			log.V(1).Info(message + ", skip updating VM volume size")
 			return nil
 		}
@@ -139,7 +139,7 @@ func (r *ElfMachineReconciler) resizeVMVolume(ctx goctx.Context, machineCtx *con
 
 	withTaskVMVolume, err := machineCtx.VMService.ResizeVMVolume(*vmVolume.ID, diskSize)
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, conditionType, infrav1.ExpandingVMDiskFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, conditionType, capev1.ExpandingVMDiskFailedReason, capiv1beta1.ConditionSeverityWarning, "%s", err.Error())
 
 		return errors.Wrapf(err, "failed to trigger expand size from %d to %d for vm volume %s/%s", *vmVolume.Size, diskSize, *vmVolume.ID, *vmVolume.Name)
 	}
@@ -153,18 +153,18 @@ func (r *ElfMachineReconciler) resizeVMVolume(ctx goctx.Context, machineCtx *con
 
 // expandVMRootPartition adds new disk capacity to root partition.
 func (r *ElfMachineReconciler) expandVMRootPartition(ctx goctx.Context, machineCtx *context.MachineContext) (bool, error) {
-	reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	reason := conditionsv1beta1.GetReason(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition)
 	if reason == "" {
 		return true, nil
-	} else if reason != infrav1.ExpandingVMDiskReason &&
-		reason != infrav1.ExpandingVMDiskFailedReason &&
-		reason != infrav1.ExpandingRootPartitionReason &&
-		reason != infrav1.ExpandingRootPartitionFailedReason {
+	} else if reason != capev1.ExpandingVMDiskReason &&
+		reason != capev1.ExpandingVMDiskFailedReason &&
+		reason != capev1.ExpandingRootPartitionReason &&
+		reason != capev1.ExpandingRootPartitionFailedReason {
 		return true, nil
 	}
 
-	if reason != infrav1.ExpandingRootPartitionFailedReason {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingRootPartitionReason, clusterv1.ConditionSeverityInfo, "")
+	if reason != capev1.ExpandingRootPartitionFailedReason {
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, capev1.ExpandingRootPartitionReason, capiv1beta1.ConditionSeverityInfo, "")
 	}
 
 	return r.reconcileHostJob(ctx, machineCtx, hostagent.HostAgentJobTypeExpandRootPartition, nil)
@@ -175,15 +175,15 @@ func (r *ElfMachineReconciler) reconcileVMCPUAndMemory(ctx goctx.Context, machin
 	machineCtx.ElfMachine.Status.Resources.CPUCores = *vm.Vcpu
 	machineCtx.ElfMachine.Status.Resources.Memory = *resource.NewQuantity(service.ByteToMiB(*vm.Memory)*1024*1024, resource.BinarySI)
 
-	if !(machineCtx.ElfMachine.Spec.NumCPUs > *vm.Vcpu ||
-		machineCtx.ElfMachine.Spec.MemoryMiB > service.ByteToMiB(*vm.Memory)) {
+	if machineCtx.ElfMachine.Spec.NumCPUs <= *vm.Vcpu &&
+		machineCtx.ElfMachine.Spec.MemoryMiB <= service.ByteToMiB(*vm.Memory) {
 		return true, nil
 	}
 
-	reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	reason := conditionsv1beta1.GetReason(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition)
 	if reason == "" ||
-		(reason != infrav1.ExpandingVMComputeResourcesReason && reason != infrav1.ExpandingVMComputeResourcesFailedReason) {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
+		(reason != capev1.ExpandingVMComputeResourcesReason && reason != capev1.ExpandingVMComputeResourcesFailedReason) {
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, capev1.ExpandingVMComputeResourcesReason, capiv1beta1.ConditionSeverityInfo, "")
 
 		// Save the condition first, and then expand the resources capacity.
 		// This prevents the resources expansion from succeeding but failing to save the
@@ -195,7 +195,7 @@ func (r *ElfMachineReconciler) reconcileVMCPUAndMemory(ctx goctx.Context, machin
 
 	if insufficient, message := isELFClusterMemoryInsufficient(machineCtx); insufficient {
 		if canRetry := canRetryMemoryAllocation(machineCtx); !canRetry {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "Waiting for the ELF cluster with sufficient memory")
+			conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, capev1.ExpandingVMComputeResourcesReason, capiv1beta1.ConditionSeverityInfo, "Waiting for the ELF cluster with sufficient memory")
 			log.V(1).Info(message + ", skip updating VM CPU and memory")
 			return false, nil
 		}
@@ -211,7 +211,7 @@ func (r *ElfMachineReconciler) reconcileVMCPUAndMemory(ctx goctx.Context, machin
 
 	withTaskVM, err := machineCtx.VMService.UpdateVM(vm, machineCtx.ElfMachine)
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, capev1.ExpandingVMComputeResourcesFailedReason, capiv1beta1.ConditionSeverityWarning, "%s", err.Error())
 
 		return false, errors.Wrapf(err, "failed to trigger update CPU and memory for VM %s", *vm.Name)
 	}
@@ -224,18 +224,18 @@ func (r *ElfMachineReconciler) reconcileVMCPUAndMemory(ctx goctx.Context, machin
 }
 
 func (r *ElfMachineReconciler) restartKubelet(ctx goctx.Context, machineCtx *context.MachineContext) (bool, error) {
-	reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	reason := conditionsv1beta1.GetReason(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition)
 	if reason == "" {
 		return true, nil
-	} else if reason != infrav1.ExpandingVMComputeResourcesReason &&
-		reason != infrav1.ExpandingVMComputeResourcesFailedReason &&
-		reason != infrav1.RestartingKubeletReason &&
-		reason != infrav1.RestartingKubeletFailedReason {
+	} else if reason != capev1.ExpandingVMComputeResourcesReason &&
+		reason != capev1.ExpandingVMComputeResourcesFailedReason &&
+		reason != capev1.RestartingKubeletReason &&
+		reason != capev1.RestartingKubeletFailedReason {
 		return true, nil
 	}
 
-	if reason != infrav1.RestartingKubeletFailedReason {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.RestartingKubeletReason, clusterv1.ConditionSeverityInfo, "")
+	if reason != capev1.RestartingKubeletFailedReason {
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, capev1.RestartingKubeletReason, capiv1beta1.ConditionSeverityInfo, "")
 	}
 
 	return r.reconcileHostJob(ctx, machineCtx, hostagent.HostAgentJobTypeRestartKubelet, nil)
@@ -245,7 +245,7 @@ func (r *ElfMachineReconciler) reconcileHostJob(ctx goctx.Context, machineCtx *c
 	log := ctrl.LoggerFrom(ctx)
 
 	// Agent needs to wait for the node exists before it can run and execute commands.
-	if machineCtx.Machine.Status.NodeRef == nil {
+	if !machineCtx.Machine.Status.NodeRef.IsDefined() {
 		log.Info("Waiting for node exists for host agent job", "jobType", jobType)
 
 		return false, nil
@@ -255,34 +255,34 @@ func (r *ElfMachineReconciler) reconcileHostJob(ctx goctx.Context, machineCtx *c
 	failReason := ""
 	switch jobType {
 	case hostagent.HostAgentJobTypeExpandRootPartition:
-		failReason = infrav1.ExpandingRootPartitionFailedReason
+		failReason = capev1.ExpandingRootPartitionFailedReason
 	case hostagent.HostAgentJobTypeRestartKubelet:
-		failReason = infrav1.RestartingKubeletFailedReason
+		failReason = capev1.RestartingKubeletFailedReason
 	case hostagent.HostAgentJobTypeSetNetworkDeviceConfig:
-		failReason = infrav1.SettingVMNetworkDeviceConfigFailedReason
+		failReason = capev1.SettingVMNetworkDeviceConfigFailedReason
 	}
 
 	kubeClient, err := capiremote.NewClusterClient(ctx, "", r.Client, client.ObjectKey{Namespace: machineCtx.Cluster.Namespace, Name: machineCtx.Cluster.Name})
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "failed to create kubeClient: %s", err.Error())
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, failReason, capiv1beta1.ConditionSeverityWarning, "failed to create kubeClient: %s", err.Error())
 		return false, err
 	}
 
 	agentJob, err := hostagent.GetHostJob(ctx, kubeClient, machineCtx.ElfMachine.Namespace, hostagent.GetJobName(machineCtx.ElfMachine, jobType, macTypes))
 	if err != nil && !apierrors.IsNotFound(err) {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "failed to get HostOperationJob: %s", err.Error())
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, failReason, capiv1beta1.ConditionSeverityWarning, "failed to get HostOperationJob: %s", err.Error())
 		return false, err
 	}
 
 	if agentJob == nil {
 		agentJob, err = hostagent.GenerateJob(ctx, r.Client, machineCtx.ElfMachine, jobType, macTypes, nodeName)
 		if err != nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "failed to generate host agent job: %s", err.Error())
+			conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, failReason, capiv1beta1.ConditionSeverityWarning, "failed to generate host agent job: %s", err.Error())
 			return false, err
 		}
 
 		if err = kubeClient.Create(ctx, agentJob); err != nil {
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
+			conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, failReason, capiv1beta1.ConditionSeverityWarning, "%s", err.Error())
 			return false, err
 		}
 
@@ -295,7 +295,7 @@ func (r *ElfMachineReconciler) reconcileHostJob(ctx goctx.Context, machineCtx *c
 	case agentv1.PhaseSucceeded:
 		log.Info("HostJob succeeded", "hostAgentJob", agentJob.Name)
 	case agentv1.PhaseFailed:
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, failReason, clusterv1.ConditionSeverityWarning, "%s", agentJob.Status.FailureMessage)
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, failReason, capiv1beta1.ConditionSeverityWarning, "%s", agentJob.Status.FailureMessage)
 		log.Info("HostJob failed, will try again after three minutes", "hostAgentJob", agentJob.Name, "failureMessage", agentJob.Status.FailureMessage)
 
 		lastExecutionTime := agentJob.Status.LastExecutionTime
@@ -343,27 +343,27 @@ func (r *ElfMachineReconciler) reconcieVMNetworkDevices(ctx goctx.Context, machi
 		return ok, err
 	}
 
-	reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	reason := conditionsv1beta1.GetReason(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition)
 	if reason == "" {
 		return true, nil
-	} else if reason != infrav1.AddingVMNetworkDeviceReason &&
-		reason != infrav1.AddingVMNetworkDeviceFailedReason &&
-		reason != infrav1.SettingVMNetworkDeviceConfigFailedReason &&
-		reason != infrav1.SettingVMNetworkDeviceConfigReason &&
-		reason != infrav1.WaitingForNetworkAddressesReason &&
-		reason != infrav1.WaitingForNetworkMacAddressReason {
+	} else if reason != capev1.AddingVMNetworkDeviceReason &&
+		reason != capev1.AddingVMNetworkDeviceFailedReason &&
+		reason != capev1.SettingVMNetworkDeviceConfigFailedReason &&
+		reason != capev1.SettingVMNetworkDeviceConfigReason &&
+		reason != capev1.WaitingForNetworkAddressesReason &&
+		reason != capev1.WaitingForNetworkMacAddressReason {
 		return true, nil
 	}
 
 	network := machineCtx.ElfMachine.Spec.Network
 	for i := range network.Devices {
-		if network.Devices[i].NetworkType == infrav1.NetworkTypeNone {
+		if network.Devices[i].NetworkType == capev1.NetworkTypeNone {
 			continue
 		}
 
 		if service.GetTowerString(vmNics[i].IPAddress) == "" {
 			message := fmt.Sprintf("waiting for the vm network device %d ready", i)
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNetworkAddressesReason, clusterv1.ConditionSeverityInfo, "%s", message)
+			conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, capev1.WaitingForNetworkAddressesReason, capiv1beta1.ConditionSeverityInfo, "%s", message)
 			log.V(1).Info(message)
 
 			return false, nil
@@ -383,9 +383,9 @@ func (r *ElfMachineReconciler) reconcileVMNics(ctx goctx.Context, machineCtx *co
 	log := ctrl.LoggerFrom(ctx)
 
 	if len(machineCtx.ElfMachine.Status.Network) != len(vmNics) {
-		machineCtx.ElfMachine.Status.Network = []infrav1.NetworkStatus{}
+		machineCtx.ElfMachine.Status.Network = []capev1.NetworkStatus{}
 		for i := range vmNics {
-			machineCtx.ElfMachine.Status.Network = append(machineCtx.ElfMachine.Status.Network, infrav1.NetworkStatus{
+			machineCtx.ElfMachine.Status.Network = append(machineCtx.ElfMachine.Status.Network, capev1.NetworkStatus{
 				IPAddrs:    []string{service.GetTowerString(vmNics[i].IPAddress)},
 				MACAddr:    service.GetTowerString(vmNics[i].MacAddress),
 				Gateway:    service.GetTowerString(vmNics[i].Gateway),
@@ -396,11 +396,11 @@ func (r *ElfMachineReconciler) reconcileVMNics(ctx goctx.Context, machineCtx *co
 		log.V(1).Info("Set network status for adding new nics", "network", machineCtx.ElfMachine.Status.Network)
 	}
 
-	reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	reason := conditionsv1beta1.GetReason(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition)
 	if reason == "" ||
-		(reason != infrav1.AddingVMNetworkDeviceReason && reason != infrav1.AddingVMNetworkDeviceFailedReason) {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceReason, clusterv1.ConditionSeverityInfo, "")
-		log.V(1).Info(fmt.Sprintf("Set %s with %s", infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceReason))
+		(reason != capev1.AddingVMNetworkDeviceReason && reason != capev1.AddingVMNetworkDeviceFailedReason) {
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, capev1.AddingVMNetworkDeviceReason, capiv1beta1.ConditionSeverityInfo, "")
+		log.V(1).Info(fmt.Sprintf("Set %s with %s", capev1.ResourcesHotUpdatedCondition, capev1.AddingVMNetworkDeviceReason))
 
 		return false, nil
 	}
@@ -432,13 +432,13 @@ func (r *ElfMachineReconciler) reconcileVMNics(ctx goctx.Context, machineCtx *co
 
 	withTaskVM, err := machineCtx.VMService.AddVMNics(*vm.ID, newNics)
 	if err != nil {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceFailedReason, clusterv1.ConditionSeverityWarning, "%s", err.Error())
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, capev1.AddingVMNetworkDeviceFailedReason, capiv1beta1.ConditionSeverityWarning, "%s", err.Error())
 
 		return false, errors.Wrapf(err, "failed to trigger add new nics to vm")
 	}
 
-	if reason == infrav1.AddingVMNetworkDeviceFailedReason {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.AddingVMNetworkDeviceReason, clusterv1.ConditionSeverityInfo, "")
+	if reason == capev1.AddingVMNetworkDeviceFailedReason {
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, capev1.AddingVMNetworkDeviceReason, capiv1beta1.ConditionSeverityInfo, "")
 	}
 
 	machineCtx.ElfMachine.SetTask(*withTaskVM.TaskID)
@@ -450,14 +450,14 @@ func (r *ElfMachineReconciler) reconcileVMNics(ctx goctx.Context, machineCtx *co
 
 // setVMNetworkDeviceConfig sets the vm network nics configuration.
 func (r *ElfMachineReconciler) setVMNetworkDeviceConfig(ctx goctx.Context, machineCtx *context.MachineContext, vmNics []*models.VMNic) (bool, error) {
-	reason := conditions.GetReason(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition)
+	reason := conditionsv1beta1.GetReason(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition)
 	if reason == "" {
 		return true, nil
-	} else if reason != infrav1.AddingVMNetworkDeviceReason &&
-		reason != infrav1.AddingVMNetworkDeviceFailedReason &&
-		reason != infrav1.SettingVMNetworkDeviceConfigReason &&
-		reason != infrav1.SettingVMNetworkDeviceConfigFailedReason &&
-		reason != infrav1.WaitingForNetworkMacAddressReason {
+	} else if reason != capev1.AddingVMNetworkDeviceReason &&
+		reason != capev1.AddingVMNetworkDeviceFailedReason &&
+		reason != capev1.SettingVMNetworkDeviceConfigReason &&
+		reason != capev1.SettingVMNetworkDeviceConfigFailedReason &&
+		reason != capev1.WaitingForNetworkMacAddressReason {
 		return true, nil
 	}
 
@@ -478,7 +478,7 @@ func (r *ElfMachineReconciler) setVMNetworkDeviceConfig(ctx goctx.Context, machi
 		return true, nil
 	} else if deviceCount != vmNicCount {
 		message := "The expected number of network devices is not equal to the number of vm nics"
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.SettingVMNetworkDeviceConfigFailedReason, clusterv1.ConditionSeverityWarning, "%s", message)
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, capev1.SettingVMNetworkDeviceConfigFailedReason, capiv1beta1.ConditionSeverityWarning, "%s", message)
 		log.V(1).Info(message, "expectedDevices", machineCtx.ElfMachine.Spec.Network.Devices, "currentNics", formatNics(vmNics))
 
 		return false, nil
@@ -490,7 +490,7 @@ func (r *ElfMachineReconciler) setVMNetworkDeviceConfig(ctx goctx.Context, machi
 	for i := len(nics) - toConfigNicCount; i >= 0 && i < len(nics); i++ {
 		if service.GetTowerString(nics[i].MacAddress) == "" {
 			message := fmt.Sprintf("Waiting for the vm network device %d mac address", i+1)
-			conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNetworkMacAddressReason, clusterv1.ConditionSeverityInfo, "%s", message)
+			conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, capev1.WaitingForNetworkMacAddressReason, capiv1beta1.ConditionSeverityInfo, "%s", message)
 			log.V(1).Info(message)
 
 			return false, nil
@@ -502,8 +502,8 @@ func (r *ElfMachineReconciler) setVMNetworkDeviceConfig(ctx goctx.Context, machi
 		})
 	}
 
-	if reason != infrav1.SettingVMNetworkDeviceConfigFailedReason {
-		conditions.MarkFalse(machineCtx.ElfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.SettingVMNetworkDeviceConfigReason, clusterv1.ConditionSeverityInfo, "")
+	if reason != capev1.SettingVMNetworkDeviceConfigFailedReason {
+		conditionsv1beta1.MarkFalse(machineCtx.ElfMachine, capev1.ResourcesHotUpdatedCondition, capev1.SettingVMNetworkDeviceConfigReason, capiv1beta1.ConditionSeverityInfo, "")
 	}
 
 	return r.reconcileHostJob(ctx, machineCtx, hostagent.HostAgentJobTypeSetNetworkDeviceConfig, macTypes)

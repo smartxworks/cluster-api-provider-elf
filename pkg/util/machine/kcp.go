@@ -23,8 +23,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apitypes "k8s.io/apimachinery/pkg/types"
-	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -35,7 +35,7 @@ func GetKCPForCluster(
 	clusterKey client.ObjectKey,
 ) (*controlplanev1.KubeadmControlPlane, error) {
 	var kcpList controlplanev1.KubeadmControlPlaneList
-	labels := map[string]string{clusterv1.ClusterNameLabel: clusterKey.Name}
+	labels := map[string]string{capiv1.ClusterNameLabel: clusterKey.Name}
 
 	if err := ctrlClient.List(
 		ctx, &kcpList,
@@ -57,7 +57,7 @@ func GetKCPForCluster(
 // GetKCPNameByMachine returns the KCP name associated with the Machine.
 // Do not use "cluster.x-k8s.io/control-plane-name" label because
 // its value will be a hashed string of the KCP name when the KCP name exceeds 63 characters.
-func GetKCPNameByMachine(machine *clusterv1.Machine) string {
+func GetKCPNameByMachine(machine *capiv1.Machine) string {
 	for _, o := range machine.OwnerReferences {
 		if o.Kind == "KubeadmControlPlane" {
 			return o.Name
@@ -66,7 +66,7 @@ func GetKCPNameByMachine(machine *clusterv1.Machine) string {
 	panic(fmt.Sprintf("Machine %s is not owned by KubeadmControlPlane", machine.GetName()))
 }
 
-func GetKCPByMachine(ctx goctx.Context, ctrlClient client.Client, machine *clusterv1.Machine) (*controlplanev1.KubeadmControlPlane, error) {
+func GetKCPByMachine(ctx goctx.Context, ctrlClient client.Client, machine *capiv1.Machine) (*controlplanev1.KubeadmControlPlane, error) {
 	var kcp controlplanev1.KubeadmControlPlane
 
 	kcpName := GetKCPNameByMachine(machine)

@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/service"
 )
 
@@ -47,8 +47,8 @@ func init() {
 
 func initTowerSession() {
 	var err error
-	vmService, err = service.NewVMService(goctx.Background(), nil, infrav1.Tower{
-		TowerClientConfig: infrav1.TowerClientConfig{
+	vmService, err = service.NewVMService(goctx.Background(), nil, capev1.Tower{
+		TowerClientConfig: capev1.TowerClientConfig{
 			Server:        towerServer,
 			Username:      towerUsername,
 			Password:      towerPassword,

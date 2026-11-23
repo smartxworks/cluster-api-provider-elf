@@ -14,7 +14,7 @@ import (
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -34,7 +34,7 @@ func TestClearClientCache(t *testing.T) {
 	t.Run("should clear client cache", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 
-		clientKey := getTowerClientCacheKey(&infrav1.TowerClientConfig{})
+		clientKey := getTowerClientCacheKey(&capev1.TowerClientConfig{})
 		cachedClient := &towerclient.Cloudtower{}
 		cacheMap.Store(clientKey, &cacheItem{TowerClient: cachedClient})
 
@@ -75,7 +75,7 @@ func TestNewTowerClient(t *testing.T) {
 		cacheMap.Store(cacheKey, &cacheItem{
 			LastUsedTime: time.Now(),
 			TowerClient:  cachedClient,
-			TowerConfig:  &infrav1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "tower", AuthMode: "LOCAL", SkipTLSVerify: true},
+			TowerConfig:  &capev1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "tower", AuthMode: "LOCAL", SkipTLSVerify: true},
 		})
 
 		client, err := NewTowerClient(t.Context(), k8sClient, secretKey)
@@ -98,7 +98,7 @@ func TestNewTowerClient(t *testing.T) {
 		cacheMap.Store(cacheKey, &cacheItem{
 			LastUsedTime: time.Now(),
 			TowerClient:  &towerclient.Cloudtower{},
-			TowerConfig:  &infrav1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "old-password", AuthMode: "LOCAL", SkipTLSVerify: true},
+			TowerConfig:  &capev1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "old-password", AuthMode: "LOCAL", SkipTLSVerify: true},
 		})
 
 		_, err := NewTowerClient(t.Context(), k8sClient, secretKey)
@@ -115,7 +115,7 @@ func TestNewTowerClientWithConfig(t *testing.T) {
 		resetTowerCache(t)
 
 		lastGCTime = time.Now().Add(-gcMinInterval - time.Second)
-		config := infrav1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "tower"}
+		config := capev1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "tower"}
 		inactiveConfig := config
 		inactiveConfig.Username = "inactive"
 		invalidConfig := config
@@ -127,7 +127,7 @@ func TestNewTowerClientWithConfig(t *testing.T) {
 		inactiveClientKey := getTowerClientCacheKey(&inactiveConfig)
 		cacheMap.Store(inactiveClientKey, &cacheItem{TowerClient: &towerclient.Cloudtower{}, LastUsedTime: time.Now().Add(-cacheIdleTime - time.Second)})
 		inactiveSecretKey := getTowerSecretCacheKey(apitypes.NamespacedName{Namespace: "default", Name: "inactive-secret"})
-		cacheMap.Store(inactiveSecretKey, &cacheItem{TowerConfig: &infrav1.TowerClientConfig{}, LastUsedTime: time.Now().Add(-cacheIdleTime - time.Second)})
+		cacheMap.Store(inactiveSecretKey, &cacheItem{TowerConfig: &capev1.TowerClientConfig{}, LastUsedTime: time.Now().Add(-cacheIdleTime - time.Second)})
 
 		client, err := NewTowerClientWithConfig(t.Context(), config)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
@@ -152,7 +152,7 @@ func TestNewTowerClientAndConfig(t *testing.T) {
 		resetTowerCache(t)
 
 		secretKey := apitypes.NamespacedName{Namespace: "sks-system", Name: "cloudtower-server"}
-		config := infrav1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "tower", AuthMode: "LOCAL", SkipTLSVerify: true}
+		config := capev1.TowerClientConfig{Server: "127.0.0.1", Username: "tower", Password: "tower", AuthMode: "LOCAL", SkipTLSVerify: true}
 		secret := newTowerSecret(secretKey.Name, secretKey.Namespace, config.Server, config.Username, config.Password)
 		k8sClient := fake.NewClientBuilder().WithObjects(secret).Build()
 		cachedClient := &towerclient.Cloudtower{}
@@ -176,7 +176,8 @@ func TestGetTowerClientConfig(t *testing.T) {
 
 		config, err := GetTowerClientConfig(ctx, k8sClient, secretKey)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
-		g.Expect(config).To(gomega.Equal(infrav1.TowerClientConfig{
+		//nolint:gosec // fixture credential used to verify secret parsing
+		g.Expect(config).To(gomega.Equal(capev1.TowerClientConfig{
 			Server:        "10.255.0.4",
 			Username:      "system-service",
 			Password:      "K5yt3hcjtUE4Teqe",
@@ -233,7 +234,7 @@ func TestParseTowerClientConfigFromSecret(t *testing.T) {
 			},
 		})
 		g.Expect(err).ToNot(gomega.HaveOccurred())
-		g.Expect(yamlConfig).To(gomega.Equal(infrav1.TowerClientConfig{Server: "10.255.0.4", Username: "yaml-user", Password: "yaml-password", AuthMode: "LOCAL", SkipTLSVerify: true}))
+		g.Expect(yamlConfig).To(gomega.Equal(capev1.TowerClientConfig{Server: "10.255.0.4", Username: "yaml-user", Password: "yaml-password", AuthMode: "LOCAL", SkipTLSVerify: true}))
 
 		jsonConfig, err := ParseTowerClientConfigFromSecret(&corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: "json-secret", Namespace: "sks-system"},
@@ -242,7 +243,7 @@ func TestParseTowerClientConfigFromSecret(t *testing.T) {
 			},
 		})
 		g.Expect(err).ToNot(gomega.HaveOccurred())
-		g.Expect(jsonConfig).To(gomega.Equal(infrav1.TowerClientConfig{Server: "10.255.0.5", Username: "json-user", Password: "json-password", AuthMode: "LDAP"}))
+		g.Expect(jsonConfig).To(gomega.Equal(capev1.TowerClientConfig{Server: "10.255.0.5", Username: "json-user", Password: "json-password", AuthMode: "LDAP"}))
 	})
 
 	t.Run("rejects missing cloudtower yaml key", func(t *testing.T) {
@@ -272,7 +273,7 @@ func TestTowerCacheKeys(t *testing.T) {
 	t.Run("client cache key hashes password without exposing plaintext", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 
-		config := &infrav1.TowerClientConfig{Server: "10.255.0.4", Username: "system-service", Password: "super-secret", AuthMode: "LOCAL", SkipTLSVerify: true}
+		config := &capev1.TowerClientConfig{Server: "10.255.0.4", Username: "system-service", Password: "super-secret", AuthMode: "LOCAL", SkipTLSVerify: true}
 		key := getTowerClientCacheKey(config)
 
 		g.Expect(key).To(gomega.HavePrefix("tower-client:"))
@@ -284,7 +285,7 @@ func TestTowerCacheKeys(t *testing.T) {
 	t.Run("client cache key changes when password changes", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 
-		base := &infrav1.TowerClientConfig{Server: "10.255.0.4", Username: "system-service", Password: "password-a", AuthMode: "LOCAL"}
+		base := &capev1.TowerClientConfig{Server: "10.255.0.4", Username: "system-service", Password: "password-a", AuthMode: "LOCAL"}
 		changedPassword := *base
 		changedPassword.Password = "password-b"
 
@@ -310,7 +311,7 @@ func TestWithHeaderRoundTripper(t *testing.T) {
 	t.Run("does not clone or mutate headers when no configured headers exist", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
 		called := false
-		req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://example.com", nil)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		req.Header.Set("Existing", "value")
 
@@ -330,7 +331,7 @@ func TestWithHeaderRoundTripper(t *testing.T) {
 
 	t.Run("adds configured headers to a cloned request", func(t *testing.T) {
 		g := gomega.NewGomegaWithT(t)
-		req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://example.com", nil)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		req.Header.Set("Existing", "value")
 

@@ -18,10 +18,10 @@ package annotations
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/annotations"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 // HasAnnotation returns true if the object has the specified annotation.
@@ -41,7 +41,7 @@ func GetPlacementGroupName(o metav1.Object) string {
 		return ""
 	}
 
-	return annotations[infrav1.PlacementGroupNameAnnotation]
+	return annotations[capev1.PlacementGroupNameAnnotation]
 }
 
 func GetCreatedBy(o metav1.Object) string {
@@ -50,7 +50,7 @@ func GetCreatedBy(o metav1.Object) string {
 		return ""
 	}
 
-	return annotations[infrav1.CreatedByAnnotation]
+	return annotations[capev1.CreatedByAnnotation]
 }
 
 func GetTemplateClonedFromName(o metav1.Object) string {
@@ -59,7 +59,7 @@ func GetTemplateClonedFromName(o metav1.Object) string {
 		return ""
 	}
 
-	return annotations[clusterv1.TemplateClonedFromNameAnnotation]
+	return annotations[capiv1.TemplateClonedFromNameAnnotation]
 }
 
 // AddAnnotations sets the desired annotations on the object and returns true if the annotations have changed.

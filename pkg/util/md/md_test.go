@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 /*
@@ -27,23 +27,23 @@ limitations under the License.
 */
 
 func TestMaxUnavailable(t *testing.T) {
-	deployment := func(replicas int32, maxUnavailable intstr.IntOrString) clusterv1.MachineDeployment {
-		return clusterv1.MachineDeployment{
-			Spec: clusterv1.MachineDeploymentSpec{
+	deployment := func(replicas int32, maxUnavailable intstr.IntOrString) capiv1.MachineDeployment {
+		return capiv1.MachineDeployment{
+			Spec: capiv1.MachineDeploymentSpec{
 				Replicas: func(i int32) *int32 { return &i }(replicas),
-				Strategy: &clusterv1.MachineDeploymentStrategy{
-					RollingUpdate: &clusterv1.MachineRollingUpdateDeployment{
+				Rollout: capiv1.MachineDeploymentRolloutSpec{Strategy: capiv1.MachineDeploymentRolloutStrategy{
+					RollingUpdate: capiv1.MachineDeploymentRolloutStrategyRollingUpdate{
 						MaxSurge:       func(i int) *intstr.IntOrString { x := intstr.FromInt(i); return &x }(int(1)),
 						MaxUnavailable: &maxUnavailable,
 					},
-					Type: clusterv1.RollingUpdateMachineDeploymentStrategyType,
-				},
+					Type: capiv1.RollingUpdateMachineDeploymentStrategyType,
+				}},
 			},
 		}
 	}
 	tests := []struct {
 		name       string
-		deployment clusterv1.MachineDeployment
+		deployment capiv1.MachineDeployment
 		expected   int32
 	}{
 		{
@@ -165,19 +165,19 @@ func TestMaxSurge(t *testing.T) {
 	maxSurge := intstr.FromInt(1)
 	maxUnavailable := intstr.FromInt(1)
 	tests := []struct {
-		strategy    *clusterv1.MachineDeploymentStrategy
+		strategy    capiv1.MachineDeploymentRolloutStrategy
 		expectSurge int32
 	}{
 		{
-			strategy: &clusterv1.MachineDeploymentStrategy{
-				Type: clusterv1.OnDeleteMachineDeploymentStrategyType,
+			strategy: capiv1.MachineDeploymentRolloutStrategy{
+				Type: capiv1.OnDeleteMachineDeploymentStrategyType,
 			},
 			expectSurge: 0,
 		},
 		{
-			strategy: &clusterv1.MachineDeploymentStrategy{
-				Type: clusterv1.RollingUpdateMachineDeploymentStrategyType,
-				RollingUpdate: &clusterv1.MachineRollingUpdateDeployment{
+			strategy: capiv1.MachineDeploymentRolloutStrategy{
+				Type: capiv1.RollingUpdateMachineDeploymentStrategyType,
+				RollingUpdate: capiv1.MachineDeploymentRolloutStrategyRollingUpdate{
 					MaxSurge:       &maxSurge,
 					MaxUnavailable: &maxUnavailable,
 				},
@@ -190,65 +190,14 @@ func TestMaxSurge(t *testing.T) {
 		t.Run(fmt.Sprintf("maxSurge=%d", tc.expectSurge), func(t *testing.T) {
 			g := NewWithT(t)
 
-			deployment := clusterv1.MachineDeployment{
-				Spec: clusterv1.MachineDeploymentSpec{
+			deployment := capiv1.MachineDeployment{
+				Spec: capiv1.MachineDeploymentSpec{
 					Replicas: ptr.To[int32](1),
-					Strategy: tc.strategy,
+					Rollout:  capiv1.MachineDeploymentRolloutSpec{Strategy: tc.strategy},
 				},
 			}
 			surge := MaxSurge(deployment)
 			g.Expect(surge).To(Equal(tc.expectSurge))
-		})
-	}
-}
-
-func TestIsMDInRollingUpdate(t *testing.T) {
-	tests := []struct {
-		specReplicas    int32
-		statusReplicas  int32
-		updatedReplicas int32
-		isUpdated       bool
-	}{
-		{
-			specReplicas:    1,
-			statusReplicas:  1,
-			updatedReplicas: 1,
-			isUpdated:       false,
-		},
-		{
-			specReplicas:    3,
-			statusReplicas:  3,
-			updatedReplicas: 3,
-			isUpdated:       false,
-		},
-		{
-			specReplicas:    3,
-			statusReplicas:  3,
-			updatedReplicas: 2,
-			isUpdated:       true,
-		},
-		{
-			specReplicas:    3,
-			statusReplicas:  3,
-			updatedReplicas: 1,
-			isUpdated:       true,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(fmt.Sprintf("%v", tc), func(t *testing.T) {
-			g := NewWithT(t)
-
-			deployment := clusterv1.MachineDeployment{
-				Spec: clusterv1.MachineDeploymentSpec{
-					Replicas: ptr.To[int32](tc.specReplicas),
-				},
-				Status: clusterv1.MachineDeploymentStatus{
-					Replicas:        tc.statusReplicas,
-					UpdatedReplicas: tc.updatedReplicas,
-				},
-			}
-			g.Expect(IsMDInRollingUpdate(&deployment)).To(Equal(tc.isUpdated))
 		})
 	}
 }

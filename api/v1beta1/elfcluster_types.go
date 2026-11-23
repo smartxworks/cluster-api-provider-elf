@@ -18,7 +18,7 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 const (
@@ -53,7 +53,7 @@ type ElfClusterSpec struct {
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
-	ControlPlaneEndpoint clusterv1.APIEndpoint `json:"controlPlaneEndpoint"`
+	ControlPlaneEndpoint capiv1beta1.APIEndpoint `json:"controlPlaneEndpoint"`
 
 	// VMGracefulShutdown indicates the VMs in this ElfCluster should shutdown gracefully when deleting the VMs.
 	// Default to false because sometimes the OS stuck when shutting down gracefully.
@@ -68,11 +68,11 @@ type ElfClusterStatus struct {
 
 	// failureDomains is a list of failure domain objects synced from the infrastructure provider.
 	// +optional
-	FailureDomains clusterv1.FailureDomains `json:"failureDomains,omitempty"`
+	FailureDomains capiv1beta1.FailureDomains `json:"failureDomains,omitempty"`
 
 	// Conditions defines current service state of the ElfCluster.
 	// +optional
-	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+	Conditions capiv1beta1.Conditions `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -95,11 +95,11 @@ func (c *ElfCluster) IsStretched() bool {
 	return c.Spec.ClusterType == ElfClusterTypeStretched
 }
 
-func (c *ElfCluster) GetConditions() clusterv1.Conditions {
+func (c *ElfCluster) GetConditions() capiv1beta1.Conditions {
 	return c.Status.Conditions
 }
 
-func (c *ElfCluster) SetConditions(conditions clusterv1.Conditions) {
+func (c *ElfCluster) SetConditions(conditions capiv1beta1.Conditions) {
 	c.Status.Conditions = conditions
 }
 

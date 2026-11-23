@@ -18,6 +18,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -68,14 +69,16 @@ func (s Hosts) IsEmpty() bool {
 func (s Hosts) String() string {
 	str := ""
 
+	var strSb71 strings.Builder
 	for _, host := range s {
 		state := ""
 		if host.HostState != nil {
 			state = string(*host.HostState.State)
 		}
 
-		str += fmt.Sprintf("{id: %s,name: %s,memory: %d,status: %s,state: %s},", GetTowerString(host.ID), GetTowerString(host.Name), GetTowerInt64(host.AllocatableMemoryBytes), string(*host.Status), state)
+		fmt.Fprintf(&strSb71, "{id: %s,name: %s,memory: %d,status: %s,state: %s},", GetTowerString(host.ID), GetTowerString(host.Name), GetTowerInt64(host.AllocatableMemoryBytes), string(*host.Status), state)
 	}
+	str += strSb71.String()
 
 	return fmt.Sprintf("[%s]", str)
 }

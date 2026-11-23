@@ -22,9 +22,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
-	conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+	conditionsv1beta1 "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
 )
 
 const (
@@ -130,10 +130,10 @@ type ElfMachineStatus struct {
 
 	// Conditions defines current service state of the ElfMachine.
 	// +optional
-	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+	Conditions capiv1beta1.Conditions `json:"conditions,omitempty"`
 
 	// Addresses contains the Elf instance associated addresses.
-	Addresses []clusterv1.MachineAddress `json:"addresses,omitempty"`
+	Addresses []capiv1beta1.MachineAddress `json:"addresses,omitempty"`
 
 	// Network returns the network status for each of the machine's configured
 	// network interfaces.
@@ -254,11 +254,11 @@ type ElfMachine struct {
 	Status ElfMachineStatus `json:"status,omitempty"`
 }
 
-func (m *ElfMachine) GetConditions() clusterv1.Conditions {
+func (m *ElfMachine) GetConditions() capiv1beta1.Conditions {
 	return m.Status.Conditions
 }
 
-func (m *ElfMachine) SetConditions(conditions clusterv1.Conditions) {
+func (m *ElfMachine) SetConditions(conditions capiv1beta1.Conditions) {
 	m.Status.Conditions = conditions
 }
 
@@ -285,8 +285,8 @@ func (m *ElfMachine) IsFailed() bool {
 
 // IsHotUpdating returns whether the machine is being hot updated.
 func (m *ElfMachine) IsHotUpdating() bool {
-	if conditions.Has(m, ResourcesHotUpdatedCondition) &&
-		conditions.IsFalse(m, ResourcesHotUpdatedCondition) {
+	if conditionsv1beta1.Has(m, ResourcesHotUpdatedCondition) &&
+		conditionsv1beta1.IsFalse(m, ResourcesHotUpdatedCondition) {
 		return true
 	}
 

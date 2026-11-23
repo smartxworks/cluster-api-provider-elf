@@ -32,8 +32,9 @@ import (
 	logsv1 "k8s.io/component-base/logs/api/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/controllers/clustercache"
+	"sigs.k8s.io/cluster-api/controllers/crdmigrator"
 	"sigs.k8s.io/cluster-api/controllers/remote"
 	"sigs.k8s.io/cluster-api/feature"
 	"sigs.k8s.io/cluster-api/util/apiwarnings"
@@ -46,6 +47,7 @@ import (
 	ctrlmgr "sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 	"github.com/smartxworks/cluster-api-provider-elf/controllers"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/config"
 	"github.com/smartxworks/cluster-api-provider-elf/pkg/context"
@@ -77,6 +79,7 @@ var (
 	elfMachineConcurrency         int
 	elfMachineTemplateConcurrency int
 	clusterCacheConcurrency       int
+	skipCRDMigrationPhases        []string
 
 	managerOptions = capiflags.ManagerOptions{}
 
@@ -144,7 +147,7 @@ func InitFlags(fs *pflag.FlagSet) {
 		"Namespace that the controller watches to reconcile cluster-api objects. If unspecified, the controller watches for cluster-api objects across all namespaces.")
 
 	fs.StringVar(&managerOpts.WatchFilterValue, "watch-filter", "",
-		fmt.Sprintf("Label value that the controller watches to reconcile cluster-api objects. Label key is always %s. If unspecified, the controller watches for all cluster-api objects.", clusterv1.WatchLabel))
+		fmt.Sprintf("Label value that the controller watches to reconcile cluster-api objects. Label key is always %s. If unspecified, the controller watches for all cluster-api objects.", capiv1.WatchLabel))
 
 	fs.StringVar(&managerOpts.PprofBindAddress, "profiler-address", defaultProfilerAddr,
 		"Bind address to expose the pprof profiler (e.g. localhost:6060)")
@@ -169,6 +172,9 @@ func InitFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&clusterCacheConcurrency, "clustercache-concurrency", 100,
 		"Number of clusters to process simultaneously")
+
+	fs.StringSliceVar(&skipCRDMigrationPhases, "skip-crd-migration-phases", []string{},
+		"List of CRD migration phases to skip. Valid values are: StorageVersionMigration, CleanupManagedFields.")
 
 	fs.IntVar(&webhookOpts.Port, "webhook-port", 9443,
 		"Webhook Server port.")
@@ -308,6 +314,24 @@ func main() {
 	mgr, err := manager.New(ctx, managerOpts)
 	if err != nil {
 		setupLog.Error(err, "failed to create controller manager")
+		os.Exit(1)
+	}
+
+	crdMigratorSkipPhases := make([]crdmigrator.Phase, 0, len(skipCRDMigrationPhases))
+	for _, phase := range skipCRDMigrationPhases {
+		crdMigratorSkipPhases = append(crdMigratorSkipPhases, crdmigrator.Phase(phase))
+	}
+	if err := (&crdmigrator.CRDMigrator{
+		Client:                 mgr.GetClient(),
+		APIReader:              mgr.GetAPIReader(),
+		SkipCRDMigrationPhases: crdMigratorSkipPhases,
+		Config: map[client.Object]crdmigrator.ByObjectConfig{
+			&capev1.ElfCluster{}:         {UseCache: true, UseStatusForStorageVersionMigration: false},
+			&capev1.ElfMachine{}:         {UseCache: true, UseStatusForStorageVersionMigration: false},
+			&capev1.ElfMachineTemplate{}: {UseCache: true, UseStatusForStorageVersionMigration: false},
+		},
+	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: 1}); err != nil {
+		setupLog.Error(err, "Unable to create controller", "controller", "CRDMigrator")
 		os.Exit(1)
 	}
 

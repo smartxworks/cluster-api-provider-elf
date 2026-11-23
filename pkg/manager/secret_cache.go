@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/rest"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -35,7 +35,7 @@ import (
 // cached Secrets when possible and falls back to the API server for Secrets
 // excluded by the cache.
 func ConfigureSecretCaching(opts *Options) error {
-	requirement, err := labels.NewRequirement(clusterv1.ClusterNameLabel, selection.Exists, nil)
+	requirement, err := labels.NewRequirement(capiv1.ClusterNameLabel, selection.Exists, nil)
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func requiresClusterNameLabel(selector labels.Selector) bool {
 		return false
 	}
 	for _, requirement := range requirements {
-		if requirement.Key() != clusterv1.ClusterNameLabel {
+		if requirement.Key() != capiv1.ClusterNameLabel {
 			continue
 		}
 

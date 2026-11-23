@@ -23,7 +23,7 @@ import (
 	"github.com/smartxworks/cloudtower-go-sdk/v2/models"
 	"k8s.io/utils/ptr"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 func TestIsAvailableHost(t *testing.T) {
@@ -174,11 +174,11 @@ func TestGetVMsOccupyingGPU(t *testing.T) {
 
 func TestHasGPUsCanNotBeUsedForVM(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	elfMachine := &infrav1.ElfMachine{}
+	elfMachine := &capev1.ElfMachine{}
 	elfMachine.Name = "test"
 
 	t.Run("GPU", func(t *testing.T) {
-		elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, infrav1.GPUPassthroughDeviceSpec{Model: "A16", Count: 1})
+		elfMachine.Spec.GPUDevices = append(elfMachine.Spec.GPUDevices, capev1.GPUPassthroughDeviceSpec{Model: "A16", Count: 1})
 
 		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(), elfMachine)).To(gomega.BeFalse())
 
@@ -227,7 +227,7 @@ func TestHasGPUsCanNotBeUsedForVM(t *testing.T) {
 	t.Run("vGPU", func(t *testing.T) {
 		vGPUType := "V100"
 		elfMachine.Spec.GPUDevices = nil
-		elfMachine.Spec.VGPUDevices = []infrav1.VGPUDeviceSpec{{Type: vGPUType, Count: 2}}
+		elfMachine.Spec.VGPUDevices = []capev1.VGPUDeviceSpec{{Type: vGPUType, Count: 2}}
 
 		g.Expect(HasGPUsCanNotBeUsedForVM(NewGPUVMInfos(), elfMachine)).To(gomega.BeFalse())
 

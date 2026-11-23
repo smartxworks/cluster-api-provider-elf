@@ -24,7 +24,7 @@ import (
 	pkgerrors "github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -33,7 +33,7 @@ import (
 var (
 	// ErrNoCluster is returned when the cluster
 	// label could not be found on the object passed in.
-	ErrNoCluster = fmt.Errorf("no %q label present", clusterv1.ClusterNameLabel)
+	ErrNoCluster = fmt.Errorf("no %q label present", capiv1.ClusterNameLabel)
 
 	// ErrUnstructuredFieldNotFound determines that a field
 	// in an unstructured object could not be found.
@@ -41,15 +41,15 @@ var (
 )
 
 // GetClusterFromMetadata returns the Cluster object (if present) using the object metadata.
-func GetClusterFromMetadata(ctx context.Context, c client.Client, obj metav1.ObjectMeta) (*clusterv1.Cluster, error) {
-	if obj.Labels[clusterv1.ClusterNameLabel] == "" {
+func GetClusterFromMetadata(ctx context.Context, c client.Client, obj metav1.ObjectMeta) (*capiv1.Cluster, error) {
+	if obj.Labels[capiv1.ClusterNameLabel] == "" {
 		return nil, pkgerrors.WithStack(ErrNoCluster)
 	}
-	return GetClusterByName(ctx, c, obj.Namespace, obj.Labels[clusterv1.ClusterNameLabel])
+	return GetClusterByName(ctx, c, obj.Namespace, obj.Labels[capiv1.ClusterNameLabel])
 }
 
 // GetOwnerCluster returns the Cluster object owning the current resource.
-func GetOwnerCluster(ctx context.Context, c client.Client, obj metav1.ObjectMeta) (*clusterv1.Cluster, error) {
+func GetOwnerCluster(ctx context.Context, c client.Client, obj metav1.ObjectMeta) (*capiv1.Cluster, error) {
 	for _, ref := range obj.GetOwnerReferences() {
 		if ref.Kind != "Cluster" {
 			continue
@@ -58,7 +58,7 @@ func GetOwnerCluster(ctx context.Context, c client.Client, obj metav1.ObjectMeta
 		if err != nil {
 			return nil, pkgerrors.WithStack(err)
 		}
-		if gv.Group == clusterv1.GroupVersion.Group {
+		if gv.Group == capiv1.GroupVersion.Group {
 			return GetClusterByName(ctx, c, obj.Namespace, ref.Name)
 		}
 	}
@@ -66,8 +66,8 @@ func GetOwnerCluster(ctx context.Context, c client.Client, obj metav1.ObjectMeta
 }
 
 // GetClusterByName finds and return a Cluster object using the specified params.
-func GetClusterByName(ctx context.Context, c client.Client, namespace, name string) (*clusterv1.Cluster, error) {
-	cluster := &clusterv1.Cluster{}
+func GetClusterByName(ctx context.Context, c client.Client, namespace, name string) (*capiv1.Cluster, error) {
+	cluster := &capiv1.Cluster{}
 	key := client.ObjectKey{
 		Namespace: namespace,
 		Name:      name,
@@ -81,13 +81,13 @@ func GetClusterByName(ctx context.Context, c client.Client, namespace, name stri
 }
 
 // GetOwnerMachine returns the Machine object owning the current resource.
-func GetOwnerMachine(ctx context.Context, c client.Client, obj metav1.ObjectMeta) (*clusterv1.Machine, error) {
+func GetOwnerMachine(ctx context.Context, c client.Client, obj metav1.ObjectMeta) (*capiv1.Machine, error) {
 	for _, ref := range obj.GetOwnerReferences() {
 		gv, err := schema.ParseGroupVersion(ref.APIVersion)
 		if err != nil {
 			return nil, err
 		}
-		if ref.Kind == "Machine" && gv.Group == clusterv1.GroupVersion.Group {
+		if ref.Kind == "Machine" && gv.Group == capiv1.GroupVersion.Group {
 			return GetMachineByName(ctx, c, obj.Namespace, ref.Name)
 		}
 	}
@@ -95,8 +95,8 @@ func GetOwnerMachine(ctx context.Context, c client.Client, obj metav1.ObjectMeta
 }
 
 // GetMachineByName finds and return a Machine object using the specified params.
-func GetMachineByName(ctx context.Context, c client.Client, namespace, name string) (*clusterv1.Machine, error) {
-	m := &clusterv1.Machine{}
+func GetMachineByName(ctx context.Context, c client.Client, namespace, name string) (*capiv1.Machine, error) {
+	m := &capiv1.Machine{}
 	key := client.ObjectKey{Name: name, Namespace: namespace}
 	if err := c.Get(ctx, key, m); err != nil {
 		return nil, err

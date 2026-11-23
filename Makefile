@@ -25,7 +25,7 @@ VERSION ?= $(shell cat clusterctl-settings.json | jq .config.nextVersion -r)
 #
 # Go.
 #
-GO_VERSION ?= 1.25.9
+GO_VERSION ?= 1.27.4
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -128,7 +128,7 @@ e2e-templates: kustomize ## Generate e2e cluster templates
 	$(KUSTOMIZE) build $(E2E_TEMPLATE_DIR)/kustomization/conformance > $(E2E_TEMPLATE_DIR)/cluster-template-conformance.yaml
 
 ENVTEST ?= $(BIN_DIR)/setup-envtest
-ENVTEST_K8S_VERSION ?= 1.33.0
+ENVTEST_K8S_VERSION ?= 1.34.0
 ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 
 .PHONY: envtest
@@ -167,7 +167,7 @@ controller-gen: ## Download controller-gen locally if necessary.
 
 GINKGO := $(shell pwd)/bin/ginkgo
 ginkgo: ## Download ginkgo locally if necessary.
-	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo@2.23.4)
+	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo@v2.34.0)
 
 KIND := $(shell pwd)/bin/kind
 kind: ## Download kind locally if necessary.
@@ -175,7 +175,7 @@ kind: ## Download kind locally if necessary.
 
 GOLANGCI_LINT := $(shell pwd)/bin/golangci-lint
 golangci-lint: ## Download golangci-lint locally if necessary.
-	$(call go-get-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8)
+	$(call go-get-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0)
 
 MOCKGEN := $(shell pwd)/bin/mockgen
 mockgen: ## Download golangci-lint locally if necessary.
@@ -187,7 +187,7 @@ mockgen: ## Download golangci-lint locally if necessary.
 
 .PHONY: lint
 lint: golangci-lint ## Lint codebase
-	$(GOLANGCI_LINT) run -v --fast=false
+	$(GOLANGCI_LINT) run -v
 
 .PHONY: lint-fix
 lint-fix: $(GOLANGCI_LINT) ## Lint the codebase and run auto-fixers if supported by the linter.

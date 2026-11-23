@@ -25,24 +25,24 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	infrav1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
+	capev1 "github.com/smartxworks/cluster-api-provider-elf/api/v1beta1"
 )
 
 func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 	g := NewWithT(t)
 
-	var tests []elfMachineTestCase
+	tests := make([]elfMachineTestCase, 0, 8)
 	scheme := newScheme(g)
 
-	elfMachineTemplate := &infrav1.ElfMachineTemplate{
+	elfMachineTemplate := &capev1.ElfMachineTemplate{
 		ObjectMeta: metav1.ObjectMeta{Name: "test"},
-		Spec: infrav1.ElfMachineTemplateSpec{
-			Template: infrav1.ElfMachineTemplateResource{
-				Spec: infrav1.ElfMachineSpec{
+		Spec: capev1.ElfMachineTemplateSpec{
+			Template: capev1.ElfMachineTemplateResource{
+				Spec: capev1.ElfMachineSpec{
 					DiskGiB:   1,
 					NumCPUs:   1,
 					MemoryMiB: 1,
@@ -53,13 +53,13 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 
 	tests = append(tests, elfMachineTestCase{
 		Name: "Cannot reduce disk capacity",
-		OldEM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		OldEM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				DiskGiB: 2,
 			},
 		},
-		EM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		EM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				DiskGiB: 1,
 			},
 		},
@@ -69,13 +69,13 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 	})
 	tests = append(tests, elfMachineTestCase{
 		Name: "Cannot reduce vcpu capacity",
-		OldEM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		OldEM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				NumCPUs: 2,
 			},
 		},
-		EM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		EM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				NumCPUs: 1,
 			},
 		},
@@ -85,13 +85,13 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 	})
 	tests = append(tests, elfMachineTestCase{
 		Name: "Cannot reduce memory capacity",
-		OldEM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		OldEM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				MemoryMiB: 2,
 			},
 		},
-		EM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		EM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				MemoryMiB: 1,
 			},
 		},
@@ -101,13 +101,13 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 	})
 	tests = append(tests, elfMachineTestCase{
 		Name: "Can update the default numCoresPerSocket",
-		OldEM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		OldEM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				NumCoresPerSocket: 0,
 			},
 		},
-		EM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		EM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				NumCoresPerSocket: 1,
 			},
 		},
@@ -115,13 +115,13 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 	})
 	tests = append(tests, elfMachineTestCase{
 		Name: "Cannot update numCoresPerSocket",
-		OldEM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		OldEM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				NumCoresPerSocket: 1,
 			},
 		},
-		EM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		EM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				NumCoresPerSocket: 2,
 			},
 		},
@@ -132,20 +132,20 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 
 	tests = append(tests, elfMachineTestCase{
 		Name: "Disk cannot be modified directly",
-		OldEM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		OldEM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				DiskGiB:   1,
 				NumCPUs:   1,
 				MemoryMiB: 1,
 			},
 		},
-		EM: &infrav1.ElfMachine{
+		EM: &capev1.ElfMachine{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					clusterv1.TemplateClonedFromNameAnnotation: elfMachineTemplate.Name,
+					capiv1.TemplateClonedFromNameAnnotation: elfMachineTemplate.Name,
 				},
 			},
-			Spec: infrav1.ElfMachineSpec{
+			Spec: capev1.ElfMachineSpec{
 				DiskGiB:   2,
 				NumCPUs:   1,
 				MemoryMiB: 1,
@@ -158,20 +158,20 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 	})
 	tests = append(tests, elfMachineTestCase{
 		Name: "vcpu cannot be modified directly",
-		OldEM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		OldEM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				DiskGiB:   1,
 				NumCPUs:   1,
 				MemoryMiB: 1,
 			},
 		},
-		EM: &infrav1.ElfMachine{
+		EM: &capev1.ElfMachine{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					clusterv1.TemplateClonedFromNameAnnotation: elfMachineTemplate.Name,
+					capiv1.TemplateClonedFromNameAnnotation: elfMachineTemplate.Name,
 				},
 			},
-			Spec: infrav1.ElfMachineSpec{
+			Spec: capev1.ElfMachineSpec{
 				DiskGiB:   1,
 				NumCPUs:   2,
 				MemoryMiB: 1,
@@ -184,20 +184,20 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 	})
 	tests = append(tests, elfMachineTestCase{
 		Name: "memory cannot be modified directly",
-		OldEM: &infrav1.ElfMachine{
-			Spec: infrav1.ElfMachineSpec{
+		OldEM: &capev1.ElfMachine{
+			Spec: capev1.ElfMachineSpec{
 				DiskGiB:   1,
 				NumCPUs:   1,
 				MemoryMiB: 1,
 			},
 		},
-		EM: &infrav1.ElfMachine{
+		EM: &capev1.ElfMachine{
 			ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{
-					clusterv1.TemplateClonedFromNameAnnotation: elfMachineTemplate.Name,
+					capiv1.TemplateClonedFromNameAnnotation: elfMachineTemplate.Name,
 				},
 			},
-			Spec: infrav1.ElfMachineSpec{
+			Spec: capev1.ElfMachineSpec{
 				DiskGiB:   1,
 				NumCPUs:   1,
 				MemoryMiB: 2,
@@ -223,7 +223,7 @@ func TestElfMachineValidatorValidateUpdate(t *testing.T) {
 
 func newScheme(g Gomega) *runtime.Scheme {
 	scheme := runtime.NewScheme()
-	g.Expect(infrav1.AddToScheme(scheme)).To(Succeed())
+	g.Expect(capev1.AddToScheme(scheme)).To(Succeed())
 
 	return scheme
 }
@@ -252,8 +252,8 @@ func expectElfMachineTestCase(g Gomega, tc elfMachineTestCase, err error) {
 
 type elfMachineTestCase struct {
 	Name  string
-	EM    *infrav1.ElfMachine
-	OldEM *infrav1.ElfMachine
+	EM    *capev1.ElfMachine
+	OldEM *capev1.ElfMachine
 	Objs  []client.Object
 	Errs  field.ErrorList
 }

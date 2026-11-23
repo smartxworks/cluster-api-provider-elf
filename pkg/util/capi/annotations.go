@@ -18,14 +18,14 @@ package capi
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 // Copied from https://github.com/kubernetes-sigs/cluster-api/blob/release-1.10/util/annotations/helpers.go.
 
 // IsPaused returns true if the Cluster is paused or the object has the `paused` annotation.
-func IsPaused(cluster *clusterv1.Cluster, o metav1.Object) bool {
-	if cluster.Spec.Paused {
+func IsPaused(cluster *capiv1.Cluster, o metav1.Object) bool {
+	if cluster.Spec.Paused != nil && *cluster.Spec.Paused {
 		return true
 	}
 	return HasPaused(o)
@@ -33,7 +33,7 @@ func IsPaused(cluster *clusterv1.Cluster, o metav1.Object) bool {
 
 // HasPaused returns true if the object has the `paused` annotation.
 func HasPaused(o metav1.Object) bool {
-	return hasAnnotation(o, clusterv1.PausedAnnotation)
+	return hasAnnotation(o, capiv1.PausedAnnotation)
 }
 
 // hasAnnotation returns true if the object has the specified annotation.
