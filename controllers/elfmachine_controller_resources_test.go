@@ -82,6 +82,59 @@ var _ = Describe("ElfMachineReconciler", func() {
 	})
 
 	Context("reconcileVMResources", func() {
+		It("should wait for guest CPU after kubelet restart and complete when node capacity catches up", func() {
+			elfMachine.Spec.NumCPUs = 8
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: elfMachine.Name}
+			node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: elfMachine.Name}}
+			Expect(testEnv.CreateAndWait(ctx, node)).To(Succeed())
+			DeferCleanup(func() { Expect(testEnv.Delete(ctx, node)).To(Succeed()) })
+			nodePatchSource := node.DeepCopy()
+			node.Status.Capacity = corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("4")}
+			Expect(testEnv.PatchAndWait(ctx, node, nodePatchSource)).To(Succeed())
+
+			agentJob := hostagent.GenerateRestartKubeletJob(elfMachine, "", node.Name)
+			Expect(testEnv.CreateAndWait(ctx, agentJob)).To(Succeed())
+			agentJobPatchSource := agentJob.DeepCopy()
+			agentJob.Status.Phase = agentv1.PhaseSucceeded
+			Expect(testEnv.PatchAndWait(ctx, agentJob, agentJobPatchSource)).To(Succeed())
+			kubeConfigSecret, err := helpers.NewKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)
+			Expect(err).NotTo(HaveOccurred())
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx, NewVMService: mockNewVMService}
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMComputeResourcesReason, clusterv1.ConditionSeverityInfo, "")
+			vm := fake.NewTowerVMFromElfMachine(elfMachine)
+
+			ok, err := reconciler.reconcileVMResources(ctx, machineContext, vm)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeFalse())
+			Expect(elfMachine.Status.Resources.CPUCores).To(Equal(int32(8)))
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNodeCPUReadyReason}})
+			Expect(conditions.GetMessage(elfMachine, infrav1.ResourcesHotUpdatedCondition)).To(Equal("Node CPU is below ElfMachine: expected 8, observed 4"))
+
+			// Repeated reconciliation must keep waiting without repeating the restart job.
+			ok, err = reconciler.reconcileVMResources(ctx, machineContext, vm)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeFalse())
+			Expect(conditions.GetReason(elfMachine, infrav1.ResourcesHotUpdatedCondition)).To(Equal(infrav1.WaitingForNodeCPUReadyReason))
+
+			nodePatchSource = node.DeepCopy()
+			node.Status.Capacity[corev1.ResourceCPU] = resource.MustParse("8")
+			Expect(testEnv.PatchAndWait(ctx, node, nodePatchSource)).To(Succeed())
+			vmVolume := fake.NewVMVolume(elfMachine)
+			vmDisk := fake.NewVMDisk(vmVolume)
+			vm.VMDisks = []*models.NestedVMDisk{{ID: vmDisk.ID}}
+			mockVMService.EXPECT().GetVMDisks([]string{*vmDisk.ID}).Return([]*models.VMDisk{vmDisk}, nil)
+			mockVMService.EXPECT().GetVMVolume(*vmVolume.ID).Return(vmVolume, nil)
+			mockVMService.EXPECT().GetVMNics(*vm.ID).Return([]*models.VMNic{fake.NewVMNic()}, nil)
+			ok, err = reconciler.reconcileVMResources(ctx, machineContext, vm)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeTrue())
+			Expect(conditions.IsTrue(elfMachine, infrav1.ResourcesHotUpdatedCondition)).To(BeTrue())
+			Expect(conditions.GetMessage(elfMachine, infrav1.ResourcesHotUpdatedCondition)).To(BeEmpty())
+		})
+
 		It("should mark ResourcesHotUpdatedCondition to true", func() {
 			agentJob := hostagent.GenerateExpandRootPartitionJob(elfMachine, "", "test-node")
 			Expect(testEnv.CreateAndWait(ctx, agentJob)).NotTo(HaveOccurred())
@@ -93,7 +146,7 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			machine.Status.NodeRef = &corev1.ObjectReference{Name: "test-node"}
 			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.ExpandingVMDiskReason, clusterv1.ConditionSeverityInfo, "")
-			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret, hostAgentJobsConfig)
 			fake.InitOwnerReferences(ctx, ctrlMgrCtx, elfCluster, cluster, elfMachine, machine)
 			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
 			vmVolume := fake.NewVMVolume(elfMachine)
@@ -466,6 +519,95 @@ var _ = Describe("ElfMachineReconciler", func() {
 			Expect(logBuffer.String()).To(ContainSubstring("HostJob succeeded"))
 			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.RestartingKubeletReason}})
 		})
+	})
+
+	Context("reconcileNodeCPU", func() {
+		It("should skip checks outside compute hot updates or when CPU count is unspecified", func() {
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			for _, reason := range []string{"", infrav1.ExpandingVMDiskReason, infrav1.AddingVMNetworkDeviceReason} {
+				conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, reason, clusterv1.ConditionSeverityInfo, "")
+				ok, err := reconciler.reconcileNodeCPU(ctx, machineContext)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ok).To(BeTrue())
+				Expect(conditions.GetReason(elfMachine, infrav1.ResourcesHotUpdatedCondition)).To(Equal(reason))
+			}
+			elfMachine.Spec.NumCPUs = 0
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.RestartingKubeletReason, clusterv1.ConditionSeverityInfo, "")
+			ok, err := reconciler.reconcileNodeCPU(ctx, machineContext)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeTrue())
+		})
+
+		It("should wait when NodeRef is missing", func() {
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.RestartingKubeletReason, clusterv1.ConditionSeverityInfo, "")
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			ok, err := reconciler.reconcileNodeCPU(ctx, machineContext)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeFalse())
+			Expect(conditions.GetMessage(elfMachine, infrav1.ResourcesHotUpdatedCondition)).To(ContainSubstring("Waiting for NodeRef"))
+			Expect(conditions.GetReason(elfMachine, infrav1.ResourcesHotUpdatedCondition)).To(Equal(infrav1.WaitingForNodeCPUReadyReason))
+		})
+
+		It("should keep the hot update incomplete when the workload client cannot be created", func() {
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: elfMachine.Name}
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.RestartingKubeletReason, clusterv1.ConditionSeverityInfo, "")
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			ok, err := reconciler.reconcileNodeCPU(ctx, machineContext)
+			Expect(err).To(HaveOccurred())
+			Expect(ok).To(BeFalse())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.WaitingForNodeCPUReadyReason}})
+			Expect(conditions.GetMessage(elfMachine, infrav1.ResourcesHotUpdatedCondition)).To(ContainSubstring("Failed to create workload cluster client"))
+		})
+
+		It("should keep the hot update incomplete when the Node cannot be read", func() {
+			kubeConfigSecret, err := helpers.NewKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)
+			Expect(err).NotTo(HaveOccurred())
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: elfMachine.Name}
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNodeCPUReadyReason, clusterv1.ConditionSeverityInfo, "")
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			ok, err := reconciler.reconcileNodeCPU(ctx, machineContext)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			Expect(ok).To(BeFalse())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityWarning, infrav1.WaitingForNodeCPUReadyReason}})
+			Expect(conditions.GetMessage(elfMachine, infrav1.ResourcesHotUpdatedCondition)).To(ContainSubstring("Failed to get Node " + elfMachine.Name))
+		})
+
+		DescribeTable("should check reported CPU capacity", func(capacity, observed string) {
+			elfMachine.Spec.NumCPUs = 8
+			kubeConfigSecret, err := helpers.NewKubeConfigSecret(testEnv, cluster.Namespace, cluster.Name)
+			Expect(err).NotTo(HaveOccurred())
+			node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: elfMachine.Name}}
+			Expect(testEnv.CreateAndWait(ctx, node)).To(Succeed())
+			DeferCleanup(func() { Expect(testEnv.Delete(ctx, node)).To(Succeed()) })
+			if capacity != "" {
+				nodePatchSource := node.DeepCopy()
+				node.Status.Capacity = corev1.ResourceList{corev1.ResourceCPU: resource.MustParse(capacity)}
+				Expect(testEnv.PatchAndWait(ctx, node, nodePatchSource)).To(Succeed())
+			}
+			machine.Status.NodeRef = &corev1.ObjectReference{Name: node.Name}
+			conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.RestartingKubeletReason, clusterv1.ConditionSeverityInfo, "")
+			ctrlMgrCtx := fake.NewControllerManagerContext(elfCluster, cluster, elfMachine, machine, secret, kubeConfigSecret)
+			machineContext := newMachineContext(elfCluster, cluster, elfMachine, machine, mockVMService)
+			reconciler := &ElfMachineReconciler{ControllerManagerContext: ctrlMgrCtx}
+			ok, err := reconciler.reconcileNodeCPU(ctx, machineContext)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeFalse())
+			expectConditions(elfMachine, []conditionAssertion{{infrav1.ResourcesHotUpdatedCondition, corev1.ConditionFalse, clusterv1.ConditionSeverityInfo, infrav1.WaitingForNodeCPUReadyReason}})
+			Expect(conditions.GetMessage(elfMachine, infrav1.ResourcesHotUpdatedCondition)).To(Equal("Node CPU is below ElfMachine: expected 8, observed " + observed))
+		},
+			Entry("CPU has not expanded", "4", "4"),
+			Entry("CPU capacity is absent", "", "<missing>"),
+			Entry("fractional CPU capacity is not rounded up", "7500m", "7500m"),
+		)
+
 	})
 
 	Context("reconcileVMCPUAndMemory", func() {
