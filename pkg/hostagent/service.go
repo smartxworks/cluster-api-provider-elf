@@ -121,6 +121,9 @@ func GenerateRestartKubeletJob(elfMachine *infrav1.ElfMachine, playbook string, 
 					LocalPlaybookText: &agentv1.YAMLText{
 						Inline: playbook,
 					},
+					Values: &agentv1.YAMLText{
+						Inline: fmt.Sprintf("expected_cpu: %d\n", elfMachine.Spec.NumCPUs),
+					},
 				},
 				Timeout: metav1.Duration{Duration: JobTimeouts.TimeoutFor(HostAgentJobTypeRestartKubelet)},
 			},

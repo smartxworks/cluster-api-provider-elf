@@ -134,6 +134,13 @@ data:
                 echo "Skipped: $file ($CUR_CPUS)"
               fi
             done
+      - name: Reboot node when CPU count is insufficient
+        ansible.builtin.shell: |-
+          expected_cpu={{ expected_cpu }}
+          actual_cpu=$(grep -c '^processor' /proc/cpuinfo || true)
+          if [ "$expected_cpu" -gt 0 ] && [ "$actual_cpu" -lt "$expected_cpu" ]; then
+            shutdown --reboot +1
+          fi
 
   set-network-device-config: |-
     - name: Set network device configuration

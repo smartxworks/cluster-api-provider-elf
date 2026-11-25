@@ -46,6 +46,10 @@ func (r *ElfMachineReconciler) reconcileVMResources(ctx goctx.Context, machineCt
 		return ok, err
 	}
 
+	if ok, err := r.reconcileNodeCPU(ctx, machineCtx); err != nil || !ok {
+		return ok, err
+	}
+
 	if ok, err := r.reconcieVMVolume(ctx, machineCtx, vm, infrav1.ResourcesHotUpdatedCondition); err != nil || !ok {
 		return ok, err
 	}
@@ -239,6 +243,53 @@ func (r *ElfMachineReconciler) restartKubelet(ctx goctx.Context, machineCtx *con
 	}
 
 	return r.reconcileHostJob(ctx, machineCtx, hostagent.HostAgentJobTypeRestartKubelet, nil)
+}
+
+// reconcileNodeCPU verifies guest CPU capacity after the hot update and kubelet restart.
+func (r *ElfMachineReconciler) reconcileNodeCPU(ctx goctx.Context, machineCtx *context.MachineContext) (bool, error) {
+	elfMachine := machineCtx.ElfMachine
+	reason := conditions.GetReason(elfMachine, infrav1.ResourcesHotUpdatedCondition)
+	if elfMachine.Spec.NumCPUs == 0 ||
+		(reason != infrav1.RestartingKubeletReason && reason != infrav1.WaitingForNodeCPUReadyReason) {
+		return true, nil
+	}
+
+	if machineCtx.Machine.Status.NodeRef == nil {
+		conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNodeCPUReadyReason,
+			clusterv1.ConditionSeverityInfo, "Waiting for NodeRef to check CPU capacity")
+		return false, nil
+	}
+
+	kubeClient, err := capiremote.NewClusterClient(ctx, "", r.Client, client.ObjectKeyFromObject(machineCtx.Cluster))
+	if err != nil {
+		conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNodeCPUReadyReason,
+			clusterv1.ConditionSeverityWarning, "Failed to create workload cluster client to check Node CPU: %s", err.Error())
+		return false, err
+	}
+
+	node := &corev1.Node{}
+	if err := kubeClient.Get(ctx, client.ObjectKey{Name: machineCtx.Machine.Status.NodeRef.Name}, node); err != nil {
+		conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNodeCPUReadyReason,
+			clusterv1.ConditionSeverityWarning, "Failed to get Node %s to check CPU capacity: %s", machineCtx.Machine.Status.NodeRef.Name, err.Error())
+		return false, err
+	}
+
+	// Tower reports the VM configuration; only the guest kubelet can confirm that
+	// the added CPUs are actually available inside the VM.
+	cpu, ok := node.Status.Capacity[corev1.ResourceCPU]
+	if !ok || cpu.CmpInt64(int64(elfMachine.Spec.NumCPUs)) < 0 {
+		observedCPU := "<missing>"
+		if ok {
+			observedCPU = cpu.String()
+		}
+		conditions.MarkFalse(elfMachine, infrav1.ResourcesHotUpdatedCondition, infrav1.WaitingForNodeCPUReadyReason,
+			clusterv1.ConditionSeverityInfo, "Node CPU is below ElfMachine: expected %d, observed %s", elfMachine.Spec.NumCPUs, observedCPU)
+		ctrl.LoggerFrom(ctx).V(2).Info("Waiting for Node CPU capacity after hot expansion", "node", node.Name,
+			"expectedCPU", elfMachine.Spec.NumCPUs, "observedCPU", observedCPU)
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (r *ElfMachineReconciler) reconcileHostJob(ctx goctx.Context, machineCtx *context.MachineContext, jobType hostagent.HostAgentJobType, macTypes []hostagent.MacType) (bool, error) {

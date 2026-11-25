@@ -170,6 +170,10 @@ const (
 	// are automatically re-tried by the controller.
 	RestartingKubeletFailedReason = "RestartingKubeletFailed"
 
+	// WaitingForNodeCPUReadyReason documents (Severity=Info) ElfMachine waiting for
+	// the guest kubelet to report the requested CPU capacity after hot expansion.
+	WaitingForNodeCPUReadyReason = "WaitingForNodeCPUReady"
+
 	// AddingVMNetworkDeviceReason documents (Severity=Info) ElfMachine currently executing the adding
 	// a new network device operation.
 	AddingVMNetworkDeviceReason = "AddingVMNetworkDevice"
